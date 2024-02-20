@@ -19,7 +19,7 @@ type PostInstanceResponse struct {
 }
 
 type PostInstanceData struct {
-	Id            string `json:"data"`
+	Id            string `json:"id"`
 	Name          string `json:"name"`
 	TenantId      string `json:"tenant_id"`
 	CloudProvider string `json:"cloud_provider"`
@@ -36,7 +36,7 @@ type GetInstanceResponse struct {
 
 // todo optional fields
 type GetInstanceData struct {
-	Id            string `json:"data"`
+	Id            string `json:"id"`
 	Name          string `json:"name"`
 	Status        string `json:"status"`
 	TenantId      string `json:"tenant_id"`

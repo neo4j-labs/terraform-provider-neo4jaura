@@ -77,7 +77,7 @@ func (api *AuraApi) DeleteInstanceById(id string) (GetInstanceResponse, error) {
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}
-	if status != 200 {
+	if status != 202 {
 		return GetInstanceResponse{}, errors.New("Aura error: " + fmt.Sprintf("Status: %+v. Response: %+v", status, string(payload)))
 	}
 
