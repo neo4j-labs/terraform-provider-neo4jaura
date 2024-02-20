@@ -88,3 +88,25 @@ func (api *AuraApi) DeleteInstanceById(id string) (GetInstanceResponse, error) {
 	}
 	return response, nil
 }
+
+func (api *AuraApi) PatchInstanceById(id string, request PatchInstanceRequest) (GetInstanceResponse, error) {
+	payload, err := json.Marshal(request)
+	if err != nil {
+		return GetInstanceResponse{}, err
+	}
+
+	body, status, err := api.auraClient.Patch("instances/"+id, payload)
+	if err != nil {
+		return GetInstanceResponse{}, err
+	}
+	if status != 202 {
+		return GetInstanceResponse{}, errors.New("Aura error: " + fmt.Sprintf("Status: %+v. Response: %+v", status, string(body)))
+	}
+
+	var response GetInstanceResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return GetInstanceResponse{}, err
+	}
+	return response, nil
+}

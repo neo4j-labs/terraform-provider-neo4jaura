@@ -32,39 +32,22 @@ func NewAuraClient(clientId, clientSecret string) *AuraClient {
 }
 
 func (c *AuraClient) Get(path string) ([]byte, int, error) {
-	token, err := c.auth.GetToken()
-	if err != nil {
-		return []byte{}, 0, err
-	}
-
-	getUrl, err := url.Parse(auraV1Path + "/" + path)
-	if err != nil {
-		return []byte{}, 0, err
-	}
-
-	req := &http.Request{
-		Method: "GET",
-		URL:    getUrl,
-		Header: map[string][]string{
-			"Content-Type":  {"application/json"},
-			"Authorization": {"Bearer " + token},
-		},
-	}
-
-	// todo retry
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return []byte{}, 0, err
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return []byte{}, 0, err
-	}
-	return body, resp.StatusCode, nil
+	return c.doOperation("GET", path)
 }
 
 func (c *AuraClient) Post(path string, payload []byte) ([]byte, int, error) {
+	return c.doOperationWithPayload("POST", path, payload)
+}
+
+func (c *AuraClient) Delete(path string) ([]byte, int, error) {
+	return c.doOperation("DELETE", path)
+}
+
+func (c *AuraClient) Patch(path string, payload []byte) ([]byte, int, error) {
+	return c.doOperationWithPayload("PATCH", path, payload)
+}
+
+func (c *AuraClient) doOperationWithPayload(method string, path string, payload []byte) ([]byte, int, error) {
 	token, err := c.auth.GetToken()
 	if err != nil {
 		return []byte{}, 0, err
@@ -76,7 +59,7 @@ func (c *AuraClient) Post(path string, payload []byte) ([]byte, int, error) {
 	}
 
 	req := &http.Request{
-		Method: "POST",
+		Method: method,
 		URL:    postUrl,
 		Header: map[string][]string{
 			"Content-Type":  {"application/json"},
@@ -97,26 +80,27 @@ func (c *AuraClient) Post(path string, payload []byte) ([]byte, int, error) {
 	return body, resp.StatusCode, nil
 }
 
-func (c *AuraClient) Delete(path string) ([]byte, int, error) {
+func (c *AuraClient) doOperation(method string, path string) ([]byte, int, error) {
 	token, err := c.auth.GetToken()
 	if err != nil {
 		return []byte{}, 0, err
 	}
 
-	deleteUrl, err := url.Parse(auraV1Path + "/" + path)
+	getUrl, err := url.Parse(auraV1Path + "/" + path)
 	if err != nil {
 		return []byte{}, 0, err
 	}
 
 	req := &http.Request{
-		Method: "DELETE",
-		URL:    deleteUrl,
+		Method: method,
+		URL:    getUrl,
 		Header: map[string][]string{
 			"Content-Type":  {"application/json"},
 			"Authorization": {"Bearer " + token},
 		},
 	}
 
+	// todo retry
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return []byte{}, 0, err

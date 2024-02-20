@@ -10,3 +10,8 @@ type PostInstanceRequest struct {
 	TenantId      string `json:"tenant_id"`
 	CloudProvider string `json:"cloud_provider"`
 }
+
+type PatchInstanceRequest struct {
+	Name   *string `json:"name"`
+	Memory *string `json:"memory"`
+}

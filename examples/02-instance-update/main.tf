@@ -14,10 +14,10 @@ provider "aura" {
 }
 
 resource "aura_instance" "this" {
-  name           = "MyFirstAuraInstance"
+  name           = var.name
   cloud_provider = "gcp"
   region         = "europe-west2"
-  memory         = "1GB"
+  memory         = var.memory
   type           = "professional-db"
   tenant_id      = data.aura_tenants.this.tenants.0.id
 }
@@ -26,16 +26,9 @@ data "aura_tenants" "this" {}
 
 variable "client_id" {}
 variable "client_secret" {}
-
-output "connection_url" {
-  value = aura_instance.this.connection_url
+variable "name" {
+  default = "MySecondInstance"
 }
-
-output "username" {
-  value = aura_instance.this.username
-}
-
-output "password" {
-  value     = aura_instance.this.password
-  sensitive = true
+variable "memory" {
+  default = "1GB"
 }

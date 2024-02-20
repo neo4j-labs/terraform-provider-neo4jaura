@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/venikkin/neo4j-aura-terraform-provider/internal/client"
@@ -71,9 +73,9 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 			"id": schema.StringAttribute{
 				MarkdownDescription: "Id of the instance",
 				Computed:            true,
-				//PlanModifiers: []planmodifier.String{
-				//	stringplanmodifier.UseStateForUnknown(),
-				//},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "Name if the instance",
@@ -86,34 +88,55 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 				Optional: true,
 				Computed: true,
 				Default:  stringdefault.StaticString("1GB"),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"type": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
 				Default:  stringdefault.StaticString("free-db"),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"cloud_provider": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
 				Default:  stringdefault.StaticString("gcp"),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"tenant_id": schema.StringAttribute{
 				Required: true,
 			},
 			"connection_url": schema.StringAttribute{
 				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"username": schema.StringAttribute{
 				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"password": schema.StringAttribute{
 				Computed:  true,
 				Sensitive: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"version": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
 				Default:  stringdefault.StaticString("5"),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}
@@ -186,8 +209,55 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 }
 
 func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
-	//TODO implement me
-	panic("implement me")
+	var plan InstanceResourceModel
+
+	response.Diagnostics.Append(request.Plan.Get(ctx, &plan)...)
+
+	if response.Diagnostics.HasError() {
+		return
+	}
+
+	instance, err := r.auraApi.GetInstanceById(plan.Id.ValueString())
+	if err != nil {
+		response.Diagnostics.AddError("Error while getting instance details", err.Error())
+	}
+	if plan.Name.ValueString() != instance.Data.Name || plan.Memory.ValueString() != instance.Data.Memory {
+		request := &client.PatchInstanceRequest{}
+		if plan.Name.ValueString() != instance.Data.Name {
+			request.Name = plan.Name.ValueStringPointer()
+		}
+		if plan.Memory.ValueString() != instance.Data.Memory {
+			request.Memory = plan.Memory.ValueStringPointer()
+		}
+
+		updated, err := r.auraApi.PatchInstanceById(instance.Data.Id, *request)
+
+		if err != nil {
+			response.Diagnostics.AddError("Error while updating the instance details", err.Error())
+			return
+		}
+
+		updated, err = util.WaitUntil(
+			func() (client.GetInstanceResponse, error) {
+				r, e := r.auraApi.GetInstanceById(plan.Id.ValueString())
+				tflog.Debug(ctx, fmt.Sprintf("Received response %+v and error %+v", r, e))
+				return r, e
+			},
+			func(resp client.GetInstanceResponse, e error) bool {
+				return err == nil &&
+					resp.Data.Memory == plan.Memory.ValueString() &&
+					resp.Data.Name == plan.Name.ValueString() &&
+					strings.ToLower(resp.Data.Status) == "running"
+			},
+			time.Second,
+			time.Minute*time.Duration(10),
+		)
+
+		plan.Name = types.StringValue(updated.Data.Name)
+		plan.Memory = types.StringValue(updated.Data.Memory)
+	}
+
+	response.Diagnostics.Append(response.State.Set(ctx, &plan)...)
 }
 
 func (r *InstanceResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
