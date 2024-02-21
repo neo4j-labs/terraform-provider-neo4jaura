@@ -23,8 +23,8 @@ resource "aura_instance" "source" {
 }
 
 resource "aura_instance" "target" {
-  count = var.create_another ? 1 : 0
-  name = "MyTargetInstance"
+  count          = var.create_another ? 1 : 0
+  name           = "MyTargetInstance"
   cloud_provider = "gcp"
   region         = "europe-west2"
   memory         = "1GB"
@@ -33,6 +33,10 @@ resource "aura_instance" "target" {
 
   source = {
     instance_id = aura_instance.source.instance_id
+  }
+
+  lifecycle {
+    ignore_changes = [source]
   }
 }
 
