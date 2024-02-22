@@ -58,3 +58,7 @@ type GetSnapshotData struct {
 	Status     string `json:"status"`
 	Timestamp  string `json:"timestamp"`
 }
+
+type GetSnapshotResponse struct {
+	Data GetSnapshotData `json:"data"`
+}

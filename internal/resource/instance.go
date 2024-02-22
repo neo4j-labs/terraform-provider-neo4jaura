@@ -210,8 +210,13 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		}
 		postInstanceRequest.SourceInstanceId = sourceData.InstanceId.ValueStringPointer()
 		if !sourceData.SnapshotId.IsNull() {
-
-			// todo validate snapshot if created
+			_, err := r.waitUntilSnapshotIsInState(ctx, sourceData.InstanceId.ValueString(), sourceData.SnapshotId.ValueString(),
+				func(resp client.GetSnapshotData) bool {
+					return strings.ToLower(resp.Status) == "completed"
+				})
+			if err != nil {
+				response.Diagnostics.AddError("Error while waiting snapshot to be completed", err.Error())
+			}
 			postInstanceRequest.SourceSnapshotId = sourceData.SnapshotId.ValueStringPointer()
 		}
 	}
@@ -385,5 +390,27 @@ func (r *InstanceResource) waitUntilInstanceIsInState(
 		time.Second,
 		// todo timeouts must be parametrized
 		time.Minute*time.Duration(15),
+	)
+}
+
+func (r *InstanceResource) waitUntilSnapshotIsInState(
+	ctx context.Context, instanceId string, snapshotId string,
+	condition func(data client.GetSnapshotData) bool) (client.GetSnapshotData, error) {
+
+	return util.WaitUntil(
+		func() (client.GetSnapshotData, error) {
+			r, e := r.auraApi.GetSnapshotById(instanceId, snapshotId)
+			tflog.Debug(ctx, fmt.Sprintf("Received response %+v and error %+v", r, e))
+			if e != nil {
+				return client.GetSnapshotData{}, e
+			}
+			return r.Data, e
+		},
+		func(resp client.GetSnapshotData, e error) bool {
+			return e == nil && condition(resp)
+		},
+		time.Second,
+		// todo timeouts must be parametrized
+		time.Minute*time.Duration(5),
 	)
 }

@@ -116,3 +116,14 @@ func (api *AuraApi) GetSnapshotsByInstanceId(instanceId string) (GetSnapshotsRes
 	}
 	return util.Unmarshal[GetSnapshotsResponse](body)
 }
+
+func (api *AuraApi) GetSnapshotById(instanceId string, snapshotId string) (GetSnapshotResponse, error) {
+	body, status, err := api.auraClient.Get(fmt.Sprintf("instances/%s/snapshots/%s", instanceId, snapshotId))
+	if err != nil {
+		return GetSnapshotResponse{}, err
+	}
+	if status != 200 {
+		return GetSnapshotResponse{}, err
+	}
+	return util.Unmarshal[GetSnapshotResponse](body)
+}

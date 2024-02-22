@@ -6,7 +6,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/venikkin/neo4j-aura-terraform-provider/internal/client"
+	"sort"
+	"time"
 )
 
 var (
@@ -28,14 +31,14 @@ type SnapshotDataSourceModel struct {
 	Profile    types.String `tfsdk:"profile"`
 	Status     types.String `tfsdk:"status"`
 	Timestamp  types.String `tfsdk:"timestamp"`
-	MostRecent types.Bool   `tfsdk:"timestamp"`
+	MostRecent types.Bool   `tfsdk:"most_recent"`
 }
 
-func (ds SnapshotDataSource) Metadata(ctx context.Context, request datasource.MetadataRequest, response *datasource.MetadataResponse) {
+func (ds *SnapshotDataSource) Metadata(ctx context.Context, request datasource.MetadataRequest, response *datasource.MetadataResponse) {
 	response.TypeName = request.ProviderTypeName + "_snapshot"
 }
 
-func (ds SnapshotDataSource) Schema(ctx context.Context, request datasource.SchemaRequest, response *datasource.SchemaResponse) {
+func (ds *SnapshotDataSource) Schema(ctx context.Context, request datasource.SchemaRequest, response *datasource.SchemaResponse) {
 	// todo validation
 	response.Schema = schema.Schema{
 		MarkdownDescription: "DataSource representing a snapshot of an instance",
@@ -69,7 +72,7 @@ func (ds SnapshotDataSource) Schema(ctx context.Context, request datasource.Sche
 	}
 }
 
-func (ds SnapshotDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
+func (ds *SnapshotDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
 	var data SnapshotDataSourceModel
 
 	response.Diagnostics.Append(request.Config.Get(ctx, &data)...)
@@ -92,6 +95,20 @@ func (ds SnapshotDataSource) Read(ctx context.Context, request datasource.ReadRe
 	var selected client.GetSnapshotData
 	// todo assuming this is pre-validated and EITHER of those parameters is provided
 	if !data.MostRecent.IsNull() && data.MostRecent.ValueBool() {
+		sort.Slice(snapshots.Data, func(i1, i2 int) bool {
+			layout := "2006-01-02T03:04:05Z"
+			timestamp1, err := time.Parse(layout, snapshots.Data[i1].Timestamp)
+			if err != nil {
+				tflog.Error(ctx, "Fail to parse timestamp: "+snapshots.Data[i1].Timestamp)
+				return true
+			}
+			timestamp2, err := time.Parse(layout, snapshots.Data[i2].Timestamp)
+			if err != nil {
+				tflog.Error(ctx, "Fail to parse timestamp: "+snapshots.Data[i2].Timestamp)
+				return true
+			}
+			return timestamp1.Before(timestamp2)
+		})
 		selected = snapshots.Data[len(snapshots.Data)-1]
 		data.SnapshotId = types.StringValue(selected.SnapshotId)
 	} else {
@@ -118,7 +135,7 @@ func (ds SnapshotDataSource) Read(ctx context.Context, request datasource.ReadRe
 	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
 }
 
-func (ds SnapshotDataSource) Configure(ctx context.Context, request datasource.ConfigureRequest, response *datasource.ConfigureResponse) {
+func (ds *SnapshotDataSource) Configure(ctx context.Context, request datasource.ConfigureRequest, response *datasource.ConfigureResponse) {
 	if request.ProviderData == nil {
 		return
 	}
