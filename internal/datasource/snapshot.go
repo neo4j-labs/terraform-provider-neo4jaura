@@ -3,8 +3,11 @@ package datasource
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework-validators/datasourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/venikkin/neo4j-aura-terraform-provider/internal/client"
@@ -13,8 +16,9 @@ import (
 )
 
 var (
-	_ datasource.DataSource              = &SnapshotDataSource{}
-	_ datasource.DataSourceWithConfigure = &SnapshotDataSource{}
+	_ datasource.DataSource                     = &SnapshotDataSource{}
+	_ datasource.DataSourceWithConfigure        = &SnapshotDataSource{}
+	_ datasource.DataSourceWithConfigValidators = &SnapshotDataSource{}
 )
 
 func NewSnapshotDataSource() datasource.DataSource {
@@ -51,6 +55,7 @@ func (ds *SnapshotDataSource) Schema(ctx context.Context, request datasource.Sch
 				MarkdownDescription: "Id of the snapshot",
 				Optional:            true,
 				Computed:            true,
+				Validators:          []validator.String{},
 			},
 			"profile": schema.StringAttribute{
 				MarkdownDescription: "Profile of the snapshot. One of [AddHoc, Scheduled]",
@@ -69,6 +74,15 @@ func (ds *SnapshotDataSource) Schema(ctx context.Context, request datasource.Sch
 				Optional:            true,
 			},
 		},
+	}
+}
+
+func (ds *SnapshotDataSource) ConfigValidators(ctx context.Context) []datasource.ConfigValidator {
+	return []datasource.ConfigValidator{
+		datasourcevalidator.Conflicting(
+			path.MatchRoot("snapshot_id"),
+			path.MatchRoot("most_recent"),
+		),
 	}
 }
 

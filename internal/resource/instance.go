@@ -3,6 +3,7 @@ package resource
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
@@ -10,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -103,6 +105,9 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
+				Validators: []validator.String{
+					stringvalidator.OneOf("enterprise-db", "enterprise-ds", "professional-db", "professional-ds", "free-db"),
+				},
 			},
 			"type": schema.StringAttribute{
 				MarkdownDescription: "Type of the instance. Depend on your tenant configuration. One of [enterprise-db, ]" +
@@ -113,6 +118,9 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
+				Validators: []validator.String{
+					stringvalidator.OneOf("1GB", "2GB", "4GB", "8GB", "16GB", "24GB", "32GB", "48GB", "64GB"),
+				},
 			},
 			"cloud_provider": schema.StringAttribute{
 				MarkdownDescription: "Cloud provider. One of [gcp, aws, azure]",
@@ -121,6 +129,9 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 				Default:             stringdefault.StaticString("gcp"),
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
+				},
+				Validators: []validator.String{
+					stringvalidator.OneOf("gcp", "aws", "azure"),
 				},
 			},
 			"tenant_id": schema.StringAttribute{
