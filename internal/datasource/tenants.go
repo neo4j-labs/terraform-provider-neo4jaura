@@ -19,7 +19,7 @@ func NewTenantsDataSource() datasource.DataSource {
 }
 
 type TenantsDataSource struct {
-	auraClient *client.AuraClient
+	auraApi *client.AuraApi
 }
 
 type TenantsModel struct {
@@ -44,7 +44,7 @@ func (ds *TenantsDataSource) Configure(ctx context.Context, request datasource.C
 		)
 		return
 	}
-	ds.auraClient = auraClient
+	ds.auraApi = client.NewAuraApi(auraClient)
 }
 
 func (ds *TenantsDataSource) Metadata(ctx context.Context, request datasource.MetadataRequest, response *datasource.MetadataResponse) {
@@ -81,7 +81,7 @@ func (ds *TenantsDataSource) Read(ctx context.Context, request datasource.ReadRe
 		return
 	}
 
-	tenantsResponse, err := client.NewAuraApi(ds.auraClient).GetTenants()
+	tenantsResponse, err := ds.auraApi.GetTenants()
 	if err != nil {
 		response.Diagnostics.AddError("Error while reading tenants", err.Error())
 		return

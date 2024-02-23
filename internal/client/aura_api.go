@@ -1,10 +1,13 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/venikkin/neo4j-aura-terraform-provider/internal/util"
+	"time"
 )
 
 type AuraApi struct {
@@ -137,4 +140,45 @@ func (api *AuraApi) PostSnapshot(instanceId string) (PostSnapshotResponse, error
 		return PostSnapshotResponse{}, errors.New("Aura error: " + fmt.Sprintf("Status: %+v. Response: %+v", status, string(body)))
 	}
 	return util.Unmarshal[PostSnapshotResponse](body)
+}
+
+func (api *AuraApi) WaitUntilSnapshotIsInState(
+	ctx context.Context, instanceId string, snapshotId string,
+	condition func(data GetSnapshotData) bool) (GetSnapshotData, error) {
+
+	return util.WaitUntil(
+		func() (GetSnapshotData, error) {
+			r, e := api.GetSnapshotById(instanceId, snapshotId)
+			tflog.Debug(ctx, fmt.Sprintf("Received response %+v and error %+v", r, e))
+			if e != nil {
+				return GetSnapshotData{}, e
+			}
+			return r.Data, e
+		},
+		func(resp GetSnapshotData, e error) bool {
+			return e == nil && condition(resp)
+		},
+		time.Second,
+		// todo timeouts must be parametrized
+		time.Minute*time.Duration(5),
+	)
+}
+
+func (api *AuraApi) WaitUntilInstanceIsInState(
+	ctx context.Context,
+	id string,
+	condition func(GetInstanceResponse) bool) (GetInstanceResponse, error) {
+	return util.WaitUntil(
+		func() (GetInstanceResponse, error) {
+			r, e := api.GetInstanceById(id)
+			tflog.Debug(ctx, fmt.Sprintf("Received response %+v and error %+v", r, e))
+			return r, e
+		},
+		func(resp GetInstanceResponse, e error) bool {
+			return e == nil && condition(resp)
+		},
+		time.Second,
+		// todo timeouts must be parametrized
+		time.Minute*time.Duration(15),
+	)
 }

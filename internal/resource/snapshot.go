@@ -8,11 +8,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/venikkin/neo4j-aura-terraform-provider/internal/client"
-	"github.com/venikkin/neo4j-aura-terraform-provider/internal/util"
 	"strings"
-	"time"
 )
 
 var (
@@ -114,7 +111,7 @@ func (r *SnapshotResource) Create(ctx context.Context, request resource.CreateRe
 		return
 	}
 
-	snapshot, err := r.waitUntilSnapshotIsInState(ctx, data.InstanceId.ValueString(), postResponse.Data.SnapshotId,
+	snapshot, err := r.auraApi.WaitUntilSnapshotIsInState(ctx, data.InstanceId.ValueString(), postResponse.Data.SnapshotId,
 		func(resp client.GetSnapshotData) bool {
 			return strings.ToLower(resp.Status) == "completed"
 		})
@@ -144,31 +141,9 @@ func (r *SnapshotResource) Read(ctx context.Context, request resource.ReadReques
 }
 
 func (r *SnapshotResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
-	// todo do we need to re-post the snapshot
+	// no op
 }
 
 func (r *SnapshotResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
 	// snapshots are immutable
-}
-
-func (r *SnapshotResource) waitUntilSnapshotIsInState(
-	ctx context.Context, instanceId string, snapshotId string,
-	condition func(data client.GetSnapshotData) bool) (client.GetSnapshotData, error) {
-
-	return util.WaitUntil(
-		func() (client.GetSnapshotData, error) {
-			r, e := r.auraApi.GetSnapshotById(instanceId, snapshotId)
-			tflog.Debug(ctx, fmt.Sprintf("Received response %+v and error %+v", r, e))
-			if e != nil {
-				return client.GetSnapshotData{}, e
-			}
-			return r.Data, e
-		},
-		func(resp client.GetSnapshotData, e error) bool {
-			return e == nil && condition(resp)
-		},
-		time.Second,
-		// todo timeouts must be parametrized
-		time.Minute*time.Duration(5),
-	)
 }

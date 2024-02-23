@@ -34,17 +34,17 @@ type GetInstanceResponse struct {
 	Data GetInstanceData `json:"data"`
 }
 
-// todo optional fields
 type GetInstanceData struct {
-	Id            string `json:"id"`
-	Name          string `json:"name"`
-	Status        string `json:"status"`
-	TenantId      string `json:"tenant_id"`
-	CloudProvider string `json:"cloud_provider"`
-	ConnectionUrl string `json:"connection_url"`
-	Region        string `json:"region"`
-	Type          string `json:"type"`
-	Memory        string `json:"memory"`
+	Id            string  `json:"id"`
+	Name          string  `json:"name"`
+	Status        string  `json:"status"`
+	TenantId      string  `json:"tenant_id"`
+	CloudProvider string  `json:"cloud_provider"`
+	ConnectionUrl string  `json:"connection_url"`
+	Region        string  `json:"region"`
+	Type          string  `json:"type"`
+	Memory        string  `json:"memory"`
+	Storage       *string `json:"storage"`
 }
 
 type GetSnapshotsResponse struct {

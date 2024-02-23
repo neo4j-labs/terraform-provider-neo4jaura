@@ -18,7 +18,6 @@ import (
 	"github.com/venikkin/neo4j-aura-terraform-provider/internal/client"
 	"github.com/venikkin/neo4j-aura-terraform-provider/internal/util"
 	"strings"
-	"time"
 )
 
 // Ensure resource defined types fully satisfy framework interfaces.
@@ -48,6 +47,7 @@ type InstanceResourceModel struct {
 	Password      types.String `tfsdk:"password"`
 	Version       types.String `tfsdk:"version"`
 	Paused        types.Bool   `tfsdk:"paused"`
+	Storage       types.String `tfsdk:"storage"`
 	Source        types.Object `tfsdk:"source"`
 }
 
@@ -78,7 +78,6 @@ func (r *InstanceResource) Configure(ctx context.Context, request resource.Confi
 }
 
 func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
-	// todo validation
 	response.Schema = schema.Schema{
 		MarkdownDescription: "Aura instance",
 		Attributes: map[string]schema.Attribute{
@@ -106,7 +105,7 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
-					stringvalidator.OneOf("enterprise-db", "enterprise-ds", "professional-db", "professional-ds", "free-db"),
+					stringvalidator.OneOf("1GB", "2GB", "4GB", "8GB", "16GB", "24GB", "32GB", "48GB", "64GB"),
 				},
 			},
 			"type": schema.StringAttribute{
@@ -119,7 +118,7 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
-					stringvalidator.OneOf("1GB", "2GB", "4GB", "8GB", "16GB", "24GB", "32GB", "48GB", "64GB"),
+					stringvalidator.OneOf("enterprise-db", "enterprise-ds", "professional-db", "professional-ds", "free-db"),
 				},
 			},
 			"cloud_provider": schema.StringAttribute{
@@ -178,6 +177,13 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 					boolplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"storage": schema.StringAttribute{
+				MarkdownDescription: "Storage allocated to the instance",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
 			"source": schema.SingleNestedAttribute{
 				MarkdownDescription: "Information about source for the instance",
 				Optional:            true,
@@ -221,7 +227,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		}
 		postInstanceRequest.SourceInstanceId = sourceData.InstanceId.ValueStringPointer()
 		if !sourceData.SnapshotId.IsNull() {
-			_, err := r.waitUntilSnapshotIsInState(ctx, sourceData.InstanceId.ValueString(), sourceData.SnapshotId.ValueString(),
+			_, err := r.auraApi.WaitUntilSnapshotIsInState(ctx, sourceData.InstanceId.ValueString(), sourceData.SnapshotId.ValueString(),
 				func(resp client.GetSnapshotData) bool {
 					return strings.ToLower(resp.Status) == "completed"
 				})
@@ -245,11 +251,14 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 
 	tflog.Debug(ctx, "Created an instance with id "+postInstanceResp.Data.Id)
 
-	_, err = r.waitUntilInstanceIsInState(ctx, postInstanceResp.Data.Id, func(r client.GetInstanceResponse) bool {
+	instance, err := r.auraApi.WaitUntilInstanceIsInState(ctx, postInstanceResp.Data.Id, func(r client.GetInstanceResponse) bool {
 		return strings.ToLower(r.Data.Status) == "running"
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Instance is not running in time", err.Error())
+	}
+	if instance.Data.Storage != nil {
+		data.Storage = types.StringValue(*instance.Data.Storage)
 	}
 
 	tflog.Debug(ctx, fmt.Sprintf("Instance %s is running", postInstanceResp.Data.Id))
@@ -317,7 +326,7 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 			return
 		}
 
-		_, err = r.waitUntilInstanceIsInState(ctx, plan.InstanceId.ValueString(), func(resp client.GetInstanceResponse) bool {
+		_, err = r.auraApi.WaitUntilInstanceIsInState(ctx, plan.InstanceId.ValueString(), func(resp client.GetInstanceResponse) bool {
 			return resp.Data.Memory == plan.Memory.ValueString() &&
 				resp.Data.Name == plan.Name.ValueString() &&
 				(strings.ToLower(resp.Data.Status) == "running" || strings.ToLower(instance.Data.Status) == "paused")
@@ -362,7 +371,7 @@ func (r *InstanceResource) resumeInstance(ctx context.Context, id string) util.D
 	if err != nil {
 		return util.NewDiagnosticsError("Error while resume the instance", err.Error())
 	}
-	_, err = r.waitUntilInstanceIsInState(ctx, id, func(resp client.GetInstanceResponse) bool {
+	_, err = r.auraApi.WaitUntilInstanceIsInState(ctx, id, func(resp client.GetInstanceResponse) bool {
 		return strings.ToLower(resp.Data.Status) == "running"
 	})
 	if err != nil {
@@ -376,52 +385,11 @@ func (r *InstanceResource) pauseInstance(ctx context.Context, id string) util.Di
 	if err != nil {
 		return util.NewDiagnosticsError("Error while pausing the instance", err.Error())
 	}
-	_, err = r.waitUntilInstanceIsInState(ctx, id, func(resp client.GetInstanceResponse) bool {
+	_, err = r.auraApi.WaitUntilInstanceIsInState(ctx, id, func(resp client.GetInstanceResponse) bool {
 		return strings.ToLower(resp.Data.Status) == "paused"
 	})
 	if err != nil {
 		return util.NewDiagnosticsError("Error while waiting for instance to be paused", err.Error())
 	}
 	return util.NoDiagnosticsError()
-}
-
-func (r *InstanceResource) waitUntilInstanceIsInState(
-	ctx context.Context,
-	id string,
-	condition func(client.GetInstanceResponse) bool) (client.GetInstanceResponse, error) {
-	return util.WaitUntil(
-		func() (client.GetInstanceResponse, error) {
-			r, e := r.auraApi.GetInstanceById(id)
-			tflog.Debug(ctx, fmt.Sprintf("Received response %+v and error %+v", r, e))
-			return r, e
-		},
-		func(resp client.GetInstanceResponse, e error) bool {
-			return e == nil && condition(resp)
-		},
-		time.Second,
-		// todo timeouts must be parametrized
-		time.Minute*time.Duration(15),
-	)
-}
-
-func (r *InstanceResource) waitUntilSnapshotIsInState(
-	ctx context.Context, instanceId string, snapshotId string,
-	condition func(data client.GetSnapshotData) bool) (client.GetSnapshotData, error) {
-
-	return util.WaitUntil(
-		func() (client.GetSnapshotData, error) {
-			r, e := r.auraApi.GetSnapshotById(instanceId, snapshotId)
-			tflog.Debug(ctx, fmt.Sprintf("Received response %+v and error %+v", r, e))
-			if e != nil {
-				return client.GetSnapshotData{}, e
-			}
-			return r.Data, e
-		},
-		func(resp client.GetSnapshotData, e error) bool {
-			return e == nil && condition(resp)
-		},
-		time.Second,
-		// todo timeouts must be parametrized
-		time.Minute*time.Duration(5),
-	)
 }
