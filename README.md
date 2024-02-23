@@ -1,6 +1,7 @@
 # Neo4j Aura Terraform Provider Proof of Concept 
 
-This is a proof of concept of Terraform Provider for Aura. 
+This is a proof of concept of Terraform Provider for Aura. It uses [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework) 
+on [protocol version 6](https://developer.hashicorp.com/terraform/plugin/terraform-plugin-protocol#protocol-version-6).
 
 ## Requirements
 * Go 1.22+
@@ -24,7 +25,7 @@ provider_installation {
 
 ## Examples
 There are several examples of the provider usage available on [`examples`](examples) folder. In order to run them you need to 
-export export the Aura credentials to your environment:
+export the Aura credentials to your environment:
 ```
 export TF_VAR_client_id="$AURA_CLIENT_ID"
 export TF_VAR_client_secret="$AURA_CLIENT_SECRET"
@@ -33,3 +34,6 @@ and execute the script
 ```
 ./execute_example.sh $EXAMPLE_FOLDER_NAME
 ```
+## Resources 
+* [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework) - documentation of the latest version of the plugin framework
+* [Terraform Provider Scaffolding Framework](https://github.com/hashicorp/terraform-provider-scaffolding-framework) - template repository, which is good

@@ -42,7 +42,6 @@ func (ds *SnapshotDataSource) Metadata(ctx context.Context, request datasource.M
 }
 
 func (ds *SnapshotDataSource) Schema(ctx context.Context, request datasource.SchemaRequest, response *datasource.SchemaResponse) {
-	// todo validation
 	response.Schema = schema.Schema{
 		MarkdownDescription: "DataSource representing a snapshot of an instance",
 		Attributes: map[string]schema.Attribute{
@@ -105,7 +104,6 @@ func (ds *SnapshotDataSource) Read(ctx context.Context, request datasource.ReadR
 	}
 
 	var selected client.GetSnapshotData
-	// todo assuming this is pre-validated and EITHER of those parameters is provided
 	if !data.MostRecent.IsNull() && data.MostRecent.ValueBool() {
 		sort.Slice(snapshots.Data, func(i1, i2 int) bool {
 			layout := "2006-01-02T03:04:05Z"
