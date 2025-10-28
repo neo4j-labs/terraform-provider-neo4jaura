@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/venikkin/neo4j-aura-terraform-provider/internal/util"
-	"time"
 )
 
 type AuraApi struct {

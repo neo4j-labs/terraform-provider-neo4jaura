@@ -3,8 +3,9 @@ package main
 import (
 	"context"
 	"flag"
-	"github.com/venikkin/neo4j-aura-terraform-provider/internal/provider"
 	"log"
+
+	"github.com/venikkin/neo4j-aura-terraform-provider/internal/provider"
 )
 
 import (

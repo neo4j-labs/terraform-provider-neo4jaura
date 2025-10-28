@@ -3,6 +3,8 @@ package resource
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -17,7 +19,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/venikkin/neo4j-aura-terraform-provider/internal/client"
 	"github.com/venikkin/neo4j-aura-terraform-provider/internal/util"
-	"strings"
 )
 
 // Ensure resource defined types fully satisfy framework interfaces.
