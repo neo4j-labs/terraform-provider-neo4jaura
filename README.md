@@ -6,8 +6,8 @@ on [protocol version 6](https://developer.hashicorp.com/terraform/plugin/terrafo
 
 ## Requirements
 
-* Go 1.22+
-* Terraform 1.7.3+
+* Go 1.25+
+* Terraform 1.13.4+
 
 ## Build
 
