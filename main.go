@@ -5,7 +5,7 @@ import (
 	"flag"
 	"log"
 
-	"github.com/venikkin/neo4j-aura-terraform-provider/internal/provider"
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/provider"
 )
 
 import (

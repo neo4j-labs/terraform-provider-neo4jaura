@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/venikkin/neo4j-aura-terraform-provider/internal/client"
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/client"
 )
 
 var (

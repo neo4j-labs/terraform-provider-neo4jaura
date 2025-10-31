@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	"github.com/venikkin/neo4j-aura-terraform-provider/internal/util"
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/util"
 )
 
 type AuraApi struct {

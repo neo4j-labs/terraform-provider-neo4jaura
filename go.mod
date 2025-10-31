@@ -1,4 +1,4 @@
-module github.com/venikkin/neo4j-aura-terraform-provider
+module github.com/neo4j-labs/terraform-provider-neo4jaura
 
 go 1.25
 

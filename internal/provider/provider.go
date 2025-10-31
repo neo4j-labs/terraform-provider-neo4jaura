@@ -8,9 +8,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/venikkin/neo4j-aura-terraform-provider/internal/client"
-	auradatasource "github.com/venikkin/neo4j-aura-terraform-provider/internal/datasource"
-	auraresource "github.com/venikkin/neo4j-aura-terraform-provider/internal/resource"
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/client"
+	auradatasource "github.com/neo4j-labs/terraform-provider-neo4jaura/internal/datasource"
+	auraresource "github.com/neo4j-labs/terraform-provider-neo4jaura/internal/resource"
 )
 
 type Neo4jAuraProvider struct {
@@ -23,7 +23,7 @@ type Neo4jAuraProviderModel struct {
 }
 
 func (n *Neo4jAuraProvider) Metadata(ctx context.Context, request provider.MetadataRequest, response *provider.MetadataResponse) {
-	response.TypeName = "aura"
+	response.TypeName = "neo4jaura"
 	response.Version = n.version
 }
 

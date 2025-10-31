@@ -1,39 +1,39 @@
 terraform {
   required_version = ">= 1.13.4"
   required_providers {
-    aura = {
-      source  = "terraform.local/local/aura"
+    neo4jaura = {
+      source  = "terraform.local/local/neo4jaura"
       version = "0.0.1"
     }
   }
 }
 
-provider "aura" {
+provider "neo4jaura" {
   client_id     = var.client_id
   client_secret = var.client_secret
 }
 
-resource "aura_instance" "source" {
+resource "neo4jaura_instance" "source" {
   name           = "MySourceInstance"
   cloud_provider = "gcp"
   region         = "europe-west2"
   memory         = "1GB"
   type           = "professional-db"
-  project_id      = data.aura_projects.this.projects.0.id
+  project_id      = data.neo4jaura_projects.this.projects.0.id
 }
 
-resource "aura_instance" "target" {
+resource "neo4jaura_instance" "target" {
   count          = var.create_another ? 1 : 0
   name           = "MyTargetInstance"
   cloud_provider = "gcp"
   region         = "europe-west2"
   memory         = "1GB"
   type           = "professional-db"
-  project_id      = data.aura_projects.this.projects.0.id
+  project_id      = data.neo4jaura_projects.this.projects.0.id
 
   source = {
-    instance_id = aura_instance.source.instance_id
-    snapshot_id = data.aura_snapshot.source.snapshot_id
+    instance_id = neo4jaura_instance.source.instance_id
+    snapshot_id = data.neo4jaura_snapshot.source.snapshot_id
   }
 
   lifecycle {
@@ -41,12 +41,12 @@ resource "aura_instance" "target" {
   }
 }
 
-data "aura_snapshot" "source" {
-  instance_id = aura_instance.source.instance_id
+data "neo4jaura_snapshot" "source" {
+  instance_id = neo4jaura_instance.source.instance_id
   most_recent = true
 }
 
-data "aura_projects" "this" {}
+data "neo4jaura_projects" "this" {}
 
 variable "client_id" {}
 variable "client_secret" {}
@@ -57,15 +57,15 @@ variable "create_another" {
 }
 
 output "connection_url" {
-  value = aura_instance.source.connection_url
+  value = neo4jaura_instance.source.connection_url
 }
 
 output "password" {
-  value     = aura_instance.source.password
+  value     = neo4jaura_instance.source.password
   sensitive = true
 }
 
 output "target_password" {
-  value     = var.create_another ? aura_instance.target.0.password : ""
+  value     = var.create_another ? neo4jaura_instance.target.0.password : ""
   sensitive = true
 }

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PROVIDER_NAME=aura
+PROVIDER_NAME=neo4jaura
 VERSION=0.0.1
 PLUGIN_FOLDER="${HOME}/.terraform.d/plugins/terraform.local/local/${PROVIDER_NAME}/${VERSION}/darwin_arm64/terraform-provider-${PROVIDER_NAME}_v${VERSION}"
 

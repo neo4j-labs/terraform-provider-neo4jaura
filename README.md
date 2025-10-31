@@ -1,6 +1,6 @@
-# Neo4j Aura Terraform Provider Proof of Concept
+# Neo4j Aura Terraform Provider
 
-This is a proof of concept of Terraform Provider for Aura. It
+This is an experimental Terraform Provider for Neo4j Aura. It
 uses [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework)
 on [protocol version 6](https://developer.hashicorp.com/terraform/plugin/terraform-plugin-protocol#protocol-version-6).
 
@@ -43,11 +43,3 @@ and execute the script
 ```
 ./execute_example.sh $EXAMPLE_FOLDER_NAME
 ```
-
-## Resources
-
-* [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework) - documentation of the latest
-  version of the plugin framework
-* [Terraform Provider Scaffolding Framework](https://github.com/hashicorp/terraform-provider-scaffolding-framework) -
-  template repository, which is good
-* [Aura API Specification](https://neo4j.com/docs/aura/platform/api/specification/) - OpenAPI specification for Aura API 

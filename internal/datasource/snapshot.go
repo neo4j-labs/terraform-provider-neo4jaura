@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	"github.com/venikkin/neo4j-aura-terraform-provider/internal/client"
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/client"
 )
 
 var (
