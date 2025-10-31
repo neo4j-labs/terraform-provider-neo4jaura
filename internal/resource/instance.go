@@ -448,15 +448,90 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 }
 
 func (r *InstanceResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
-	var data InstanceResourceModel
+	var stateData InstanceResourceModel
 
-	response.Diagnostics.Append(request.State.Get(ctx, &data)...)
+	response.Diagnostics.Append(request.State.Get(ctx, &stateData)...)
 
 	if response.Diagnostics.HasError() {
 		return
 	}
 
-	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
+	instance, err := r.auraApi.GetInstanceById(stateData.InstanceId.ValueString())
+	if err != nil {
+		response.Diagnostics.AddError("Error while getting instance details", err.Error())
+		return
+	}
+
+	stateData.Name = types.StringValue(instance.Data.Name)
+	stateData.Region = types.StringValue(instance.Data.Region)
+	stateData.Memory = types.StringValue(instance.Data.Memory)
+	stateData.Type = types.StringValue(instance.Data.Type)
+	stateData.CloudProvider = types.StringValue(instance.Data.CloudProvider)
+	stateData.ConnectionUrl = types.StringValue(instance.Data.ConnectionUrl)
+	if instance.Data.Storage != nil {
+		stateData.Storage = types.StringValue(*instance.Data.Storage)
+	} else {
+		stateData.Storage = types.StringNull()
+	}
+	stateData.Status = types.StringValue(instance.Data.Status)
+	if instance.Data.CreatedAt != nil {
+		stateData.CreatedAt = types.StringValue(*instance.Data.CreatedAt)
+	} else {
+		stateData.CreatedAt = types.StringNull()
+	}
+	if instance.Data.MetricsIntegrationUrl != nil {
+		stateData.MetricsIntegrationUrl = types.StringValue(*instance.Data.MetricsIntegrationUrl)
+	} else {
+		stateData.MetricsIntegrationUrl = types.StringNull()
+	}
+	if instance.Data.GraphNodes != nil {
+		graphNodes, err := strconv.Atoi(*instance.Data.GraphNodes)
+		if err != nil {
+			response.Diagnostics.AddWarning(
+				"Error while parsing graph nodes",
+				fmt.Sprintf("Cannot convert value to int: %s", *instance.Data.GraphNodes),
+			)
+			stateData.GraphNodes = types.Int32Null()
+		}
+		stateData.GraphNodes = types.Int32Value(int32(graphNodes))
+	} else {
+		stateData.GraphNodes = types.Int32Null()
+	}
+	if instance.Data.GraphRelationships != nil {
+		graphRelationships, err := strconv.Atoi(*instance.Data.GraphRelationships)
+		if err != nil {
+			response.Diagnostics.AddWarning(
+				"Error while parsing graph relationships",
+				fmt.Sprintf("Cannot convert value to int: %s", *instance.Data.GraphNodes),
+			)
+			stateData.GraphRelationships = types.Int32Null()
+		}
+		stateData.GraphRelationships = types.Int32Value(int32(graphRelationships))
+	} else {
+		stateData.GraphRelationships = types.Int32Null()
+	}
+	if instance.Data.SecondariesCount != nil {
+		stateData.SecondariesCount = types.Int32Value(int32(*instance.Data.SecondariesCount))
+	} else {
+		stateData.SecondariesCount = types.Int32Null()
+	}
+	if instance.Data.CdcEnrichmentMode != nil {
+		stateData.CdcEnrichmentMode = types.StringValue(*instance.Data.CdcEnrichmentMode)
+	} else {
+		stateData.CdcEnrichmentMode = types.StringNull()
+	}
+	if instance.Data.VectorOptimized != nil {
+		stateData.VectorOptimized = types.BoolValue(*instance.Data.VectorOptimized)
+	} else {
+		stateData.VectorOptimized = types.BoolNull()
+	}
+	if instance.Data.GraphAnalyticsPlugin != nil {
+		stateData.GraphAnalyticsPlugin = types.BoolValue(*instance.Data.GraphAnalyticsPlugin)
+	} else {
+		stateData.GraphAnalyticsPlugin = types.BoolNull()
+	}
+
+	response.Diagnostics.Append(response.State.Set(ctx, &stateData)...)
 }
 
 // todo implement override based on source instance
@@ -468,6 +543,8 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 	if response.Diagnostics.HasError() {
 		return
 	}
+
+	response.Diagnostics.Append(request.State.Get(ctx, &plan)...)
 
 	instance, err := r.auraApi.GetInstanceById(plan.InstanceId.ValueString())
 	if err != nil {
