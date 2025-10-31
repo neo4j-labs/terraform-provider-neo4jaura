@@ -19,17 +19,17 @@ func NewAuraApi(client *AuraClient) *AuraApi {
 	return &AuraApi{client}
 }
 
-func (api *AuraApi) GetTenants() (GetTenantsResponse, error) {
+func (api *AuraApi) GetTenants() (GetProjectsResponse, error) {
 	payload, status, err := api.auraClient.Get("tenants")
 	if err != nil {
-		return GetTenantsResponse{}, err
+		return GetProjectsResponse{}, err
 	}
 
 	if status != 200 {
-		return GetTenantsResponse{}, errors.New("Aura error: " + fmt.Sprintf("Status: %+v. Response: %+v", status, string(payload)))
+		return GetProjectsResponse{}, errors.New("Aura error: " + fmt.Sprintf("Status: %+v. Response: %+v", status, string(payload)))
 	}
 
-	return util.Unmarshal[GetTenantsResponse](payload)
+	return util.Unmarshal[GetProjectsResponse](payload)
 }
 
 func (api *AuraApi) PostInstance(request PostInstanceRequest) (PostInstanceResponse, error) {

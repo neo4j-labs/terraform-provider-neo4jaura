@@ -11,28 +11,28 @@ import (
 )
 
 var (
-	_ datasource.DataSource              = &TenantsDataSource{}
-	_ datasource.DataSourceWithConfigure = &TenantsDataSource{}
+	_ datasource.DataSource              = &ProjectsDataSource{}
+	_ datasource.DataSourceWithConfigure = &ProjectsDataSource{}
 )
 
-func NewTenantsDataSource() datasource.DataSource {
-	return &TenantsDataSource{}
+func NewProjectDataSource() datasource.DataSource {
+	return &ProjectsDataSource{}
 }
 
-type TenantsDataSource struct {
+type ProjectsDataSource struct {
 	auraApi *client.AuraApi
 }
 
-type TenantsModel struct {
-	Tenants types.List `tfsdk:"tenants"`
+type ProjectsModel struct {
+	Projects types.List `tfsdk:"projects"`
 }
 
-type ShortTenantModel struct {
+type ShortProjectModel struct {
 	Id   types.String `tfsdk:"id"`
 	Name types.String `tfsdk:"name"`
 }
 
-func (ds *TenantsDataSource) Configure(ctx context.Context, request datasource.ConfigureRequest, response *datasource.ConfigureResponse) {
+func (ds *ProjectsDataSource) Configure(ctx context.Context, request datasource.ConfigureRequest, response *datasource.ConfigureResponse) {
 	if request.ProviderData == nil {
 		return
 	}
@@ -48,15 +48,15 @@ func (ds *TenantsDataSource) Configure(ctx context.Context, request datasource.C
 	ds.auraApi = client.NewAuraApi(auraClient)
 }
 
-func (ds *TenantsDataSource) Metadata(ctx context.Context, request datasource.MetadataRequest, response *datasource.MetadataResponse) {
-	response.TypeName = request.ProviderTypeName + "_tenants"
+func (ds *ProjectsDataSource) Metadata(ctx context.Context, request datasource.MetadataRequest, response *datasource.MetadataResponse) {
+	response.TypeName = request.ProviderTypeName + "_projects"
 }
 
-func (ds *TenantsDataSource) Schema(ctx context.Context, request datasource.SchemaRequest, response *datasource.SchemaResponse) {
+func (ds *ProjectsDataSource) Schema(ctx context.Context, request datasource.SchemaRequest, response *datasource.SchemaResponse) {
 	response.Schema = schema.Schema{
-		MarkdownDescription: "Data Source containing all Aura Tenants",
+		MarkdownDescription: "Data Source containing all Aura Projects",
 		Attributes: map[string]schema.Attribute{
-			"tenants": schema.ListNestedAttribute{
+			"projects": schema.ListNestedAttribute{
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"id": schema.StringAttribute{
@@ -73,8 +73,8 @@ func (ds *TenantsDataSource) Schema(ctx context.Context, request datasource.Sche
 	}
 }
 
-func (ds *TenantsDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
-	var data TenantsModel
+func (ds *ProjectsDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
+	var data ProjectsModel
 
 	response.Diagnostics.Append(request.Config.Get(ctx, &data)...)
 
@@ -84,23 +84,23 @@ func (ds *TenantsDataSource) Read(ctx context.Context, request datasource.ReadRe
 
 	tenantsResponse, err := ds.auraApi.GetTenants()
 	if err != nil {
-		response.Diagnostics.AddError("Error while reading tenants", err.Error())
+		response.Diagnostics.AddError("Error while reading projects", err.Error())
 		return
 	}
 
-	tenants := make([]ShortTenantModel, len(tenantsResponse.Data))
+	tenants := make([]ShortProjectModel, len(tenantsResponse.Data))
 	for i := 0; i < len(tenantsResponse.Data); i++ {
 		t := tenantsResponse.Data[i]
-		tenants[i] = ShortTenantModel{
+		tenants[i] = ShortProjectModel{
 			Id:   types.StringValue(t.Id),
 			Name: types.StringValue(t.Name),
 		}
 	}
 
-	tenantsValue, diags := types.ListValueFrom(ctx, data.Tenants.ElementType(ctx), tenants)
+	tenantsValue, diags := types.ListValueFrom(ctx, data.Projects.ElementType(ctx), tenants)
 	response.Diagnostics.Append(diags...)
 
-	data.Tenants = tenantsValue
+	data.Projects = tenantsValue
 
 	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
 }

@@ -19,14 +19,14 @@ resource "aura_instance" "this" {
   region         = "europe-west2"
   memory         = "1GB"
   type           = "professional-db"
-  tenant_id      = data.aura_tenants.this.tenants.0.id
+  project_id      = data.aura_projects.this.projects.0.id
 }
 
 resource "aura_snapshot" "this" {
   instance_id = aura_instance.this.instance_id
 }
 
-data "aura_tenants" "this" {}
+data "aura_projects" "this" {}
 
 variable "client_id" {}
 variable "client_secret" {}

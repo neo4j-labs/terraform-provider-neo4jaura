@@ -13,11 +13,11 @@ provider "aura" {
   client_secret = var.client_secret
 }
 
-data "aura_tenants" "this" {}
+data "aura_projects" "this" {}
 
 variable "client_id" {}
 variable "client_secret" {}
 
 output "test" {
-  value = data.aura_tenants.this
+  value = data.aura_projects.this
 }

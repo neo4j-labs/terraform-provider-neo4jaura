@@ -43,7 +43,7 @@ type InstanceResourceModel struct {
 	Memory                types.String `tfsdk:"memory"`
 	Type                  types.String `tfsdk:"type"`
 	CloudProvider         types.String `tfsdk:"cloud_provider"`
-	TenantId              types.String `tfsdk:"tenant_id"`
+	ProjectId             types.String `tfsdk:"project_id"`
 	ConnectionUrl         types.String `tfsdk:"connection_url"`
 	Username              types.String `tfsdk:"username"`
 	Password              types.String `tfsdk:"password"`
@@ -121,7 +121,7 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 				},
 			},
 			"type": schema.StringAttribute{
-				MarkdownDescription: "Type of the instance. Depend on your tenant configuration. One of [enterprise-db, " +
+				MarkdownDescription: "Type of the instance. Depend on your project configuration. One of [enterprise-db, " +
 					"enterprise-ds, professional-db, professional-ds, free-db, business-critical]",
 				Optional: true,
 				Computed: true,
@@ -146,8 +146,8 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 					stringvalidator.OneOf("gcp", "aws", "azure"),
 				},
 			},
-			"tenant_id": schema.StringAttribute{
-				MarkdownDescription: "Id of the tenant",
+			"project_id": schema.StringAttribute{
+				MarkdownDescription: "Id of the project",
 				Required:            true,
 			},
 			"connection_url": schema.StringAttribute{
@@ -302,7 +302,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		Memory:        data.Memory.ValueString(),
 		Name:          data.Name.ValueString(),
 		Type:          data.Type.ValueString(),
-		TenantId:      data.TenantId.ValueString(),
+		TenantId:      data.ProjectId.ValueString(),
 		CloudProvider: data.CloudProvider.ValueString(),
 	}
 	if !data.Source.IsNull() {

@@ -7,11 +7,11 @@ type TokenResponse struct {
 	ExpiredIn   int64  `json:"expires_in"`
 }
 
-type GetTenantsResponse struct {
-	Data []TenantsRepostData `json:"data"`
+type GetProjectsResponse struct {
+	Data []ProjectResponseData `json:"data"`
 }
 
-type TenantsRepostData struct {
+type ProjectResponseData struct {
 	Id   string `json:"id"`
 	Name string `json:"name"`
 }

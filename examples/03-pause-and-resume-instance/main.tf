@@ -19,11 +19,11 @@ resource "aura_instance" "this" {
   region         = "europe-west2"
   memory         = "1GB"
   type           = "professional-db"
-  tenant_id      = data.aura_tenants.this.tenants.0.id
+  project_id      = data.aura_projects.this.projects.0.id
   status         = var.paused ? "paused" : "running"
 }
 
-data "aura_tenants" "this" {}
+data "aura_projects" "this" {}
 
 variable "client_id" {}
 variable "client_secret" {}

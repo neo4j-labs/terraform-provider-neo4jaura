@@ -63,7 +63,7 @@ func (n *Neo4jAuraProvider) Configure(ctx context.Context, request provider.Conf
 
 func (n *Neo4jAuraProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
-		auradatasource.NewTenantsDataSource,
+		auradatasource.NewProjectDataSource,
 		auradatasource.NewSnapshotDataSource,
 	}
 }

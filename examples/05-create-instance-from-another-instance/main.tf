@@ -19,7 +19,7 @@ resource "aura_instance" "source" {
   region         = "europe-west2"
   memory         = "1GB"
   type           = "professional-db"
-  tenant_id      = data.aura_tenants.this.tenants.0.id
+  project_id      = data.aura_projects.this.projects.0.id
 }
 
 resource "aura_instance" "target" {
@@ -29,7 +29,7 @@ resource "aura_instance" "target" {
   region         = "europe-west2"
   memory         = "1GB"
   type           = "professional-db"
-  tenant_id      = data.aura_tenants.this.tenants.0.id
+  project_id      = data.aura_projects.this.projects.0.id
 
   source = {
     instance_id = aura_instance.source.instance_id
@@ -40,7 +40,7 @@ resource "aura_instance" "target" {
   }
 }
 
-data "aura_tenants" "this" {}
+data "aura_projects" "this" {}
 
 variable "client_id" {}
 variable "client_secret" {}
