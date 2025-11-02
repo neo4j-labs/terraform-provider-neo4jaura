@@ -1,3 +1,5 @@
+//go:build generate
+
 /*
  *  Copyright (c) "Neo4j"
  *  Neo4j Sweden AB [https://neo4j.com]
@@ -15,21 +17,14 @@
  *  limitations under the License.
  */
 
-package util
+package tools
 
-type DiagnosticsError struct {
-	Message string
-	Details string
-}
+import (
+	_ "github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs"
+)
 
-func NoDiagnosticsError() DiagnosticsError {
-	return DiagnosticsError{}
-}
+// Format terraform files in examples
+//go:generate terraform fmt -recursive ../examples/
 
-func NewDiagnosticsError(message, detail string) DiagnosticsError {
-	return DiagnosticsError{Message: message, Details: detail}
-}
-
-func (de DiagnosticsError) IsNotEmpty() bool {
-	return de != NoDiagnosticsError()
-}
+// Generate documentation
+//go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-dir .. --provider-name neo4jaura

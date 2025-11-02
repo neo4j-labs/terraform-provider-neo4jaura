@@ -1,3 +1,20 @@
+/*
+ *  Copyright (c) "Neo4j"
+ *  Neo4j Sweden AB [https://neo4j.com]
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 package resource
 
 import (
@@ -58,9 +75,11 @@ func (r *SnapshotResource) Metadata(ctx context.Context, request resource.Metada
 func (r *SnapshotResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
 	response.Schema = schema.Schema{
 		MarkdownDescription: "Resource for an instance snapshot",
+		Description:         "Resource for an instance snapshot",
 		Attributes: map[string]schema.Attribute{
 			"instance_id": schema.StringAttribute{
 				MarkdownDescription: "Id of the instance",
+				Description:         "Id of the instance",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -68,6 +87,7 @@ func (r *SnapshotResource) Schema(ctx context.Context, request resource.SchemaRe
 			},
 			"snapshot_id": schema.StringAttribute{
 				MarkdownDescription: "Id of the snapshot",
+				Description:         "Id of the snapshot",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -75,6 +95,7 @@ func (r *SnapshotResource) Schema(ctx context.Context, request resource.SchemaRe
 			},
 			"profile": schema.StringAttribute{
 				MarkdownDescription: "Profile of the snapshot. One of [AddHoc, Scheduled]",
+				Description:         "Profile of the snapshot. One of [AddHoc, Scheduled]",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -82,6 +103,7 @@ func (r *SnapshotResource) Schema(ctx context.Context, request resource.SchemaRe
 			},
 			"status": schema.StringAttribute{
 				MarkdownDescription: "Status of the snapshot. One of [Completed, InProgress, Failed, Pending]",
+				Description:         "Status of the snapshot. One of [Completed, InProgress, Failed, Pending]",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -89,6 +111,7 @@ func (r *SnapshotResource) Schema(ctx context.Context, request resource.SchemaRe
 			},
 			"timestamp": schema.StringAttribute{
 				MarkdownDescription: "Timestamp of the snapshot",
+				Description:         "Timestamp of the snapshot",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),

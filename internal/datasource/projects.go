@@ -1,3 +1,20 @@
+/*
+ *  Copyright (c) "Neo4j"
+ *  Neo4j Sweden AB [https://neo4j.com]
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 package datasource
 
 import (
@@ -54,20 +71,27 @@ func (ds *ProjectsDataSource) Metadata(ctx context.Context, request datasource.M
 
 func (ds *ProjectsDataSource) Schema(ctx context.Context, request datasource.SchemaRequest, response *datasource.SchemaResponse) {
 	response.Schema = schema.Schema{
-		MarkdownDescription: "Data Source containing all Aura Projects",
+		MarkdownDescription: "Aura Projects",
+		Description:         "Aura Projects",
 		Attributes: map[string]schema.Attribute{
 			"projects": schema.ListNestedAttribute{
+				MarkdownDescription: "List of all projects",
+				Description:         "List of all projects",
+				Computed:            true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"id": schema.StringAttribute{
-							Computed: true,
+							MarkdownDescription: "Id of the project",
+							Description:         "Id of the project",
+							Computed:            true,
 						},
 						"name": schema.StringAttribute{
-							Computed: true,
+							Computed:            true,
+							MarkdownDescription: "Name of the project",
+							Description:         "Name of the project",
 						},
 					},
 				},
-				Computed: true,
 			},
 		},
 	}

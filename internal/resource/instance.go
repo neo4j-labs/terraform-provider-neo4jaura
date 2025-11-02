@@ -1,3 +1,20 @@
+/*
+ *  Copyright (c) "Neo4j"
+ *  Neo4j Sweden AB [https://neo4j.com]
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 package resource
 
 import (
@@ -31,6 +48,24 @@ var (
 func NewInstanceResource() resource.Resource {
 	return &InstanceResource{}
 }
+
+var supportedStatuses = []string{
+	"creating", "destroying", "running", "pausing", "paused", "suspending", "suspended", "resuming", "loading",
+	"loading failed", "restoring", "updating", "overwriting",
+}
+var supportedMemory = []string{
+	"1GB", "2GB", "4GB", "8GB", "16GB", "24GB", "32GB", "48GB", "64GB", "128GB", "192GB", "256GB", "384GB", "512GB",
+}
+var supportedTypes = []string{
+	"enterprise-db", "enterprise-ds", "professional-db", "professional-ds", "free-db", "business-critical",
+}
+var supportedCloudProviders = []string{"gcp", "aws", "azure"}
+var supportedVersions = []string{"5", "2025"}
+var supportedStorage = []string{
+	"2GB", "4GB", "8GB", "16GB", "32GB", "48GB", "64GB", "96GB", "128GB", "192GB", "256GB", "384GB", "512GB",
+	"768GB", "1024GB", "1536GB", "2048GB",
+}
+var supportedCdcEnrichmentModes = []string{"OFF", "DIFF", "FULL"}
 
 type InstanceResource struct {
 	auraApi *client.AuraApi
@@ -91,9 +126,11 @@ func (r *InstanceResource) Configure(ctx context.Context, request resource.Confi
 func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
 	response.Schema = schema.Schema{
 		MarkdownDescription: "Aura instance",
+		Description:         "Aura instance",
 		Attributes: map[string]schema.Attribute{
 			"instance_id": schema.StringAttribute{
 				MarkdownDescription: "Id of the instance",
+				Description:         "Id of the instance",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -101,14 +138,17 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "Name if the instance",
+				Description:         "Name if the instance",
 				Required:            true,
 			},
 			"region": schema.StringAttribute{
 				MarkdownDescription: "Region of the instance",
+				Description:         "Region of the instance",
 				Required:            true,
 			},
 			"memory": schema.StringAttribute{
-				MarkdownDescription: "Memory allocated for the instance",
+				MarkdownDescription: fmt.Sprintf("Memory allocated for the instance. One of [%s]", strings.Join(supportedMemory, ",")),
+				Description:         fmt.Sprintf("Memory allocated for the instance. One of [%s]", strings.Join(supportedMemory, ",")),
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString("1GB"),
@@ -116,26 +156,25 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
-					stringvalidator.OneOf("1GB", "2GB", "4GB", "8GB", "16GB", "24GB", "32GB", "48GB", "64GB",
-						"128GB", "192GB", "256GB", "384GB", "512GB"),
+					stringvalidator.OneOf(supportedMemory...),
 				},
 			},
 			"type": schema.StringAttribute{
-				MarkdownDescription: "Type of the instance. Depend on your project configuration. One of [enterprise-db, " +
-					"enterprise-ds, professional-db, professional-ds, free-db, business-critical]",
-				Optional: true,
-				Computed: true,
-				Default:  stringdefault.StaticString("free-db"),
+				MarkdownDescription: fmt.Sprintf("Type of the instance. Depend on your project configuration. One of [%s]", strings.Join(supportedTypes, ", ")),
+				Description:         fmt.Sprintf("Type of the instance. Depend on your project configuration. One of [%s]", strings.Join(supportedTypes, ", ")),
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString("free-db"),
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
-					stringvalidator.OneOf("enterprise-db", "enterprise-ds", "professional-db", "professional-ds",
-						"free-db", "business-critical"),
+					stringvalidator.OneOf(supportedTypes...),
 				},
 			},
 			"cloud_provider": schema.StringAttribute{
-				MarkdownDescription: "Cloud provider. One of [gcp, aws, azure]",
+				MarkdownDescription: fmt.Sprintf("Cloud provider. One of [%s]", strings.Join(supportedCloudProviders, ", ")),
+				Description:         fmt.Sprintf("Cloud provider. One of [%s]", strings.Join(supportedCloudProviders, ", ")),
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString("gcp"),
@@ -143,15 +182,17 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
-					stringvalidator.OneOf("gcp", "aws", "azure"),
+					stringvalidator.OneOf(supportedCloudProviders...),
 				},
 			},
 			"project_id": schema.StringAttribute{
 				MarkdownDescription: "Id of the project",
+				Description:         "Id of the project",
 				Required:            true,
 			},
 			"connection_url": schema.StringAttribute{
 				MarkdownDescription: "Bolt connection URL to the instance database",
+				Description:         "Bolt connection URL to the instance database",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -159,6 +200,7 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 			},
 			"username": schema.StringAttribute{
 				MarkdownDescription: "Username of the instance database",
+				Description:         "Username of the instance database",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -166,6 +208,7 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 			},
 			"password": schema.StringAttribute{
 				MarkdownDescription: "Password of the instance database",
+				Description:         "Password of the instance database",
 				Computed:            true,
 				Sensitive:           true,
 				PlanModifiers: []planmodifier.String{
@@ -173,39 +216,45 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 				},
 			},
 			"version": schema.StringAttribute{
-				MarkdownDescription: "Version of Neo4j",
+				MarkdownDescription: fmt.Sprintf("Version of Neo4j. One of [%s]", strings.Join(supportedVersions, ", ")),
+				Description:         fmt.Sprintf("Version of Neo4j. One of [%s]", strings.Join(supportedVersions, ", ")),
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("5"),
+				Default:             stringdefault.StaticString("2025"),
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
+				},
+				Validators: []validator.String{
+					stringvalidator.OneOf(supportedVersions...),
 				},
 			},
 			"storage": schema.StringAttribute{
-				MarkdownDescription: "Storage allocated to the instance",
+				MarkdownDescription: fmt.Sprintf("Storage allocated to the instance. One of [%s]", strings.Join(supportedStorage, ", ")),
+				Description:         fmt.Sprintf("Storage allocated to the instance. One of [%s]", strings.Join(supportedStorage, ", ")),
 				Computed:            true,
 				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
-					stringvalidator.OneOf("2GB", "4GB", "8GB", "16GB", "32GB", "48GB", "64GB", "96GB",
-						"128GB", "192GB", "256GB", "384GB", "512GB", "768GB", "1024GB", "1536GB", "2048GB"),
+					stringvalidator.OneOf(supportedStorage...),
 				},
 			},
 			"status": schema.StringAttribute{
-				MarkdownDescription: "Status of the instance",
+				MarkdownDescription: fmt.Sprintf("Status of the instance. One of [%s]", strings.Join(supportedStatuses, ", ")),
+				Description:         fmt.Sprintf("Status of the instance. One of [%s]", strings.Join(supportedStatuses, ", ")),
 				Computed:            true,
 				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
-					stringvalidator.OneOf("creating", "destroying", "running", "pausing", "paused", "suspending", "suspended", "resuming", "loading", "loading failed", "restoring", "updating", "overwriting"),
+					stringvalidator.OneOf(supportedStatuses...),
 				},
 			},
 			"created_at": schema.StringAttribute{
 				MarkdownDescription: "The timestamp when the instance was created",
+				Description:         "The timestamp when the instance was created",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -213,15 +262,15 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 			},
 			"metrics_integration_url": schema.StringAttribute{
 				MarkdownDescription: "Metrics integration endpoint URL",
+				Description:         "Metrics integration endpoint URL",
 				Computed:            true,
-				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"graph_nodes": schema.Int32Attribute{
-				MarkdownDescription: "Number of nodes in the graph (only for free-db)",
-				Optional:            true,
+				MarkdownDescription: "Number of nodes in the graph (free-db only)",
+				Description:         "Number of nodes in the graph (free-db only)",
 				Computed:            true,
 				PlanModifiers: []planmodifier.Int32{
 					int32planmodifier.UseStateForUnknown(),
@@ -229,7 +278,7 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 			},
 			"graph_relationships": schema.Int32Attribute{
 				MarkdownDescription: "Number of relationships in the graph (only for free-db)",
-				Optional:            true,
+				Description:         "Number of relationships in the graph (only for free-db)",
 				Computed:            true,
 				PlanModifiers: []planmodifier.Int32{
 					int32planmodifier.UseStateForUnknown(),
@@ -237,6 +286,7 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 			},
 			"secondaries_count": schema.Int32Attribute{
 				MarkdownDescription: "The number of secondaries in an Instance. (VDC only)",
+				Description:         "The number of secondaries in an Instance. (VDC only)",
 				Optional:            true,
 				Computed:            true,
 				PlanModifiers: []planmodifier.Int32{
@@ -244,18 +294,20 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 				},
 			},
 			"cdc_enrichment_mode": schema.StringAttribute{
-				MarkdownDescription: "CDC enrichment mode. One of [disabled, enabled, auto]",
+				MarkdownDescription: fmt.Sprintf("CDC enrichment mode. One of [%s]", strings.Join(supportedCdcEnrichmentModes, ", ")),
+				Description:         fmt.Sprintf("CDC enrichment mode. One of [%s]", strings.Join(supportedCdcEnrichmentModes, ", ")),
 				Optional:            true,
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
-					stringvalidator.OneOf("OFF", "DIFF", "FULL"),
+					stringvalidator.OneOf(supportedCdcEnrichmentModes...),
 				},
 			},
 			"vector_optimized": schema.BoolAttribute{
 				MarkdownDescription: "The vector optimization configuration of the instance",
+				Description:         "The vector optimization configuration of the instance",
 				Optional:            true,
 				Computed:            true,
 				PlanModifiers: []planmodifier.Bool{
@@ -264,6 +316,7 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 			},
 			"graph_analytics_plugin": schema.BoolAttribute{
 				MarkdownDescription: "The graph analytics plugin configuration of the instance.",
+				Description:         "The graph analytics plugin configuration of the instance.",
 				Optional:            true,
 				Computed:            true,
 				PlanModifiers: []planmodifier.Bool{
@@ -272,14 +325,17 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 			},
 			"source": schema.SingleNestedAttribute{
 				MarkdownDescription: "Information about source for the instance",
+				Description:         "Information about source for the instance",
 				Optional:            true,
 				Attributes: map[string]schema.Attribute{
 					"instance_id": schema.StringAttribute{
 						MarkdownDescription: "Instance Id that contains the source database of the instance",
+						Description:         "Instance Id that contains the source database of the instance",
 						Required:            true,
 					},
 					"snapshot_id": schema.StringAttribute{
 						MarkdownDescription: "Snapshot Id of the instance containing the source database of the instance",
+						Description:         "Snapshot Id of the instance containing the source database of the instance",
 						Optional:            true,
 					},
 				},

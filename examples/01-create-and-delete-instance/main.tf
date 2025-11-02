@@ -19,7 +19,7 @@ resource "neo4jaura_instance" "this" {
   region         = "europe-west2"
   memory         = "1GB"
   type           = "professional-db"
-  project_id      = data.neo4jaura_projects.this.projects.0.id
+  project_id     = data.neo4jaura_projects.this.projects.0.id
 }
 
 data "neo4jaura_projects" "this" {}

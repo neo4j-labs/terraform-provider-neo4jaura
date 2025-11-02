@@ -1,3 +1,20 @@
+/*
+ *  Copyright (c) "Neo4j"
+ *  Neo4j Sweden AB [https://neo4j.com]
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 package datasource
 
 import (
@@ -44,31 +61,38 @@ func (ds *SnapshotDataSource) Metadata(ctx context.Context, request datasource.M
 
 func (ds *SnapshotDataSource) Schema(ctx context.Context, request datasource.SchemaRequest, response *datasource.SchemaResponse) {
 	response.Schema = schema.Schema{
-		MarkdownDescription: "DataSource representing a snapshot of an instance",
+		MarkdownDescription: "Snapshot of an instance",
+		Description:         "Snapshot of an instance",
 		Attributes: map[string]schema.Attribute{
 			"instance_id": schema.StringAttribute{
 				MarkdownDescription: "Id of the instance",
+				Description:         "Id of the instance",
 				Required:            true,
 			},
 			"snapshot_id": schema.StringAttribute{
 				MarkdownDescription: "Id of the snapshot",
+				Description:         "Id of the snapshot",
 				Optional:            true,
 				Computed:            true,
 			},
 			"profile": schema.StringAttribute{
 				MarkdownDescription: "Profile of the snapshot. One of [AddHoc, Scheduled]",
+				Description:         "Profile of the snapshot. One of [AddHoc, Scheduled]",
 				Computed:            true,
 			},
 			"status": schema.StringAttribute{
 				MarkdownDescription: "Status of the snapshot. One of [Completed, InProgress, Failed, Pending]",
+				Description:         "Status of the snapshot. One of [Completed, InProgress, Failed, Pending]",
 				Computed:            true,
 			},
 			"timestamp": schema.StringAttribute{
 				MarkdownDescription: "Timestamp of the snapshot",
+				Description:         "Timestamp of the snapshot",
 				Computed:            true,
 			},
 			"most_recent": schema.BoolAttribute{
-				MarkdownDescription: "Is this snapshot is the most recent",
+				MarkdownDescription: "Flag indicated if the most recent snapshot should be returned",
+				Description:         "Flag indicated if the most recent snapshot should be returned",
 				Optional:            true,
 			},
 		},
