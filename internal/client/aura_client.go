@@ -28,7 +28,7 @@ import (
 const (
 	auraBasePath = "https://api.neo4j.io"
 	auraV1Path   = auraBasePath + "/v1"
-	userAgent = "auraTerrform-v0.0.1"
+	userAgent = "AuraTerraform/v0.0.1"
 )
 
 type AuraClient struct {
