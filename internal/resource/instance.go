@@ -220,7 +220,7 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 				Description:         fmt.Sprintf("Version of Neo4j. One of [%s]", strings.Join(supportedVersions, ", ")),
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("2025"),
+				Default:             stringdefault.StaticString("5"),
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
