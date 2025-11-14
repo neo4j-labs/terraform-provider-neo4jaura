@@ -60,7 +60,7 @@ var supportedTypes = []string{
 	"enterprise-db", "enterprise-ds", "professional-db", "professional-ds", "free-db", "business-critical",
 }
 var supportedCloudProviders = []string{"gcp", "aws", "azure"}
-var supportedVersions = []string{"5", "2025"}
+var supportedVersions = []string{"5"}
 var supportedStorage = []string{
 	"2GB", "4GB", "8GB", "16GB", "32GB", "48GB", "64GB", "96GB", "128GB", "192GB", "256GB", "384GB", "512GB",
 	"768GB", "1024GB", "1536GB", "2048GB",

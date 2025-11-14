@@ -28,7 +28,7 @@ import (
 const (
 	auraBasePath = "https://api.neo4j.io"
 	auraV1Path   = auraBasePath + "/v1"
-	userAgent = "AuraTerraform/v0.0.1"
+	userAgent    = "AuraTerraform/v0.0.1"
 )
 
 type AuraClient struct {
@@ -82,7 +82,7 @@ func (c *AuraClient) doOperationWithPayload(method string, path string, payload 
 		Header: map[string][]string{
 			"Content-Type":  {"application/json"},
 			"Authorization": {"Bearer " + token},
-			"User-Agent":  userAgent,
+			"User-Agent":    {userAgent},
 		},
 		Body: io.NopCloser(bytes.NewReader(payload)),
 	}
@@ -116,7 +116,7 @@ func (c *AuraClient) doOperation(method string, path string) ([]byte, int, error
 		Header: map[string][]string{
 			"Content-Type":  {"application/json"},
 			"Authorization": {"Bearer " + token},
-			"User-Agent":  userAgent,
+			"User-Agent":    {userAgent},
 		},
 	}
 
