@@ -2,3 +2,4 @@
 *.iml
 build/neo4j_aura
 .envrc
+.env
