@@ -30,7 +30,7 @@ variable "name" {
   default = "MySecondInstance"
 }
 variable "memory" {
-  default = "1GB"
+  default = "2GB"
 }
 
 output "connection_url" {
