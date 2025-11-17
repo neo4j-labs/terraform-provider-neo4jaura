@@ -20,8 +20,9 @@ package client
 import "strings"
 
 type TokenResponse struct {
-	AccessToken string `json:"access_token"`
-	ExpiredIn   int64  `json:"expires_in"`
+	AccessToken  string `json:"access_token"` // This will be a Bearer token
+	ExpiredIn    int64  `json:"expires_in"`   // The duration in seconds that the token will be valid for.  This is usually 3600 seconds
+	TokenExpires int64  // Calculcated absolute time , number of seconds from midnight 1st Jan 1970, when the issued token will expire
 }
 
 type GetProjectsResponse struct {

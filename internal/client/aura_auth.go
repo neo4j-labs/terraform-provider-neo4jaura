@@ -20,6 +20,7 @@ package client
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -31,16 +32,9 @@ import (
 type AuraAuth struct {
 	clientId     string
 	clientSecret string
-
-	mutex *sync.Mutex
-	token *TokenResponse
-
-	httpClient *http.Client
-}
-
-type AuraAuthToken struct {
-	token      string
-	expiringAt int64
+	mutex        *sync.Mutex
+	token        *TokenResponse
+	httpClient   *http.Client
 }
 
 func (a *AuraAuth) authenticate() error {
@@ -66,7 +60,15 @@ func (a *AuraAuth) authenticate() error {
 	if err != nil {
 		return err
 	}
-	// todo check response status
+
+	defer resp.Body.Close() // Do this to avoid memory leaks
+
+	//Check response status
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("authentication failed with status %d.  Check client id and secret values",
+			resp.StatusCode)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
@@ -78,6 +80,7 @@ func (a *AuraAuth) authenticate() error {
 		return err
 	}
 
+	token.TokenExpires = time.Now().Unix() + token.ExpiredIn
 	a.token = &token
 
 	return nil
@@ -86,11 +89,13 @@ func (a *AuraAuth) authenticate() error {
 func (a *AuraAuth) GetToken() (string, error) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
-	if a.token == nil || a.token.ExpiredIn < time.Now().Unix()+60 {
+	if a.token == nil || time.Now().Unix()-60 < a.token.TokenExpires {
 		err := a.authenticate()
 		if err != nil {
 			return "", err
 		}
+
 	}
+
 	return a.token.AccessToken, nil
 }
