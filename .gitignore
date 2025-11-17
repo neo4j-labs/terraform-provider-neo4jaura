@@ -3,3 +3,4 @@
 build/neo4j_aura
 .envrc
 .env
+.DS_Store
