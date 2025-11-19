@@ -18,11 +18,14 @@
 package client
 
 import (
-	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"sync"
+	"time"
+
+	"github.com/hashicorp/go-retryablehttp"
 )
 
 const (
@@ -31,13 +34,25 @@ const (
 	userAgent    = "AuraTerraform/v0.0.1"
 )
 
+const (
+	maxRetries = 5
+	backoffMin = 1 * time.Second
+	backoffMax = 30 * time.Second
+)
+
 type AuraClient struct {
 	auth       *AuraAuth
-	httpClient *http.Client
+	httpClient *retryablehttp.Client
 }
 
 func NewAuraClient(clientId, clientSecret string) *AuraClient {
-	httpClient := http.DefaultClient
+	httpClient := retryablehttp.NewClient()
+	httpClient.RetryMax = maxRetries
+	httpClient.RetryWaitMin = backoffMin
+	httpClient.RetryWaitMax = backoffMax
+	httpClient.CheckRetry = retryablehttp.DefaultRetryPolicy
+	httpClient.Backoff = retryablehttp.DefaultBackoff
+
 	return &AuraClient{
 		auth: &AuraAuth{
 			clientId:     clientId,
@@ -76,15 +91,22 @@ func (c *AuraClient) doOperationWithPayload(method string, path string, payload 
 		return []byte{}, 0, err
 	}
 
-	req := &http.Request{
-		Method: method,
-		URL:    postUrl,
-		Header: map[string][]string{
-			"Content-Type":  {"application/json"},
-			"Authorization": {"Bearer " + token},
-			"User-Agent":    {userAgent},
+	req := &retryablehttp.Request{
+		Request: &http.Request{
+			Method: method,
+			URL:    postUrl,
+			Header: map[string][]string{
+				"Content-Type":  {"application/json"},
+				"Authorization": {"Bearer " + token},
+				"User-Agent":    {userAgent},
+			},
 		},
-		Body: io.NopCloser(bytes.NewReader(payload)),
+	}
+	if payload != nil {
+		err = req.SetBody(payload)
+		if err != nil {
+			return []byte{}, 0, err
+		}
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -93,6 +115,9 @@ func (c *AuraClient) doOperationWithPayload(method string, path string, payload 
 	}
 	if err != nil {
 		return []byte{}, 0, err
+	}
+	if resp == nil {
+		return []byte{}, 0, fmt.Errorf("no response from server")
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -103,38 +128,5 @@ func (c *AuraClient) doOperationWithPayload(method string, path string, payload 
 }
 
 func (c *AuraClient) doOperation(method string, path string) ([]byte, int, error) {
-	token, err := c.auth.GetToken()
-	if err != nil {
-		return []byte{}, 0, err
-	}
-
-	getUrl, err := url.Parse(auraV1Path + "/" + path)
-	if err != nil {
-		return []byte{}, 0, err
-	}
-
-	req := &http.Request{
-		Method: method,
-		URL:    getUrl,
-		Header: map[string][]string{
-			"Content-Type":  {"application/json"},
-			"Authorization": {"Bearer " + token},
-			"User-Agent":    {userAgent},
-		},
-	}
-
-	// todo retry
-	resp, err := c.httpClient.Do(req)
-	if resp != nil && resp.Body != nil {
-		defer resp.Body.Close()
-	}
-	if err != nil {
-		return []byte{}, 0, err
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return []byte{}, 0, err
-	}
-	return body, resp.StatusCode, nil
+	return c.doOperationWithPayload(method, path, nil)
 }

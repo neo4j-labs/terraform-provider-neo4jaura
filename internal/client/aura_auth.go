@@ -27,6 +27,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/hashicorp/go-retryablehttp"
 )
 
 const expirationBuffer = 60
@@ -36,7 +38,7 @@ type AuraAuth struct {
 	clientSecret string
 	mutex        *sync.Mutex
 	token        *AuraAuthToken
-	httpClient   *http.Client
+	httpClient   *retryablehttp.Client
 }
 
 type AuraAuthToken struct {
@@ -52,23 +54,27 @@ func (a *AuraAuth) authenticate() error {
 
 	encodedCreds := base64.StdEncoding.EncodeToString([]byte(a.clientId + ":" + a.clientSecret))
 
-	req := &http.Request{
-		Method: "POST",
-		URL:    authUrl,
-		Header: map[string][]string{
-			"Content-Type":  {"application/x-www-form-urlencoded"},
-			"Authorization": {"Basic " + encodedCreds},
+	req := &retryablehttp.Request{
+		Request: &http.Request{
+			Method: "POST",
+			URL:    authUrl,
+			Header: map[string][]string{
+				"Content-Type":  {"application/x-www-form-urlencoded"},
+				"Authorization": {"Basic " + encodedCreds},
+			},
+			Body: io.NopCloser(strings.NewReader("grant_type=client_credentials")),
 		},
-		Body: io.NopCloser(strings.NewReader("grant_type=client_credentials")),
 	}
 
-	// todo retry
 	resp, err := a.httpClient.Do(req)
 	if resp != nil && resp.Body != nil {
 		defer resp.Body.Close()
 	}
 	if err != nil {
 		return err
+	}
+	if resp == nil {
+		return fmt.Errorf("authentication failed with no response")
 	}
 
 	//Check response status
