@@ -29,11 +29,31 @@ import (
 )
 
 type AuraApi struct {
-	auraClient *AuraClient
+	auraClient      *AuraClient
+	instanceTimeout time.Duration
+	snapshotTimeout time.Duration
 }
 
-func NewAuraApi(client *AuraClient) *AuraApi {
-	return &AuraApi{client}
+const (
+	defaultInstanceTimeout = time.Duration(900) * time.Second
+	defaultSnapshotTimeout = time.Duration(300) * time.Second
+)
+
+func NewAuraApi(client *AuraClient, instanceTimeoutInSecs *int64, snapshotTimeoutInSecs *int64) *AuraApi {
+	instanceTimeout := defaultInstanceTimeout
+	if instanceTimeoutInSecs != nil {
+		instanceTimeout = time.Duration(*instanceTimeoutInSecs) * time.Second
+	}
+
+	snapshotTimeout := defaultSnapshotTimeout
+	if snapshotTimeoutInSecs != nil {
+		snapshotTimeout = time.Duration(*snapshotTimeoutInSecs) * time.Second
+	}
+	return &AuraApi{
+		auraClient:      client,
+		instanceTimeout: instanceTimeout,
+		snapshotTimeout: snapshotTimeout,
+	}
 }
 
 func (api *AuraApi) GetTenants() (GetProjectsResponse, error) {
@@ -177,8 +197,7 @@ func (api *AuraApi) WaitUntilSnapshotIsInState(
 			return e == nil && condition(resp)
 		},
 		time.Second,
-		// todo timeouts must be parametrized
-		time.Minute*time.Duration(5),
+		api.snapshotTimeout,
 	)
 }
 
@@ -196,7 +215,6 @@ func (api *AuraApi) WaitUntilInstanceIsInState(
 			return e == nil && condition(resp)
 		},
 		time.Second,
-		// todo timeouts must be parametrized
-		time.Minute*time.Duration(15),
+		api.instanceTimeout,
 	)
 }

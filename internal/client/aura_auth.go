@@ -29,12 +29,19 @@ import (
 	"time"
 )
 
+const expirationBuffer = 60
+
 type AuraAuth struct {
 	clientId     string
 	clientSecret string
 	mutex        *sync.Mutex
-	token        *TokenResponse
+	token        *AuraAuthToken
 	httpClient   *http.Client
+}
+
+type AuraAuthToken struct {
+	token      string
+	expiringAt int64
 }
 
 func (a *AuraAuth) authenticate() error {
@@ -57,11 +64,12 @@ func (a *AuraAuth) authenticate() error {
 
 	// todo retry
 	resp, err := a.httpClient.Do(req)
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return err
 	}
-
-	defer resp.Body.Close() // Do this to avoid memory leaks
 
 	//Check response status
 	if resp.StatusCode != 200 {
@@ -80,8 +88,10 @@ func (a *AuraAuth) authenticate() error {
 		return err
 	}
 
-	token.TokenExpires = time.Now().Unix() + token.ExpiredIn
-	a.token = &token
+	a.token = &AuraAuthToken{
+		token:      token.AccessToken,
+		expiringAt: time.Now().Unix() + token.ExpiresIn,
+	}
 
 	return nil
 }
@@ -89,13 +99,11 @@ func (a *AuraAuth) authenticate() error {
 func (a *AuraAuth) GetToken() (string, error) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
-	if a.token == nil || time.Now().Unix()-60 < a.token.TokenExpires {
+	if a.token == nil || a.token.expiringAt <= time.Now().Unix()+expirationBuffer {
 		err := a.authenticate()
 		if err != nil {
 			return "", err
 		}
-
 	}
-
-	return a.token.AccessToken, nil
+	return a.token.token, nil
 }

@@ -88,11 +88,12 @@ func (c *AuraClient) doOperationWithPayload(method string, path string, payload 
 	}
 
 	resp, err := c.httpClient.Do(req)
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return []byte{}, 0, err
 	}
-
-	defer resp.Body.Close() // Do this to avoid memory leaks
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -124,11 +125,12 @@ func (c *AuraClient) doOperation(method string, path string) ([]byte, int, error
 
 	// todo retry
 	resp, err := c.httpClient.Do(req)
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return []byte{}, 0, err
 	}
-
-	defer resp.Body.Close() // Do this to avoid memory leaks
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

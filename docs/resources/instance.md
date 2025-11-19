@@ -33,7 +33,7 @@ Aura instance
 - `storage` (String) Storage allocated to the instance. One of [2GB, 4GB, 8GB, 16GB, 32GB, 48GB, 64GB, 96GB, 128GB, 192GB, 256GB, 384GB, 512GB, 768GB, 1024GB, 1536GB, 2048GB]
 - `type` (String) Type of the instance. Depend on your project configuration. One of [enterprise-db, enterprise-ds, professional-db, professional-ds, free-db, business-critical]
 - `vector_optimized` (Boolean) The vector optimization configuration of the instance
-- `version` (String) Version of Neo4j. One of [5, 2025]
+- `version` (String) Version of Neo4j. One of [5]
 
 ### Read-Only
 

@@ -35,8 +35,10 @@ type Neo4jAuraProvider struct {
 }
 
 type Neo4jAuraProviderModel struct {
-	ClientId     types.String `tfsdk:"client_id"`
-	ClientSecret types.String `tfsdk:"client_secret"`
+	ClientId        types.String `tfsdk:"client_id"`
+	ClientSecret    types.String `tfsdk:"client_secret"`
+	InstanceTimeout types.Int64  `tfsdk:"instance_timeout"`
+	SnapshotTimeout types.Int64  `tfsdk:"snapshot_timeout"`
 }
 
 func (n *Neo4jAuraProvider) Metadata(ctx context.Context, request provider.MetadataRequest, response *provider.MetadataResponse) {
@@ -48,14 +50,26 @@ func (n *Neo4jAuraProvider) Schema(ctx context.Context, request provider.SchemaR
 	response.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"client_id": schema.StringAttribute{
+				Description:         "Aura Client ID",
 				MarkdownDescription: "Aura Client ID",
 				Required:            true,
 				Sensitive:           true,
 			},
 			"client_secret": schema.StringAttribute{
+				Description:         "Aura Client Secret",
 				MarkdownDescription: "Aura Client Secret",
 				Required:            true,
 				Sensitive:           true,
+			},
+			"instance_timeout": schema.Int64Attribute{
+				Description:         "Timeout for instance operations (seconds). Defaults to 900 seconds",
+				MarkdownDescription: "Timeout for instance operations (seconds). Defaults to 900 seconds",
+				Optional:            true,
+			},
+			"snapshot_timeout": schema.Int64Attribute{
+				Description:         "Timeout for snapshot operations (seconds). Defaults to 300 seconds",
+				MarkdownDescription: "Timeout for snapshot operations (seconds). Defaults to 300 seconds",
+				Optional:            true,
 			},
 		},
 	}
@@ -74,8 +88,18 @@ func (n *Neo4jAuraProvider) Configure(ctx context.Context, request provider.Conf
 		data.ClientId.ValueString(),
 		data.ClientSecret.ValueString(),
 	)
-	response.DataSourceData = auraClient
-	response.ResourceData = auraClient
+	var instanceTimeoutSec *int64
+	if !data.InstanceTimeout.IsUnknown() && !data.InstanceTimeout.IsNull() {
+		instanceTimeoutSec = data.InstanceTimeout.ValueInt64Pointer()
+	}
+	var snapshotTimeoutSec *int64
+	if !data.SnapshotTimeout.IsUnknown() && !data.SnapshotTimeout.IsNull() {
+		snapshotTimeoutSec = data.SnapshotTimeout.ValueInt64Pointer()
+	}
+	auraApi := client.NewAuraApi(auraClient, instanceTimeoutSec, snapshotTimeoutSec)
+
+	response.DataSourceData = auraApi
+	response.ResourceData = auraApi
 }
 
 func (n *Neo4jAuraProvider) DataSources(ctx context.Context) []func() datasource.DataSource {

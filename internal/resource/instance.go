@@ -111,16 +111,16 @@ func (r *InstanceResource) Configure(ctx context.Context, request resource.Confi
 		return
 	}
 
-	auraClient, ok := request.ProviderData.(*client.AuraClient)
+	auraApi, ok := request.ProviderData.(*client.AuraApi)
 
 	if !ok {
 		response.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.AuraClient, got: %T. Please report this issue to the provider developers.", request.ProviderData),
+			fmt.Sprintf("Expected *client.AuraApi, got: %T. Please report this issue to the provider developers.", request.ProviderData),
 		)
 		return
 	}
-	r.auraApi = client.NewAuraApi(auraClient)
+	r.auraApi = auraApi
 }
 
 func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {

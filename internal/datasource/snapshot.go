@@ -175,13 +175,13 @@ func (ds *SnapshotDataSource) Configure(ctx context.Context, request datasource.
 		return
 	}
 
-	auraClient, ok := request.ProviderData.(*client.AuraClient)
+	auraApi, ok := request.ProviderData.(*client.AuraApi)
 	if !ok {
 		response.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *client.AuraClient, got %T. Please report this issue to the provider developers.", request.ProviderData),
+			fmt.Sprintf("Expected *client.AuraApi, got %T. Please report this issue to the provider developers.", request.ProviderData),
 		)
 		return
 	}
-	ds.auraApi = client.NewAuraApi(auraClient)
+	ds.auraApi = auraApi
 }

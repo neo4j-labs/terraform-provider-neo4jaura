@@ -18,7 +18,7 @@ resource "neo4jaura_instance" "source" {
   cloud_provider = "gcp"
   region         = "europe-west2"
   memory         = "2GB"
-  storage       = "4GB"
+  storage        = "4GB"
   type           = "professional-db"
   project_id     = data.neo4jaura_projects.this.projects.0.id
 }
@@ -29,7 +29,7 @@ resource "neo4jaura_instance" "target" {
   cloud_provider = "gcp"
   region         = "europe-west2"
   memory         = "2GB"
-  storage       = "4GB"
+  storage        = "4GB"
   type           = "professional-db"
   project_id     = data.neo4jaura_projects.this.projects.0.id
 

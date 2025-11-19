@@ -18,3 +18,8 @@ description: |-
 
 - `client_id` (String, Sensitive) Aura Client ID
 - `client_secret` (String, Sensitive) Aura Client Secret
+
+### Optional
+
+- `instance_timeout` (Number) Timeout for instance operations (seconds). Defaults to 900 seconds
+- `snapshot_timeout` (Number) Timeout for snapshot operations (seconds). Defaults to 300 seconds
