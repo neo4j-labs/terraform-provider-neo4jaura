@@ -129,7 +129,7 @@ func (r *SnapshotResource) Create(ctx context.Context, request resource.CreateRe
 		return
 	}
 
-	postResponse, err := r.auraApi.PostSnapshot(data.InstanceId.ValueString())
+	postResponse, err := r.auraApi.PostSnapshot(ctx, data.InstanceId.ValueString())
 	if err != nil {
 		response.Diagnostics.AddError("Error while creating a snapshot", err.Error())
 		return

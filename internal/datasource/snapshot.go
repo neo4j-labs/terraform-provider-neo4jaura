@@ -118,7 +118,7 @@ func (ds *SnapshotDataSource) Read(ctx context.Context, request datasource.ReadR
 	}
 
 	instanceId := data.InstanceId.ValueString()
-	snapshots, err := ds.auraApi.GetSnapshotsByInstanceId(instanceId)
+	snapshots, err := ds.auraApi.GetSnapshotsByInstanceId(ctx, instanceId)
 	if err != nil {
 		response.Diagnostics.AddError("Error while reading instance snapshots", err.Error())
 		return

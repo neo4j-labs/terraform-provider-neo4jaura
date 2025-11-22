@@ -106,7 +106,7 @@ func (ds *ProjectsDataSource) Read(ctx context.Context, request datasource.ReadR
 		return
 	}
 
-	tenantsResponse, err := ds.auraApi.GetTenants()
+	tenantsResponse, err := ds.auraApi.GetTenants(ctx)
 	if err != nil {
 		response.Diagnostics.AddError("Error while reading projects", err.Error())
 		return

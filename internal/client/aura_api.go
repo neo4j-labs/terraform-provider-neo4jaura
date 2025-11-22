@@ -55,8 +55,8 @@ func NewAuraApi(client *AuraClient, instanceTimeoutInSecs *int64, snapshotTimeou
 	}
 }
 
-func (api *AuraApi) GetTenants() (GetProjectsResponse, error) {
-	payload, status, err := api.auraClient.Get("tenants")
+func (api *AuraApi) GetTenants(ctx context.Context) (GetProjectsResponse, error) {
+	payload, status, err := api.auraClient.Get(ctx, "tenants")
 	if err != nil {
 		return GetProjectsResponse{}, err
 	}
@@ -68,13 +68,13 @@ func (api *AuraApi) GetTenants() (GetProjectsResponse, error) {
 	return util.Unmarshal[GetProjectsResponse](payload)
 }
 
-func (api *AuraApi) PostInstance(request PostInstanceRequest) (PostInstanceResponse, error) {
+func (api *AuraApi) PostInstance(ctx context.Context, request PostInstanceRequest) (PostInstanceResponse, error) {
 	payload, err := json.Marshal(request)
 	if err != nil {
 		return PostInstanceResponse{}, err
 	}
 
-	body, status, err := api.auraClient.Post("instances", payload)
+	body, status, err := api.auraClient.Post(ctx, "instances", payload)
 	if err != nil {
 		return PostInstanceResponse{}, err
 	}
@@ -86,8 +86,8 @@ func (api *AuraApi) PostInstance(request PostInstanceRequest) (PostInstanceRespo
 	return util.Unmarshal[PostInstanceResponse](body)
 }
 
-func (api *AuraApi) GetInstanceById(id string) (GetInstanceResponse, error) {
-	payload, status, err := api.auraClient.Get("instances/" + id)
+func (api *AuraApi) GetInstanceById(ctx context.Context, id string) (GetInstanceResponse, error) {
+	payload, status, err := api.auraClient.Get(ctx, "instances/"+id)
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}
@@ -97,8 +97,8 @@ func (api *AuraApi) GetInstanceById(id string) (GetInstanceResponse, error) {
 	return util.Unmarshal[GetInstanceResponse](payload)
 }
 
-func (api *AuraApi) DeleteInstanceById(id string) (GetInstanceResponse, error) {
-	payload, status, err := api.auraClient.Delete("instances/" + id)
+func (api *AuraApi) DeleteInstanceById(ctx context.Context, id string) (GetInstanceResponse, error) {
+	payload, status, err := api.auraClient.Delete(ctx, "instances/"+id)
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}
@@ -108,13 +108,13 @@ func (api *AuraApi) DeleteInstanceById(id string) (GetInstanceResponse, error) {
 	return util.Unmarshal[GetInstanceResponse](payload)
 }
 
-func (api *AuraApi) PatchInstanceById(id string, request PatchInstanceRequest) (GetInstanceResponse, error) {
+func (api *AuraApi) PatchInstanceById(ctx context.Context, id string, request PatchInstanceRequest) (GetInstanceResponse, error) {
 	payload, err := json.Marshal(request)
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}
 
-	body, status, err := api.auraClient.Patch("instances/"+id, payload)
+	body, status, err := api.auraClient.Patch(ctx, "instances/"+id, payload)
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}
@@ -124,8 +124,8 @@ func (api *AuraApi) PatchInstanceById(id string, request PatchInstanceRequest) (
 	return util.Unmarshal[GetInstanceResponse](body)
 }
 
-func (api *AuraApi) PauseInstanceById(id string) (GetInstanceResponse, error) {
-	body, status, err := api.auraClient.Post(fmt.Sprintf("instances/%s/pause", id), []byte("{}"))
+func (api *AuraApi) PauseInstanceById(ctx context.Context, id string) (GetInstanceResponse, error) {
+	body, status, err := api.auraClient.Post(ctx, fmt.Sprintf("instances/%s/pause", id), []byte("{}"))
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}
@@ -135,8 +135,8 @@ func (api *AuraApi) PauseInstanceById(id string) (GetInstanceResponse, error) {
 	return util.Unmarshal[GetInstanceResponse](body)
 }
 
-func (api *AuraApi) ResumeInstanceById(id string) (GetInstanceResponse, error) {
-	body, status, err := api.auraClient.Post(fmt.Sprintf("instances/%s/resume", id), []byte("{}"))
+func (api *AuraApi) ResumeInstanceById(ctx context.Context, id string) (GetInstanceResponse, error) {
+	body, status, err := api.auraClient.Post(ctx, fmt.Sprintf("instances/%s/resume", id), []byte("{}"))
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}
@@ -146,8 +146,8 @@ func (api *AuraApi) ResumeInstanceById(id string) (GetInstanceResponse, error) {
 	return util.Unmarshal[GetInstanceResponse](body)
 }
 
-func (api *AuraApi) GetSnapshotsByInstanceId(instanceId string) (GetSnapshotsResponse, error) {
-	body, status, err := api.auraClient.Get(fmt.Sprintf("instances/%s/snapshots", instanceId))
+func (api *AuraApi) GetSnapshotsByInstanceId(ctx context.Context, instanceId string) (GetSnapshotsResponse, error) {
+	body, status, err := api.auraClient.Get(ctx, fmt.Sprintf("instances/%s/snapshots", instanceId))
 	if err != nil {
 		return GetSnapshotsResponse{}, err
 	}
@@ -157,8 +157,8 @@ func (api *AuraApi) GetSnapshotsByInstanceId(instanceId string) (GetSnapshotsRes
 	return util.Unmarshal[GetSnapshotsResponse](body)
 }
 
-func (api *AuraApi) GetSnapshotById(instanceId string, snapshotId string) (GetSnapshotResponse, error) {
-	body, status, err := api.auraClient.Get(fmt.Sprintf("instances/%s/snapshots/%s", instanceId, snapshotId))
+func (api *AuraApi) GetSnapshotById(ctx context.Context, instanceId string, snapshotId string) (GetSnapshotResponse, error) {
+	body, status, err := api.auraClient.Get(ctx, fmt.Sprintf("instances/%s/snapshots/%s", instanceId, snapshotId))
 	if err != nil {
 		return GetSnapshotResponse{}, err
 	}
@@ -168,8 +168,8 @@ func (api *AuraApi) GetSnapshotById(instanceId string, snapshotId string) (GetSn
 	return util.Unmarshal[GetSnapshotResponse](body)
 }
 
-func (api *AuraApi) PostSnapshot(instanceId string) (PostSnapshotResponse, error) {
-	body, status, err := api.auraClient.Post(fmt.Sprintf("instances/%s/snapshots", instanceId), []byte("{}"))
+func (api *AuraApi) PostSnapshot(ctx context.Context, instanceId string) (PostSnapshotResponse, error) {
+	body, status, err := api.auraClient.Post(ctx, fmt.Sprintf("instances/%s/snapshots", instanceId), []byte("{}"))
 	if err != nil {
 		return PostSnapshotResponse{}, err
 	}
@@ -185,7 +185,7 @@ func (api *AuraApi) WaitUntilSnapshotIsInState(
 
 	return util.WaitUntil(
 		func() (GetSnapshotData, error) {
-			r, e := api.GetSnapshotById(instanceId, snapshotId)
+			r, e := api.GetSnapshotById(ctx, instanceId, snapshotId)
 			tflog.Debug(ctx, fmt.Sprintf("Received response %+v and error %+v", r, e))
 			if e != nil {
 				return GetSnapshotData{}, e
@@ -206,7 +206,7 @@ func (api *AuraApi) WaitUntilInstanceIsInState(
 	condition func(GetInstanceResponse) bool) (GetInstanceResponse, error) {
 	return util.WaitUntil(
 		func() (GetInstanceResponse, error) {
-			r, e := api.GetInstanceById(id)
+			r, e := api.GetInstanceById(ctx, id)
 			tflog.Debug(ctx, fmt.Sprintf("Received response %+v and error %+v", r, e))
 			return r, e
 		},

@@ -18,10 +18,9 @@
 package client
 
 import (
+	"context"
 	"fmt"
 	"io"
-	"net/http"
-	"net/url"
 	"sync"
 	"time"
 
@@ -64,50 +63,37 @@ func NewAuraClient(clientId, clientSecret string) *AuraClient {
 	}
 }
 
-func (c *AuraClient) Get(path string) ([]byte, int, error) {
-	return c.doOperation("GET", path)
+func (c *AuraClient) Get(ctx context.Context, path string) ([]byte, int, error) {
+	return c.doOperation(ctx, "GET", path, nil)
 }
 
-func (c *AuraClient) Post(path string, payload []byte) ([]byte, int, error) {
-	return c.doOperationWithPayload("POST", path, payload)
+func (c *AuraClient) Post(ctx context.Context, path string, payload []byte) ([]byte, int, error) {
+	return c.doOperation(ctx, "POST", path, payload)
 }
 
-func (c *AuraClient) Delete(path string) ([]byte, int, error) {
-	return c.doOperation("DELETE", path)
+func (c *AuraClient) Delete(ctx context.Context, path string) ([]byte, int, error) {
+	return c.doOperation(ctx, "DELETE", path, nil)
 }
 
-func (c *AuraClient) Patch(path string, payload []byte) ([]byte, int, error) {
-	return c.doOperationWithPayload("PATCH", path, payload)
+func (c *AuraClient) Patch(ctx context.Context, path string, payload []byte) ([]byte, int, error) {
+	return c.doOperation(ctx, "PATCH", path, payload)
 }
 
-func (c *AuraClient) doOperationWithPayload(method string, path string, payload []byte) ([]byte, int, error) {
-	token, err := c.auth.GetToken()
+func (c *AuraClient) doOperation(ctx context.Context, method string, path string, payload []byte) ([]byte, int, error) {
+	token, err := c.auth.GetToken(ctx)
 	if err != nil {
 		return []byte{}, 0, err
 	}
 
-	postUrl, err := url.Parse(auraV1Path + "/" + path)
+	absoluteUrl := fmt.Sprintf("%s/%s", auraV1Path, path)
+
+	req, err := retryablehttp.NewRequestWithContext(ctx, method, absoluteUrl, payload)
 	if err != nil {
 		return []byte{}, 0, err
 	}
-
-	req := &retryablehttp.Request{
-		Request: &http.Request{
-			Method: method,
-			URL:    postUrl,
-			Header: map[string][]string{
-				"Content-Type":  {"application/json"},
-				"Authorization": {"Bearer " + token},
-				"User-Agent":    {userAgent},
-			},
-		},
-	}
-	if payload != nil {
-		err = req.SetBody(payload)
-		if err != nil {
-			return []byte{}, 0, err
-		}
-	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	req.Header.Set("User-Agent", userAgent)
 
 	resp, err := c.httpClient.Do(req)
 	if resp != nil && resp.Body != nil {
@@ -125,8 +111,4 @@ func (c *AuraClient) doOperationWithPayload(method string, path string, payload 
 		return []byte{}, 0, err
 	}
 	return body, resp.StatusCode, nil
-}
-
-func (c *AuraClient) doOperation(method string, path string) ([]byte, int, error) {
-	return c.doOperationWithPayload(method, path, nil)
 }

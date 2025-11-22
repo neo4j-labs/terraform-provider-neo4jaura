@@ -395,7 +395,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		postInstanceRequest.GraphAnalyticsPlugin = data.GraphAnalyticsPlugin.ValueBoolPointer()
 	}
 
-	postInstanceResp, err := r.auraApi.PostInstance(*postInstanceRequest)
+	postInstanceResp, err := r.auraApi.PostInstance(ctx, *postInstanceRequest)
 	if err != nil {
 		response.Diagnostics.AddError("Error while creating an instance", err.Error())
 		return
@@ -512,7 +512,7 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 		return
 	}
 
-	instance, err := r.auraApi.GetInstanceById(stateData.InstanceId.ValueString())
+	instance, err := r.auraApi.GetInstanceById(ctx, stateData.InstanceId.ValueString())
 	if err != nil {
 		response.Diagnostics.AddError("Error while getting instance details", err.Error())
 		return
@@ -602,7 +602,7 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 
 	response.Diagnostics.Append(request.State.Get(ctx, &plan)...)
 
-	instance, err := r.auraApi.GetInstanceById(plan.InstanceId.ValueString())
+	instance, err := r.auraApi.GetInstanceById(ctx, plan.InstanceId.ValueString())
 	if err != nil {
 		response.Diagnostics.AddError("Error while getting instance details", err.Error())
 		return
@@ -621,7 +621,7 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 	if plan.Name.ValueString() != instance.Data.Name || plan.Memory.ValueString() != instance.Data.Memory {
 		tflog.Debug(ctx, fmt.Sprintf("Updating instance details: Name: %s -> %s. Memory: %s -> %s",
 			instance.Data.Name, plan.Name.ValueString(), instance.Data.Memory, plan.Memory.ValueString()))
-		_, err := r.auraApi.PatchInstanceById(instance.Data.Id, client.PatchInstanceRequest{
+		_, err := r.auraApi.PatchInstanceById(ctx, instance.Data.Id, client.PatchInstanceRequest{
 			Name:   plan.Name.ValueStringPointer(),
 			Memory: plan.Memory.ValueStringPointer(),
 		})
@@ -664,7 +664,7 @@ func (r *InstanceResource) Delete(ctx context.Context, request resource.DeleteRe
 		return
 	}
 
-	_, err := r.auraApi.DeleteInstanceById(data.InstanceId.ValueString())
+	_, err := r.auraApi.DeleteInstanceById(ctx, data.InstanceId.ValueString())
 	// todo should we wait until instance is deleted
 	if err != nil {
 		response.Diagnostics.AddError("Error while deleting an instance", err.Error())
@@ -672,7 +672,7 @@ func (r *InstanceResource) Delete(ctx context.Context, request resource.DeleteRe
 }
 
 func (r *InstanceResource) resumeInstance(ctx context.Context, id string) util.DiagnosticsError {
-	_, err := r.auraApi.ResumeInstanceById(id)
+	_, err := r.auraApi.ResumeInstanceById(ctx, id)
 	if err != nil {
 		return util.NewDiagnosticsError("Error while resume the instance", err.Error())
 	}
@@ -686,7 +686,7 @@ func (r *InstanceResource) resumeInstance(ctx context.Context, id string) util.D
 }
 
 func (r *InstanceResource) pauseInstance(ctx context.Context, id string) util.DiagnosticsError {
-	_, err := r.auraApi.PauseInstanceById(id)
+	_, err := r.auraApi.PauseInstanceById(ctx, id)
 	if err != nil {
 		return util.NewDiagnosticsError("Error while pausing the instance", err.Error())
 	}

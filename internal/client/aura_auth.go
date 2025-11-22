@@ -18,13 +18,10 @@
 package client
 
 import (
-	"encoding/base64"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
-	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -46,25 +43,14 @@ type AuraAuthToken struct {
 	expiringAt int64
 }
 
-func (a *AuraAuth) authenticate() error {
-	authUrl, err := url.Parse(auraBasePath + "/oauth/token")
+func (a *AuraAuth) authenticate(ctx context.Context) error {
+	authUrl := fmt.Sprintf("%s/%s", auraBasePath, "oauth/token")
+	req, err := retryablehttp.NewRequestWithContext(ctx, "POST", authUrl, []byte("grant_type=client_credentials"))
 	if err != nil {
 		return err
 	}
-
-	encodedCreds := base64.StdEncoding.EncodeToString([]byte(a.clientId + ":" + a.clientSecret))
-
-	req := &retryablehttp.Request{
-		Request: &http.Request{
-			Method: "POST",
-			URL:    authUrl,
-			Header: map[string][]string{
-				"Content-Type":  {"application/x-www-form-urlencoded"},
-				"Authorization": {"Basic " + encodedCreds},
-			},
-			Body: io.NopCloser(strings.NewReader("grant_type=client_credentials")),
-		},
-	}
+	req.SetBasicAuth(a.clientId, a.clientSecret)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := a.httpClient.Do(req)
 	if resp != nil && resp.Body != nil {
@@ -102,11 +88,11 @@ func (a *AuraAuth) authenticate() error {
 	return nil
 }
 
-func (a *AuraAuth) GetToken() (string, error) {
+func (a *AuraAuth) GetToken(ctx context.Context) (string, error) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 	if a.token == nil || a.token.expiringAt <= time.Now().Unix()+expirationBuffer {
-		err := a.authenticate()
+		err := a.authenticate(ctx)
 		if err != nil {
 			return "", err
 		}
