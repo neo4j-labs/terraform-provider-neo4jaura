@@ -32,11 +32,6 @@ data "neo4jaura_projects" "this" {}
 variable "client_id" {}
 variable "client_secret" {}
 
-variable "create_another" {
-  type    = bool
-  default = false
-}
-
 output "snapshot_profile" {
   value = neo4jaura_snapshot.this.profile
 }

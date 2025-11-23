@@ -28,6 +28,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -87,8 +88,8 @@ type InstanceResourceModel struct {
 	Status                types.String `tfsdk:"status"`
 	CreatedAt             types.String `tfsdk:"created_at"`
 	MetricsIntegrationUrl types.String `tfsdk:"metrics_integration_url"`
-	GraphNodes            types.Int32  `tfsdk:"graph_nodes"`
-	GraphRelationships    types.Int32  `tfsdk:"graph_relationships"`
+	GraphNodes            types.Int64  `tfsdk:"graph_nodes"`
+	GraphRelationships    types.Int64  `tfsdk:"graph_relationships"`
 	SecondariesCount      types.Int32  `tfsdk:"secondaries_count"`
 	CdcEnrichmentMode     types.String `tfsdk:"cdc_enrichment_mode"`
 	VectorOptimized       types.Bool   `tfsdk:"vector_optimized"`
@@ -149,8 +150,8 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 				},
 			},
 			"name": schema.StringAttribute{
-				MarkdownDescription: "Name if the instance",
-				Description:         "Name if the instance",
+				MarkdownDescription: "Name of the instance",
+				Description:         "Name of the instance",
 				Required:            true,
 			},
 			"region": schema.StringAttribute{
@@ -280,20 +281,20 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"graph_nodes": schema.Int32Attribute{
+			"graph_nodes": schema.Int64Attribute{
 				MarkdownDescription: "Number of nodes in the graph (free-db only)",
 				Description:         "Number of nodes in the graph (free-db only)",
 				Computed:            true,
-				PlanModifiers: []planmodifier.Int32{
-					int32planmodifier.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
 				},
 			},
-			"graph_relationships": schema.Int32Attribute{
+			"graph_relationships": schema.Int64Attribute{
 				MarkdownDescription: "Number of relationships in the graph (only for free-db)",
 				Description:         "Number of relationships in the graph (only for free-db)",
 				Computed:            true,
-				PlanModifiers: []planmodifier.Int32{
-					int32planmodifier.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
 				},
 			},
 			"secondaries_count": schema.Int32Attribute{
@@ -444,32 +445,32 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		data.MetricsIntegrationUrl = types.StringNull()
 	}
 	if instance.Data.GraphNodes != nil {
-		graphNodes, err := strconv.Atoi(*instance.Data.GraphNodes)
+		graphNodes, err := strconv.ParseInt(*instance.Data.GraphNodes, 10, 64)
 		if err != nil {
 			response.Diagnostics.AddWarning(
 				"Error while parsing graph nodes",
 				fmt.Sprintf("Cannot convert value to int: %s", *instance.Data.GraphNodes),
 			)
-			data.GraphNodes = types.Int32Null()
+			data.GraphNodes = types.Int64Null()
 		} else {
-			data.GraphNodes = types.Int32Value(int32(graphNodes))
+			data.GraphNodes = types.Int64Value(graphNodes)
 		}
 	} else {
-		data.GraphNodes = types.Int32Null()
+		data.GraphNodes = types.Int64Null()
 	}
 	if instance.Data.GraphRelationships != nil {
-		graphRelationships, err := strconv.Atoi(*instance.Data.GraphRelationships)
+		graphRelationships, err := strconv.ParseInt(*instance.Data.GraphRelationships, 10, 64)
 		if err != nil {
 			response.Diagnostics.AddWarning(
 				"Error while parsing graph relationships",
 				fmt.Sprintf("Cannot convert value to int: %s", *instance.Data.GraphNodes),
 			)
-			data.GraphRelationships = types.Int32Null()
+			data.GraphRelationships = types.Int64Null()
 		} else {
-			data.GraphRelationships = types.Int32Value(int32(graphRelationships))
+			data.GraphRelationships = types.Int64Value(graphRelationships)
 		}
 	} else {
-		data.GraphRelationships = types.Int32Null()
+		data.GraphRelationships = types.Int64Null()
 	}
 	if instance.Data.SecondariesCount != nil {
 		data.SecondariesCount = types.Int32Value(int32(*instance.Data.SecondariesCount))
@@ -548,30 +549,30 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 		stateData.MetricsIntegrationUrl = types.StringNull()
 	}
 	if instance.Data.GraphNodes != nil {
-		graphNodes, err := strconv.Atoi(*instance.Data.GraphNodes)
+		graphNodes, err := strconv.ParseInt(*instance.Data.GraphNodes, 10, 64)
 		if err != nil {
 			response.Diagnostics.AddWarning(
 				"Error while parsing graph nodes",
 				fmt.Sprintf("Cannot convert value to int: %s", *instance.Data.GraphNodes),
 			)
-			stateData.GraphNodes = types.Int32Null()
+			stateData.GraphNodes = types.Int64Null()
 		}
-		stateData.GraphNodes = types.Int32Value(int32(graphNodes))
+		stateData.GraphNodes = types.Int64Value(graphNodes)
 	} else {
-		stateData.GraphNodes = types.Int32Null()
+		stateData.GraphNodes = types.Int64Null()
 	}
 	if instance.Data.GraphRelationships != nil {
-		graphRelationships, err := strconv.Atoi(*instance.Data.GraphRelationships)
+		graphRelationships, err := strconv.ParseInt(*instance.Data.GraphRelationships, 10, 64)
 		if err != nil {
 			response.Diagnostics.AddWarning(
 				"Error while parsing graph relationships",
 				fmt.Sprintf("Cannot convert value to int: %s", *instance.Data.GraphNodes),
 			)
-			stateData.GraphRelationships = types.Int32Null()
+			stateData.GraphRelationships = types.Int64Null()
 		}
-		stateData.GraphRelationships = types.Int32Value(int32(graphRelationships))
+		stateData.GraphRelationships = types.Int64Value(graphRelationships)
 	} else {
-		stateData.GraphRelationships = types.Int32Null()
+		stateData.GraphRelationships = types.Int64Null()
 	}
 	if instance.Data.SecondariesCount != nil {
 		stateData.SecondariesCount = types.Int32Value(int32(*instance.Data.SecondariesCount))

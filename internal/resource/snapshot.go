@@ -27,6 +27,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/client"
 )
 
@@ -165,9 +166,9 @@ func (r *SnapshotResource) Read(ctx context.Context, request resource.ReadReques
 }
 
 func (r *SnapshotResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
-	// no op
+	tflog.Info(ctx, "Snapshot resources are immutable and cannot be updated")
 }
 
 func (r *SnapshotResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
-	// snapshots are immutable
+	tflog.Info(ctx, "Snapshot resources are immutable and cannot be deleted")
 }

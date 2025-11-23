@@ -123,6 +123,9 @@ func (ds *ProjectsDataSource) Read(ctx context.Context, request datasource.ReadR
 
 	tenantsValue, diags := types.ListValueFrom(ctx, data.Projects.ElementType(ctx), tenants)
 	response.Diagnostics.Append(diags...)
+	if response.Diagnostics.HasError() {
+		return
+	}
 
 	data.Projects = tenantsValue
 

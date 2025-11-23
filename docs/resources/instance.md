@@ -17,7 +17,7 @@ Aura instance
 
 ### Required
 
-- `name` (String) Name if the instance
+- `name` (String) Name of the instance
 - `project_id` (String) Id of the project
 - `region` (String) Region of the instance
 
