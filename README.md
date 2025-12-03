@@ -115,6 +115,13 @@ If you get stuck, start by checking existing GitHub issues to see if others have
 Thank you for contributing to make this better!
 
 
+## Feedback, Support and Issues
+
+All feedback is welcome and can be posted either in the Issues area of the [GitHub Reposity](https://github.com/neo4j-labs/terraform-provider-neo4jaura/issues) or by posting in [Neo4j Communities Integrations](https://community.neo4j.com/c/integrations).  Communities is also a great place for asking questions.
+
+Neo4j Aura Terraform Provider is a Neo4j Labs project which means it is not officially supported by Neo4j.  Please report any issue what you may have in the [GitHub Reposity](https://github.com/neo4j-labs/terraform-provider-neo4jaura/issues)
+
+
 ## Disclaimer
 
 Neo4j Aura Terraform Provider is a Neo4j Labs project.  Neo4j Labs projects are useful ecosystem tools that are meant to benefit all Neo4j users. 
