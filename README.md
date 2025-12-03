@@ -43,7 +43,7 @@ This is route to take if you wish to experiment with your own development of the
 
 * Go 1.25+
 * Terraform 1.13.4+
-* A Client Id and Client Secret for access to the Aura API.  To obtain these, follow the guidance in the link:https://neo4j.com/docs/aura/api/authentication/[Neo4j AuraDB documentation]
+* A Client Id and Client Secret for access to the Aura API.  To obtain these, follow the guidance in the [Neo4j AuraDB documentation](https://neo4j.com/docs/aura/api/authentication/)
 
 
 ### Installation
