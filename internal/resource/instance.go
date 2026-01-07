@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
@@ -42,8 +43,9 @@ import (
 
 // Ensure resource defined types fully satisfy framework interfaces.
 var (
-	_ resource.Resource              = &InstanceResource{}
-	_ resource.ResourceWithConfigure = &InstanceResource{}
+	_ resource.Resource                = &InstanceResource{}
+	_ resource.ResourceWithConfigure   = &InstanceResource{}
+	_ resource.ResourceWithImportState = &InstanceResource{}
 )
 
 func NewInstanceResource() resource.Resource {
@@ -706,4 +708,8 @@ func (r *InstanceResource) pauseInstance(ctx context.Context, id string) util.Di
 		return util.NewDiagnosticsError("Error while waiting for instance to be paused", err.Error())
 	}
 	return util.NoDiagnosticsError()
+}
+
+func (r *InstanceResource) ImportState(ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("instance_id"), request, response)
 }
