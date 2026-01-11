@@ -20,6 +20,7 @@ package test
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -30,4 +31,13 @@ func nonEmptyString(s string) error {
 		return nil
 	}
 	return fmt.Errorf("expected non empty string")
+}
+
+func oneOf(options ...string) func(string) error {
+	return func(s string) error {
+		if slices.Contains(options, strings.TrimSpace(s)) {
+			return nil
+		}
+		return fmt.Errorf("expected one of %v", options)
+	}
 }
