@@ -17,7 +17,12 @@
 
 package client
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
+
+const timeParseLayout = time.RFC3339
 
 type TokenResponse struct {
 	AccessToken string `json:"access_token"` // This will be a Bearer token
@@ -84,6 +89,13 @@ func (d GetInstanceData) CanBeResumed() bool {
 	return status == "paused"
 }
 
+func (d GetInstanceData) CreatedAtAsTime() (time.Time, error) {
+	if d.CreatedAt == nil {
+		return time.Time{}, nil
+	}
+	return time.Parse(timeParseLayout, *d.CreatedAt)
+}
+
 type GetSnapshotsResponse struct {
 	Data []GetSnapshotData `json:"data"`
 }
@@ -94,6 +106,10 @@ type GetSnapshotData struct {
 	Profile    string `json:"profile"`
 	Status     string `json:"status"`
 	Timestamp  string `json:"timestamp"`
+}
+
+func (d GetSnapshotData) TimestampAsTime() (time.Time, error) {
+	return time.Parse(timeParseLayout, d.Timestamp)
 }
 
 type GetSnapshotResponse struct {

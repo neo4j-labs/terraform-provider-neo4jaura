@@ -38,6 +38,6 @@ func oneOf(options ...string) func(string) error {
 		if slices.Contains(options, strings.TrimSpace(s)) {
 			return nil
 		}
-		return fmt.Errorf("expected one of %v", options)
+		return fmt.Errorf("expected one of %v, got %s", options, s)
 	}
 }

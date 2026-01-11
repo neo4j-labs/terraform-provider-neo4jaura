@@ -117,55 +117,24 @@ func (ds *SnapshotDataSource) Read(ctx context.Context, request datasource.ReadR
 		return
 	}
 
+	var snapshot *client.GetSnapshotData
 	instanceId := data.InstanceId.ValueString()
-	snapshots, err := ds.auraApi.GetSnapshotsByInstanceId(ctx, instanceId)
-	if err != nil {
-		response.Diagnostics.AddError("Error while reading instance snapshots", err.Error())
+	if !data.MostRecent.IsNull() && data.MostRecent.ValueBool() {
+		snapshot = ds.readMostRecentSnapshot(ctx, instanceId, response)
+	} else if !data.SnapshotId.IsNull() && data.SnapshotId.ValueString() != "" {
+		snapshot = ds.readSnapshotById(ctx, data.InstanceId.ValueString(), data.SnapshotId.ValueString(), response)
+	} else {
+		response.Diagnostics.AddError("Provide either snapshot_id or most_recent",
+			fmt.Errorf("missing required attribute: snapshot_id or most_recent").Error())
 		return
 	}
 
-	if len(snapshots.Data) == 0 {
-		response.Diagnostics.AddError("Cannot find snapshot", "There are no snapshots for instance "+instanceId)
+	if snapshot != nil {
+		data.SnapshotId = types.StringValue(snapshot.SnapshotId)
+		data.Status = types.StringValue(snapshot.Status)
+		data.Profile = types.StringValue(snapshot.Profile)
+		data.Timestamp = types.StringValue(snapshot.Timestamp)
 	}
-
-	var selected client.GetSnapshotData
-	if !data.MostRecent.IsNull() && data.MostRecent.ValueBool() {
-		sort.Slice(snapshots.Data, func(i1, i2 int) bool {
-			layout := "2006-01-02T03:04:05Z"
-			timestamp1, err := time.Parse(layout, snapshots.Data[i1].Timestamp)
-			if err != nil {
-				tflog.Error(ctx, "Fail to parse timestamp: "+snapshots.Data[i1].Timestamp)
-				return true
-			}
-			timestamp2, err := time.Parse(layout, snapshots.Data[i2].Timestamp)
-			if err != nil {
-				tflog.Error(ctx, "Fail to parse timestamp: "+snapshots.Data[i2].Timestamp)
-				return true
-			}
-			return timestamp1.Before(timestamp2)
-		})
-		selected = snapshots.Data[len(snapshots.Data)-1]
-		data.SnapshotId = types.StringValue(selected.SnapshotId)
-	} else {
-		found := false
-		for _, snapshot := range snapshots.Data {
-			if snapshot.SnapshotId == data.SnapshotId.ValueString() {
-				selected = snapshot
-				found = true
-				break
-			}
-		}
-		if !found {
-			response.Diagnostics.AddError("Cannot find snapshot",
-				fmt.Sprintf("There is no snapshot for instance %s and snapshot id %s",
-					instanceId, data.SnapshotId.ValueString()))
-			return
-		}
-	}
-
-	data.Status = types.StringValue(selected.Status)
-	data.Profile = types.StringValue(selected.Profile)
-	data.Timestamp = types.StringValue(selected.Timestamp)
 
 	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
 }
@@ -184,4 +153,79 @@ func (ds *SnapshotDataSource) Configure(ctx context.Context, request datasource.
 		return
 	}
 	ds.auraApi = auraApi
+}
+
+func (ds *SnapshotDataSource) readMostRecentSnapshot(ctx context.Context, instanceId string, response *datasource.ReadResponse) *client.GetSnapshotData {
+	snapshots, err := ds.auraApi.GetSnapshotsByInstanceId(ctx, instanceId)
+	if err != nil {
+		response.Diagnostics.AddError("Error while reading instance snapshots", err.Error())
+		return nil
+	}
+	if len(snapshots.Data) == 0 {
+		isRecentlyCreated, err := ds.isInstanceRecentlyCreated(ctx, instanceId)
+		if err != nil {
+			response.Diagnostics.AddError("Cannot read instance "+instanceId, err.Error())
+			return nil
+		}
+		if isRecentlyCreated {
+			snapshots, err = ds.auraApi.WaitUntilSnapshotsMatchCondition(ctx, instanceId, func(data client.GetSnapshotsResponse) bool {
+				return len(data.Data) > 0
+			})
+			if err != nil {
+				response.Diagnostics.AddError("Cannot find snapshot for instance "+instanceId, err.Error())
+				return nil
+			}
+		} else {
+			response.Diagnostics.AddError("Cannot find snapshot", "There are no snapshots for instance "+instanceId)
+			return nil
+		}
+	}
+	tflog.Debug(ctx, fmt.Sprintf("Snapshots: %+v", snapshots.Data))
+	sort.Slice(snapshots.Data, func(i1, i2 int) bool {
+		timestamp1, err := snapshots.Data[i1].TimestampAsTime()
+		if err != nil {
+			tflog.Error(ctx, "Fail to parse timestamp: "+snapshots.Data[i1].Timestamp)
+			return true
+		}
+		timestamp2, err := snapshots.Data[i2].TimestampAsTime()
+		if err != nil {
+			tflog.Error(ctx, "Fail to parse timestamp: "+snapshots.Data[i2].Timestamp)
+			return true
+		}
+		return timestamp1.Before(timestamp2)
+	})
+	return &snapshots.Data[len(snapshots.Data)-1]
+}
+
+func (ds *SnapshotDataSource) isInstanceRecentlyCreated(ctx context.Context, instanceId string) (bool, error) {
+	instance, err := ds.auraApi.GetInstanceById(ctx, instanceId)
+	if err != nil {
+		return false, err
+	}
+	createdAt, err := instance.Data.CreatedAtAsTime()
+	if err != nil {
+		return false, err
+	}
+	return createdAt.After(time.Now().Add(-time.Minute * 5)), nil
+}
+
+func (ds *SnapshotDataSource) readSnapshotById(ctx context.Context, instanceId, snapshotId string, response *datasource.ReadResponse) *client.GetSnapshotData {
+	snapshots, err := ds.auraApi.GetSnapshotsByInstanceId(ctx, instanceId)
+	if err != nil {
+		response.Diagnostics.AddError("Error while reading instance snapshots", err.Error())
+		return nil
+	}
+	if len(snapshots.Data) == 0 {
+		response.Diagnostics.AddError("Cannot find snapshot", "There are no snapshots for instance "+instanceId)
+		return nil
+	}
+	for _, s := range snapshots.Data {
+		if s.SnapshotId == snapshotId {
+			return &s
+		}
+	}
+	response.Diagnostics.AddError("Cannot find snapshot",
+		fmt.Sprintf("There is no snapshot for instance %s and snapshot id %s",
+			instanceId, snapshotId))
+	return nil
 }
