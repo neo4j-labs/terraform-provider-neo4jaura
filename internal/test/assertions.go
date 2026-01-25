@@ -41,3 +41,14 @@ func oneOf(options ...string) func(string) error {
 		return fmt.Errorf("expected one of %v, got %s", options, s)
 	}
 }
+
+type Capturer[T any] struct {
+	Value T
+}
+
+func (c *Capturer[T]) Capture(f func(T) error) func(T) error {
+	return func(t T) error {
+		c.Value = t
+		return f(t)
+	}
+}
