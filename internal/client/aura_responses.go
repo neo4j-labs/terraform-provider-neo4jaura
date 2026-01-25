@@ -71,8 +71,8 @@ type GetInstanceData struct {
 	Storage               *string `json:"storage"`
 	CreatedAt             *string `json:"created_at"`
 	MetricsIntegrationUrl *string `json:"metrics_integration_url"`
-	GraphNodes            *string `json:"graph_nodes"`
-	GraphRelationships    *string `json:"graph_relationships"`
+	GraphNodes            *int64  `json:"graph_nodes"`
+	GraphRelationships    *int64  `json:"graph_relationships"`
 	SecondariesCount      *int    `json:"secondaries_count"`
 	CdcEnrichmentMode     *string `json:"cdc_enrichment_mode"`
 	VectorOptimized       *bool   `json:"vector_optimized"`

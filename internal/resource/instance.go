@@ -20,7 +20,6 @@ package resource
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -445,30 +444,12 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		data.MetricsIntegrationUrl = types.StringNull()
 	}
 	if instance.Data.GraphNodes != nil {
-		graphNodes, err := strconv.ParseInt(*instance.Data.GraphNodes, 10, 64)
-		if err != nil {
-			response.Diagnostics.AddWarning(
-				"Error while parsing graph nodes",
-				fmt.Sprintf("Cannot convert value to int: %s", *instance.Data.GraphNodes),
-			)
-			data.GraphNodes = types.Int64Null()
-		} else {
-			data.GraphNodes = types.Int64Value(graphNodes)
-		}
+		data.GraphNodes = types.Int64Value(*instance.Data.GraphNodes)
 	} else {
 		data.GraphNodes = types.Int64Null()
 	}
 	if instance.Data.GraphRelationships != nil {
-		graphRelationships, err := strconv.ParseInt(*instance.Data.GraphRelationships, 10, 64)
-		if err != nil {
-			response.Diagnostics.AddWarning(
-				"Error while parsing graph relationships",
-				fmt.Sprintf("Cannot convert value to int: %s", *instance.Data.GraphNodes),
-			)
-			data.GraphRelationships = types.Int64Null()
-		} else {
-			data.GraphRelationships = types.Int64Value(graphRelationships)
-		}
+		data.GraphRelationships = types.Int64Value(*instance.Data.GraphRelationships)
 	} else {
 		data.GraphRelationships = types.Int64Null()
 	}
@@ -549,28 +530,12 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 		stateData.MetricsIntegrationUrl = types.StringNull()
 	}
 	if instance.Data.GraphNodes != nil {
-		graphNodes, err := strconv.ParseInt(*instance.Data.GraphNodes, 10, 64)
-		if err != nil {
-			response.Diagnostics.AddWarning(
-				"Error while parsing graph nodes",
-				fmt.Sprintf("Cannot convert value to int: %s", *instance.Data.GraphNodes),
-			)
-			stateData.GraphNodes = types.Int64Null()
-		}
-		stateData.GraphNodes = types.Int64Value(graphNodes)
+		stateData.GraphNodes = types.Int64Value(*instance.Data.GraphNodes)
 	} else {
 		stateData.GraphNodes = types.Int64Null()
 	}
 	if instance.Data.GraphRelationships != nil {
-		graphRelationships, err := strconv.ParseInt(*instance.Data.GraphRelationships, 10, 64)
-		if err != nil {
-			response.Diagnostics.AddWarning(
-				"Error while parsing graph relationships",
-				fmt.Sprintf("Cannot convert value to int: %s", *instance.Data.GraphNodes),
-			)
-			stateData.GraphRelationships = types.Int64Null()
-		}
-		stateData.GraphRelationships = types.Int64Value(graphRelationships)
+		stateData.GraphRelationships = types.Int64Value(*instance.Data.GraphRelationships)
 	} else {
 		stateData.GraphRelationships = types.Int64Null()
 	}
