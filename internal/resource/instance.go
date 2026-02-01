@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
@@ -309,10 +310,6 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 				MarkdownDescription: fmt.Sprintf("CDC enrichment mode. One of [%s]", strings.Join(supportedCdcEnrichmentModes, ", ")),
 				Description:         fmt.Sprintf("CDC enrichment mode. One of [%s]", strings.Join(supportedCdcEnrichmentModes, ", ")),
 				Optional:            true,
-				Computed:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
 				Validators: []validator.String{
 					stringvalidator.OneOf(supportedCdcEnrichmentModes...),
 				},
@@ -353,6 +350,51 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 				},
 			},
 		},
+	}
+}
+
+// ConfigValidators returns a list of resource-level validators
+func (r *InstanceResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		&cdcTierValidator{},
+	}
+}
+
+// cdcTierValidator validates that CDC enrichment mode is only used with supported tiers
+type cdcTierValidator struct{}
+
+func (v cdcTierValidator) Description(ctx context.Context) string {
+	return "CDC enrichment mode is only supported on business-critical and enterprise instance types"
+}
+
+func (v cdcTierValidator) MarkdownDescription(ctx context.Context) string {
+	return "CDC enrichment mode is only supported on `business-critical` and `enterprise` instance types"
+}
+
+func (v cdcTierValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data InstanceResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// If CDC enrichment mode is not set, no validation needed
+	if data.CdcEnrichmentMode.IsNull() || data.CdcEnrichmentMode.IsUnknown() {
+		return
+	}
+
+	// If type is not set, we can't validate yet
+	if data.Type.IsNull() || data.Type.IsUnknown() {
+		return
+	}
+
+	instanceType := data.Type.ValueString()
+	if instanceType != "business-critical" && instanceType != "enterprise" {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("cdc_enrichment_mode"),
+			"Invalid Configuration",
+			fmt.Sprintf("CDC enrichment mode is only supported on business-critical and enterprise instance types. Instance type '%s' does not support CDC.", instanceType),
+		)
 	}
 }
 
@@ -397,9 +439,8 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	if !data.SecondariesCount.IsUnknown() {
 		postInstanceRequest.SecondariesCount = data.SecondariesCount.ValueInt32Pointer()
 	}
-	if !data.CdcEnrichmentMode.IsUnknown() {
-		postInstanceRequest.CdcEnrichmentMode = data.CdcEnrichmentMode.ValueStringPointer()
-	}
+	// Note: CDC enrichment mode cannot be set during instance creation
+	// It must be set via PATCH after the instance is running (see below)
 	if !data.VectorOptimized.IsUnknown() {
 		postInstanceRequest.VectorOptimized = data.VectorOptimized.ValueBoolPointer()
 	}
@@ -428,6 +469,34 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	if err != nil {
 		response.Diagnostics.AddError("Instance is not running in time", err.Error())
 	}
+
+	// CDC enrichment mode must be set via PATCH after instance creation
+	// The POST /instances endpoint does not support cdc_enrichment_mode
+	// CDC is only supported on business-critical and enterprise tiers
+	// Note: Don't check IsUnknown() because Computed fields are marked Unknown during creation
+	instanceType := data.Type.ValueString()
+	if !data.CdcEnrichmentMode.IsNull() && (instanceType == "business-critical" || instanceType == "enterprise") {
+		cdcMode := data.CdcEnrichmentMode.ValueString()
+		tflog.Debug(ctx, fmt.Sprintf("Patching instance %s with CDC enrichment mode: %s", postInstanceResp.Data.Id, cdcMode))
+		patchRequest := client.PatchInstanceRequest{
+			CdcEnrichmentMode: &cdcMode,
+		}
+		instance, err = r.auraApi.PatchInstanceById(ctx, postInstanceResp.Data.Id, patchRequest)
+		if err != nil {
+			response.Diagnostics.AddError("Error while patching instance CDC enrichment mode", err.Error())
+			return
+		}
+		// Wait for instance to be running again after patch
+		instance, err = r.auraApi.WaitUntilInstanceIsInState(ctx, postInstanceResp.Data.Id, func(r client.GetInstanceResponse) bool {
+			return strings.ToLower(r.Data.Status) == "running"
+		})
+		if err != nil {
+			response.Diagnostics.AddError("Instance is not running after CDC patch", err.Error())
+			return
+		}
+		tflog.Debug(ctx, fmt.Sprintf("Successfully patched CDC enrichment mode for instance %s", postInstanceResp.Data.Id))
+	}
+
 	if instance.Data.Storage != nil {
 		data.Storage = types.StringValue(*instance.Data.Storage)
 	} else {
@@ -460,7 +529,12 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	}
 	if instance.Data.CdcEnrichmentMode != nil {
 		data.CdcEnrichmentMode = types.StringValue(*instance.Data.CdcEnrichmentMode)
+	} else if !data.CdcEnrichmentMode.IsNull() {
+		// API returns null for CDC enrichment mode on business-critical tier
+		// Keep the planned value since we applied it via PATCH
+		// data.CdcEnrichmentMode already has the correct planned value
 	} else {
+		// No planned value and API returns null - leave as null
 		data.CdcEnrichmentMode = types.StringNull()
 	}
 	if instance.Data.VectorOptimized != nil {
@@ -546,7 +620,12 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 	}
 	if instance.Data.CdcEnrichmentMode != nil {
 		stateData.CdcEnrichmentMode = types.StringValue(*instance.Data.CdcEnrichmentMode)
+	} else if !stateData.CdcEnrichmentMode.IsNull() {
+		// API returns null for CDC enrichment mode on business-critical tier
+		// Keep the existing state value since it was set via PATCH
+		// stateData.CdcEnrichmentMode already has the correct state value
 	} else {
+		// No state value and API returns null - leave as null
 		stateData.CdcEnrichmentMode = types.StringNull()
 	}
 	if instance.Data.VectorOptimized != nil {

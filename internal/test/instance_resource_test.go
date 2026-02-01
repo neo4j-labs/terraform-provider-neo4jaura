@@ -111,3 +111,63 @@ func TestAcc_can_create_instance_resource(t *testing.T) {
 		},
 	})
 }
+
+// Test for issue #6: CDC enrichment mode should not cause inconsistent state
+// https://github.com/neo4j-labs/terraform-provider-neo4jaura/issues/6
+func TestAcc_cdc_enrichment_mode_default_value(t *testing.T) {
+	cdcConfig := fmt.Sprintf(`
+%[1]s
+data "neo4jaura_projects" "this" {}
+
+resource "neo4jaura_instance" "cdc_test" {
+  name                = "TestCDCEnrichmentMode"
+  cloud_provider      = "gcp"
+  region              = "us-central1"
+  memory              = "8GB"
+  type                = "business-critical"
+  project_id          = data.neo4jaura_projects.this.projects.0.id
+  cdc_enrichment_mode = "OFF"
+}
+`, defaultProviderConfig)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// Create instance with CDC enrichment mode OFF
+				Config: cdcConfig,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.cdc_test",
+						tfjsonpath.New("instance_id"),
+						knownvalue.StringFunc(nonEmptyString),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.cdc_test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact("TestCDCEnrichmentMode"),
+					),
+					// Verify CDC enrichment mode is correctly set to OFF
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.cdc_test",
+						tfjsonpath.New("cdc_enrichment_mode"),
+						knownvalue.StringExact("OFF"),
+					),
+				},
+			},
+			{
+				// Refresh state to verify no drift (issue #6 bug check)
+				// Before the fix, this would cause "inconsistent result" error
+				Config: cdcConfig,
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Verify CDC enrichment mode remains OFF after refresh
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.cdc_test",
+						tfjsonpath.New("cdc_enrichment_mode"),
+						knownvalue.StringExact("OFF"),
+					),
+				},
+			},
+		},
+	})
+}
