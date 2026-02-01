@@ -48,6 +48,7 @@ data "neo4jaura_snapshot" "this" {
 `, defaultProviderConfig)
 
 func TestAcc_can_read_snapshot_datasource(t *testing.T) {
+	t.Parallel()
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
