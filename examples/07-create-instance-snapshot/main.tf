@@ -2,8 +2,8 @@ terraform {
   required_version = ">= 1.13.4"
   required_providers {
     neo4jaura = {
-      source  = "terraform.local/local/neo4jaura"
-      version = var.provider_version
+      source = "neo4j-labs/neo4jaura"
+      version = "0.0.2-beta"
     }
   }
 }
@@ -29,7 +29,6 @@ resource "neo4jaura_snapshot" "this" {
 
 data "neo4jaura_projects" "this" {}
 
-variable "provider_version" {}
 variable "client_id" {}
 variable "client_secret" {}
 

@@ -49,6 +49,7 @@ func newTestAuraApi() *client.AuraApi {
 	return client.NewAuraApi(
 		client.NewAuraClient(
 			os.Getenv("TF_VAR_client_id"),
-			os.Getenv("TF_VAR_client_secret")),
+			os.Getenv("TF_VAR_client_secret"),
+			"0.0.0-tests"),
 		nil, nil)
 }
