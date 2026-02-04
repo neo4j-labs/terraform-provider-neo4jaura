@@ -30,7 +30,6 @@ import (
 const (
 	auraBasePath = "https://api.neo4j.io"
 	auraV1Path   = auraBasePath + "/v1"
-	userAgent    = "AuraTerraform/v0.0.3"
 )
 
 const (
@@ -42,9 +41,10 @@ const (
 type AuraClient struct {
 	auth       *AuraAuth
 	httpClient *retryablehttp.Client
+	userAgent  string
 }
 
-func NewAuraClient(clientId, clientSecret string) *AuraClient {
+func NewAuraClient(clientId, clientSecret string, version string) *AuraClient {
 	httpClient := retryablehttp.NewClient()
 	httpClient.RetryMax = maxRetries
 	httpClient.RetryWaitMin = backoffMin
@@ -52,14 +52,17 @@ func NewAuraClient(clientId, clientSecret string) *AuraClient {
 	httpClient.CheckRetry = retryablehttp.DefaultRetryPolicy
 	httpClient.Backoff = retryablehttp.DefaultBackoff
 
+	userAgent := fmt.Sprintf("AuraTerraform/v%s", version)
 	return &AuraClient{
 		auth: &AuraAuth{
 			clientId:     clientId,
 			clientSecret: clientSecret,
 			httpClient:   httpClient,
 			mutex:        &sync.Mutex{},
+			userAgent:    userAgent,
 		},
 		httpClient: httpClient,
+		userAgent:  userAgent,
 	}
 }
 
@@ -93,7 +96,7 @@ func (c *AuraClient) doOperation(ctx context.Context, method string, path string
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("User-Agent", c.userAgent)
 
 	resp, err := c.httpClient.Do(req)
 	if resp != nil && resp.Body != nil {

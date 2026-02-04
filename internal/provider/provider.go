@@ -87,6 +87,7 @@ func (n *Neo4jAuraProvider) Configure(ctx context.Context, request provider.Conf
 	auraClient := client.NewAuraClient(
 		data.ClientId.ValueString(),
 		data.ClientSecret.ValueString(),
+		n.version,
 	)
 	var instanceTimeoutSec *int64
 	if !data.InstanceTimeout.IsUnknown() && !data.InstanceTimeout.IsNull() {
