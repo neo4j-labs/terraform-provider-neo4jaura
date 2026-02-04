@@ -19,7 +19,9 @@ package test
 
 import (
 	"context"
+	"os"
 
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/client"
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
 
@@ -41,4 +43,12 @@ func executeCypher(ctx context.Context, connectionUrl, username, password string
 		return result.Consume(ctx)
 	})
 	return err
+}
+
+func newTestAuraApi() *client.AuraApi {
+	return client.NewAuraApi(
+		client.NewAuraClient(
+			os.Getenv("TF_VAR_client_id"),
+			os.Getenv("TF_VAR_client_secret")),
+		nil, nil)
 }

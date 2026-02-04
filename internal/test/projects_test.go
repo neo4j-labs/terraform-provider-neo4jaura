@@ -33,6 +33,7 @@ data "neo4jaura_projects" "this" {}
 `, defaultProviderConfig)
 
 func TestAcc_can_read_projects_datasource(t *testing.T) {
+	t.Parallel()
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{

@@ -42,8 +42,9 @@ import (
 
 // Ensure resource defined types fully satisfy framework interfaces.
 var (
-	_ resource.Resource              = &InstanceResource{}
-	_ resource.ResourceWithConfigure = &InstanceResource{}
+	_ resource.Resource                = &InstanceResource{}
+	_ resource.ResourceWithConfigure   = &InstanceResource{}
+	_ resource.ResourceWithImportState = &InstanceResource{}
 )
 
 func NewInstanceResource() resource.Resource {
@@ -722,6 +723,10 @@ func (r *InstanceResource) Delete(ctx context.Context, request resource.DeleteRe
 	if err != nil {
 		response.Diagnostics.AddError("Error while waiting for deleting an instance", err.Error())
 	}
+}
+
+func (r *InstanceResource) ImportState(ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("instance_id"), request, response)
 }
 
 func (r *InstanceResource) resumeInstance(ctx context.Context, id string) util.DiagnosticsError {
