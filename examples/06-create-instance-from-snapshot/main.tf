@@ -3,7 +3,7 @@ terraform {
   required_providers {
     neo4jaura = {
       source  = "terraform.local/local/neo4jaura"
-      version = "0.0.1-beta"
+      version = "0.0.3"
     }
   }
 }
