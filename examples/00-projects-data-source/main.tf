@@ -3,7 +3,7 @@ terraform {
   required_providers {
     neo4jaura = {
       source  = "terraform.local/local/neo4jaura"
-      version = "0.0.3"
+      version = var.provider_version
     }
   }
 }
@@ -15,6 +15,7 @@ provider "neo4jaura" {
 
 data "neo4jaura_projects" "this" {}
 
+variable "provider_version" {}
 variable "client_id" {}
 variable "client_secret" {}
 

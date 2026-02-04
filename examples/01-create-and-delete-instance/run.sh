@@ -11,6 +11,10 @@ function cleanup() {
 cleanup
 trap cleanup EXIT
 
+if [[ -z "$TF_VAR_provider_version" ]]; then
+    export TF_VAR_provider_version=$(cat ../../.version)
+fi
+
 terraform init
 terraform apply
 
