@@ -20,6 +20,8 @@ package client
 import (
 	"strings"
 	"time"
+
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/domain"
 )
 
 const timeParseLayout = time.RFC3339
@@ -81,12 +83,12 @@ type GetInstanceData struct {
 
 func (d GetInstanceData) CanBePaused() bool {
 	status := strings.ToLower(d.Status)
-	return status == "running"
+	return status == domain.InstanceStatusRunning
 }
 
 func (d GetInstanceData) CanBeResumed() bool {
 	status := strings.ToLower(d.Status)
-	return status == "paused"
+	return status == domain.InstanceStatusPaused
 }
 
 func (d GetInstanceData) CreatedAtAsTime() (time.Time, error) {

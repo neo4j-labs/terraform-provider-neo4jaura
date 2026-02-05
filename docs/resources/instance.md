@@ -27,7 +27,6 @@ Aura instance
 - `cloud_provider` (String) Cloud provider. One of [gcp, aws, azure]
 - `graph_analytics_plugin` (Boolean) The graph analytics plugin configuration of the instance.
 - `memory` (String) Memory allocated for the instance. One of [1GB,2GB,4GB,8GB,16GB,24GB,32GB,48GB,64GB,128GB,192GB,256GB,384GB,512GB]
-- `secondaries_count` (Number) The number of secondaries in an Instance. (VDC only)
 - `source` (Attributes) Information about source for the instance (see [below for nested schema](#nestedatt--source))
 - `status` (String) Status of the instance. One of [creating, destroying, running, pausing, paused, suspending, suspended, resuming, loading, loading failed, restoring, updating, overwriting]
 - `storage` (String) Storage allocated to the instance. One of [2GB, 4GB, 8GB, 16GB, 32GB, 48GB, 64GB, 96GB, 128GB, 192GB, 256GB, 384GB, 512GB, 768GB, 1024GB, 1536GB, 2048GB]
@@ -44,6 +43,7 @@ Aura instance
 - `instance_id` (String) Id of the instance
 - `metrics_integration_url` (String) Metrics integration endpoint URL
 - `password` (String, Sensitive) Password of the instance database
+- `secondaries_count` (Number) The number of secondaries in an Instance. (VDC only)
 - `username` (String) Username of the instance database
 
 <a id="nestedatt--source"></a>

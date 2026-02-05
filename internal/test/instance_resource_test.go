@@ -29,6 +29,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/client"
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -170,7 +171,7 @@ func TestAcc_cdc_enrichment_mode_default_value(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"neo4jaura_instance.this",
 						tfjsonpath.New("cdc_enrichment_mode"),
-						knownvalue.StringExact("FULL"),
+						knownvalue.StringExact(domain.CdcEnrichmentModeFull),
 					),
 				},
 			},
@@ -186,7 +187,7 @@ func TestAcc_cdc_enrichment_mode_default_value(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"neo4jaura_instance.this",
 						tfjsonpath.New("cdc_enrichment_mode"),
-						knownvalue.StringExact("FULL"),
+						knownvalue.StringExact(domain.CdcEnrichmentModeFull),
 					),
 				},
 			},
@@ -195,6 +196,8 @@ func TestAcc_cdc_enrichment_mode_default_value(t *testing.T) {
 }
 
 func TestAcc_can_import_instance_resource(t *testing.T) {
+	SkipIfNotAcceptance(t)
+
 	api := newTestAuraApi()
 	examples := []struct {
 		name               string
@@ -208,26 +211,29 @@ func TestAcc_can_import_instance_resource(t *testing.T) {
 			createResourceFunc: func(tt *testing.T) string {
 				ctx := context.Background()
 				instance, err := api.PostInstance(ctx, client.PostInstanceRequest{
-					Version:       "5",
+					Version:       domain.InstanceVersion5,
 					Name:          "TestFreeTier",
-					CloudProvider: "gcp",
+					CloudProvider: domain.CloudProviderGcp,
 					Region:        "europe-west1",
-					Memory:        "1GB",
-					Type:          "free-db",
+					Memory:        domain.InstanceMemory1GB,
+					Type:          domain.InstanceTypeFreeDb,
 					TenantId:      os.Getenv("AURA_PROJECT_ID"),
 				})
 				require.NoError(tt, err)
 
 				_, err = api.WaitUntilInstanceIsInState(ctx, instance.Data.Id, func(r client.GetInstanceResponse) bool {
-					return r.Data.Status == "running"
+					return r.Data.Status == domain.InstanceStatusRunning
 				})
 				require.NoError(tt, err)
 
 				err = executeCypher(ctx, instance.Data.ConnectionUrl, instance.Data.Username, instance.Data.Password,
 					"CREATE (a: Actor {name: 'Keanu Reeves'})-[:PLAYS]->(b: Movie {title: 'The Matrix'})")
 				require.NoError(tt, err)
-				// wait for instance to update nodes sand relationships counters
-				time.Sleep(time.Minute)
+
+				_, err = api.WaitUntilInstanceIsInState(ctx, instance.Data.Id, func(r client.GetInstanceResponse) bool {
+					return r.Data.GraphRelationships != nil && r.Data.GraphNodes != nil
+				})
+				require.NoError(tt, err)
 
 				return instance.Data.Id
 			},
@@ -252,18 +258,18 @@ func TestAcc_can_import_instance_resource(t *testing.T) {
 			createResourceFunc: func(tt *testing.T) string {
 				ctx := context.Background()
 				instance, err := api.PostInstance(ctx, client.PostInstanceRequest{
-					Version:       "5",
+					Version:       domain.InstanceVersion5,
 					Name:          "TestProfessionalTier",
-					CloudProvider: "gcp",
+					CloudProvider: domain.CloudProviderGcp,
 					Region:        "europe-west1",
-					Memory:        "1GB",
-					Type:          "professional-db",
+					Memory:        domain.InstanceMemory1GB,
+					Type:          domain.InstanceTypeProfessionalDb,
 					TenantId:      os.Getenv("AURA_PROJECT_ID"),
 				})
 				require.NoError(tt, err)
 
 				_, err = api.WaitUntilInstanceIsInState(ctx, instance.Data.Id, func(r client.GetInstanceResponse) bool {
-					return r.Data.Status == "running"
+					return r.Data.Status == domain.InstanceStatusRunning
 				})
 				require.NoError(tt, err)
 
@@ -279,37 +285,35 @@ func TestAcc_can_import_instance_resource(t *testing.T) {
 			createResourceFunc: func(tt *testing.T) string {
 				ctx := context.Background()
 				instance, err := api.PostInstance(ctx, client.PostInstanceRequest{
-					Version:       "5",
+					Version:       domain.InstanceVersion5,
 					Name:          "TestBusinessCritInstance",
-					CloudProvider: "gcp",
+					CloudProvider: domain.CloudProviderGcp,
 					Region:        "us-central1",
-					Memory:        "8GB",
-					Type:          "business-critical",
+					Memory:        domain.InstanceMemory8GB,
+					Type:          domain.InstanceTypeBusinessCritical,
 					TenantId:      os.Getenv("AURA_PROJECT_ID"),
 				})
 				require.NoError(tt, err)
 
 				_, err = api.WaitUntilInstanceIsInState(ctx, instance.Data.Id, func(r client.GetInstanceResponse) bool {
-					return r.Data.Status == "running"
+					return r.Data.Status == domain.InstanceStatusRunning
 				})
 				require.NoError(tt, err)
 
-				cdcEnrichmentMode := "FULL"
+				cdcEnrichmentMode := domain.CdcEnrichmentModeFull
 				_, err = api.PatchInstanceById(ctx, instance.Data.Id, client.PatchInstanceRequest{
 					CdcEnrichmentMode: &cdcEnrichmentMode,
 				})
 				require.NoError(tt, err)
-				// wait for instance to update CDC enrichment mode
-				time.Sleep(time.Minute)
 
 				return instance.Data.Id
 			},
 			config: businessCriticalTierInstanceConfig,
 			extraStateChecks: []statecheck.StateCheck{
 				statecheck.ExpectKnownValue(
-					"neo4jaura_instance.cdc_test",
+					"neo4jaura_instance.this",
 					tfjsonpath.New("cdc_enrichment_mode"),
-					knownvalue.StringExact("FULL"),
+					knownvalue.StringExact(domain.CdcEnrichmentModeFull),
 				),
 			},
 			parallel: true,

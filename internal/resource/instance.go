@@ -37,6 +37,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/client"
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/domain"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/util"
 )
 
@@ -50,24 +51,6 @@ var (
 func NewInstanceResource() resource.Resource {
 	return &InstanceResource{}
 }
-
-var supportedStatuses = []string{
-	"creating", "destroying", "running", "pausing", "paused", "suspending", "suspended", "resuming", "loading",
-	"loading failed", "restoring", "updating", "overwriting",
-}
-var supportedMemory = []string{
-	"1GB", "2GB", "4GB", "8GB", "16GB", "24GB", "32GB", "48GB", "64GB", "128GB", "192GB", "256GB", "384GB", "512GB",
-}
-var supportedTypes = []string{
-	"enterprise-db", "enterprise-ds", "professional-db", "professional-ds", "free-db", "business-critical",
-}
-var supportedCloudProviders = []string{"gcp", "aws", "azure"}
-var supportedVersions = []string{"5"}
-var supportedStorage = []string{
-	"2GB", "4GB", "8GB", "16GB", "32GB", "48GB", "64GB", "96GB", "128GB", "192GB", "256GB", "384GB", "512GB",
-	"768GB", "1024GB", "1536GB", "2048GB",
-}
-var supportedCdcEnrichmentModes = []string{"OFF", "DIFF", "FULL"}
 
 type InstanceResource struct {
 	auraApi *client.AuraApi
@@ -107,20 +90,20 @@ type InstanceResourceSourceModel struct {
 func (m InstanceResourceModel) CanBePaused() bool {
 	return !m.Status.IsUnknown() &&
 		!m.Status.IsNull() &&
-		strings.ToLower(m.Status.ValueString()) == "running"
+		strings.ToLower(m.Status.ValueString()) == domain.InstanceStatusRunning
 }
 
 func (m InstanceResourceModel) CanBeResumed() bool {
 	return !m.Status.IsUnknown() &&
 		!m.Status.IsNull() &&
-		strings.ToLower(m.Status.ValueString()) == "paused"
+		strings.ToLower(m.Status.ValueString()) == domain.InstanceStatusPaused
 }
 
-func (r *InstanceResource) Metadata(ctx context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
+func (r *InstanceResource) Metadata(_ context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
 	response.TypeName = request.ProviderTypeName + "_instance"
 }
 
-func (r *InstanceResource) Configure(ctx context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
+func (r *InstanceResource) Configure(_ context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
 	if request.ProviderData == nil {
 		return
 	}
@@ -137,7 +120,7 @@ func (r *InstanceResource) Configure(ctx context.Context, request resource.Confi
 	r.auraApi = auraApi
 }
 
-func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
+func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, response *resource.SchemaResponse) {
 	response.Schema = schema.Schema{
 		MarkdownDescription: "Aura instance",
 		Description:         "Aura instance",
@@ -301,7 +284,6 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 			"secondaries_count": schema.Int32Attribute{
 				MarkdownDescription: "The number of secondaries in an Instance. (VDC only)",
 				Description:         "The number of secondaries in an Instance. (VDC only)",
-				Optional:            true,
 				Computed:            true,
 				PlanModifiers: []planmodifier.Int32{
 					int32planmodifier.UseStateForUnknown(),
@@ -355,47 +337,11 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 }
 
 // ConfigValidators returns a list of resource-level validators
-func (r *InstanceResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
+func (r *InstanceResource) ConfigValidators(_ context.Context) []resource.ConfigValidator {
 	return []resource.ConfigValidator{
 		&cdcTierValidator{},
-	}
-}
-
-// cdcTierValidator validates that CDC enrichment mode is only used with supported tiers
-type cdcTierValidator struct{}
-
-func (v cdcTierValidator) Description(ctx context.Context) string {
-	return "CDC enrichment mode is only supported on business-critical and enterprise instance types"
-}
-
-func (v cdcTierValidator) MarkdownDescription(ctx context.Context) string {
-	return "CDC enrichment mode is only supported on `business-critical` and `enterprise` instance types"
-}
-
-func (v cdcTierValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
-	var data InstanceResourceModel
-	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// If CDC enrichment mode is not set, no validation needed
-	if data.CdcEnrichmentMode.IsNull() || data.CdcEnrichmentMode.IsUnknown() {
-		return
-	}
-
-	// If type is not set, we can't validate yet
-	if data.Type.IsNull() || data.Type.IsUnknown() {
-		return
-	}
-
-	instanceType := data.Type.ValueString()
-	if instanceType != "business-critical" && instanceType != "enterprise" {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("cdc_enrichment_mode"),
-			"Invalid Configuration",
-			fmt.Sprintf("CDC enrichment mode is only supported on business-critical and enterprise instance types. Instance type '%s' does not support CDC.", instanceType),
-		)
+		&vectorOptimizedValidator{},
+		&graphAnalyticsPluginValidator{},
 	}
 }
 
@@ -465,7 +411,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	tflog.Debug(ctx, "Created an instance with id "+postInstanceResp.Data.Id)
 
 	instance, err := r.auraApi.WaitUntilInstanceIsInState(ctx, postInstanceResp.Data.Id, func(r client.GetInstanceResponse) bool {
-		return strings.ToLower(r.Data.Status) == "running"
+		return strings.ToLower(r.Data.Status) == domain.InstanceStatusRunning
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Instance is not running in time", err.Error())
@@ -476,7 +422,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	// CDC is only supported on business-critical and enterprise tiers
 	// Note: Don't check IsUnknown() because Computed fields are marked Unknown during creation
 	instanceType := data.Type.ValueString()
-	if !data.CdcEnrichmentMode.IsNull() && (instanceType == "business-critical" || instanceType == "enterprise") {
+	if !data.CdcEnrichmentMode.IsNull() && (instanceType == domain.InstanceTypeBusinessCritical || instanceType == domain.InstanceTypeEnterpriseDb || instanceType == domain.InstanceTypeEnterpriseDs) {
 		cdcMode := data.CdcEnrichmentMode.ValueString()
 		tflog.Debug(ctx, fmt.Sprintf("Patching instance %s with CDC enrichment mode: %s", postInstanceResp.Data.Id, cdcMode))
 		patchRequest := client.PatchInstanceRequest{
@@ -489,7 +435,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		}
 		// Wait for instance to be running again after patch
 		instance, err = r.auraApi.WaitUntilInstanceIsInState(ctx, postInstanceResp.Data.Id, func(r client.GetInstanceResponse) bool {
-			return strings.ToLower(r.Data.Status) == "running"
+			return strings.ToLower(r.Data.Status) == domain.InstanceStatusRunning
 		})
 		if err != nil {
 			response.Diagnostics.AddError("Instance is not running after CDC patch", err.Error())
@@ -555,7 +501,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	tflog.Debug(ctx, fmt.Sprintf("Instance %s is running", postInstanceResp.Data.Id))
 
 	// Pausing new instance
-	if strings.ToLower(requestedStatus.ValueString()) == "paused" {
+	if strings.ToLower(requestedStatus.ValueString()) == domain.InstanceStatusPaused {
 		diagError := r.pauseInstance(ctx, data.InstanceId.ValueString())
 		if diagError.IsNotEmpty() {
 			response.Diagnostics.AddError(diagError.Message, diagError.Details)
@@ -658,7 +604,7 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 	}
 
 	// Resume
-	if strings.ToLower(plan.Status.ValueString()) == "running" && state.CanBeResumed() {
+	if strings.ToLower(plan.Status.ValueString()) == domain.InstanceStatusRunning && state.CanBeResumed() {
 		diagError := r.resumeInstance(ctx, state.InstanceId.ValueString())
 		if diagError.IsNotEmpty() {
 			response.Diagnostics.AddError(diagError.Message, diagError.Details)
@@ -684,7 +630,7 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 		_, err = r.auraApi.WaitUntilInstanceIsInState(ctx, plan.InstanceId.ValueString(), func(resp client.GetInstanceResponse) bool {
 			return resp.Data.Memory == plan.Memory.ValueString() &&
 				resp.Data.Name == plan.Name.ValueString() &&
-				(strings.ToLower(resp.Data.Status) == "running" || strings.ToLower(resp.Data.Status) == "paused")
+				(strings.ToLower(resp.Data.Status) == domain.InstanceStatusRunning || strings.ToLower(resp.Data.Status) == string(domain.InstanceStatusPaused))
 		})
 
 		if err != nil {
@@ -694,7 +640,7 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 	}
 
 	// Pause
-	if strings.ToLower(plan.Status.ValueString()) == "paused" && state.CanBePaused() {
+	if strings.ToLower(plan.Status.ValueString()) == domain.InstanceStatusPaused && state.CanBePaused() {
 		diagError := r.pauseInstance(ctx, state.InstanceId.ValueString())
 		if diagError.IsNotEmpty() {
 			response.Diagnostics.AddError(diagError.Message, diagError.Details)
@@ -735,7 +681,7 @@ func (r *InstanceResource) resumeInstance(ctx context.Context, id string) util.D
 		return util.NewDiagnosticsError("Error while resume the instance", err.Error())
 	}
 	_, err = r.auraApi.WaitUntilInstanceIsInState(ctx, id, func(resp client.GetInstanceResponse) bool {
-		return strings.ToLower(resp.Data.Status) == "running"
+		return strings.ToLower(resp.Data.Status) == domain.InstanceStatusRunning
 	})
 	if err != nil {
 		return util.NewDiagnosticsError("Error while waiting instance to be resumed", err.Error())
@@ -749,7 +695,7 @@ func (r *InstanceResource) pauseInstance(ctx context.Context, id string) util.Di
 		return util.NewDiagnosticsError("Error while pausing the instance", err.Error())
 	}
 	_, err = r.auraApi.WaitUntilInstanceIsInState(ctx, id, func(resp client.GetInstanceResponse) bool {
-		return strings.ToLower(resp.Data.Status) == "paused"
+		return strings.ToLower(resp.Data.Status) == domain.InstanceStatusPaused
 	})
 	if err != nil {
 		return util.NewDiagnosticsError("Error while waiting for instance to be paused", err.Error())
