@@ -1,0 +1,38 @@
+name: Run tests
+on:
+  pull_request:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version: '1.25'
+      - run: make test
+
+  acceptance-tests:
+    name: Acceptance Tests
+    runs-on: ubuntu-latest
+    environment: acceptance
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version: '1.25'
+      - run: make acceptance
+        env:
+          AURA_PROJECT_ID: ${{ vars.AURA_PROJECT_ID }}
+          TF_VAR_client_id: ${{ secrets.AURA_CLIENT_ID }}
+          TF_VAR_client_secret: ${{ secrets.AURA_CLIENT_SECRET }}
+
+
+
+
