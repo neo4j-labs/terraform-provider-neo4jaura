@@ -196,6 +196,8 @@ func TestAcc_cdc_enrichment_mode_default_value(t *testing.T) {
 }
 
 func TestAcc_can_import_instance_resource(t *testing.T) {
+	SkipIfNotAcceptance(t)
+
 	api := newTestAuraApi()
 	examples := []struct {
 		name               string
@@ -304,17 +306,12 @@ func TestAcc_can_import_instance_resource(t *testing.T) {
 				})
 				require.NoError(tt, err)
 
-				_, err = api.WaitUntilInstanceIsInState(ctx, instance.Data.Id, func(r client.GetInstanceResponse) bool {
-					return r.Data.CdcEnrichmentMode != nil
-				})
-				require.NoError(tt, err)
-
 				return instance.Data.Id
 			},
 			config: businessCriticalTierInstanceConfig,
 			extraStateChecks: []statecheck.StateCheck{
 				statecheck.ExpectKnownValue(
-					"neo4jaura_instance.cdc_test",
+					"neo4jaura_instance.this",
 					tfjsonpath.New("cdc_enrichment_mode"),
 					knownvalue.StringExact(domain.CdcEnrichmentModeFull),
 				),
