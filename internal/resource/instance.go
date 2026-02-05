@@ -284,7 +284,6 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			"secondaries_count": schema.Int32Attribute{
 				MarkdownDescription: "The number of secondaries in an Instance. (VDC only)",
 				Description:         "The number of secondaries in an Instance. (VDC only)",
-				Optional:            true,
 				Computed:            true,
 				PlanModifiers: []planmodifier.Int32{
 					int32planmodifier.UseStateForUnknown(),
@@ -341,6 +340,7 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 func (r *InstanceResource) ConfigValidators(_ context.Context) []resource.ConfigValidator {
 	return []resource.ConfigValidator{
 		&cdcTierValidator{},
+		&vectorOptimizedValidator{},
 	}
 }
 

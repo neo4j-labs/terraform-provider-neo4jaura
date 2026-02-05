@@ -65,6 +65,7 @@ var supportedCdcEnrichmentModes = []string{domain.CdcEnrichmentModeOff, domain.C
 
 var (
 	_ resource.ConfigValidator = &cdcTierValidator{}
+	_ resource.ConfigValidator = &vectorOptimizedValidator{}
 )
 
 // cdcTierValidator validates that CDC enrichment mode is only used with supported tiers
@@ -85,6 +86,10 @@ func (v *cdcTierValidator) ValidateResource(ctx context.Context, req resource.Va
 		return
 	}
 
+	v.validateCdcTier(data, resp)
+}
+
+func (v *cdcTierValidator) validateCdcTier(data InstanceResourceModel, resp *resource.ValidateConfigResponse) {
 	// If CDC enrichment mode is not set, no validation needed
 	if data.CdcEnrichmentMode.IsNull() || data.CdcEnrichmentMode.IsUnknown() {
 		return
@@ -101,6 +106,45 @@ func (v *cdcTierValidator) ValidateResource(ctx context.Context, req resource.Va
 			path.Root("cdc_enrichment_mode"),
 			"Invalid Configuration",
 			fmt.Sprintf("CDC enrichment mode is only supported on business-critical and enterprise instance types. Instance type '%s' does not support CDC.", instanceType),
+		)
+	}
+}
+
+type vectorOptimizedValidator struct{}
+
+func (v *vectorOptimizedValidator) Description(ctx context.Context) string {
+	return "Vector optimization can only be applied to instances with 4GB memory or greater."
+}
+
+func (v *vectorOptimizedValidator) MarkdownDescription(ctx context.Context) string {
+	return "Vector optimization can only be applied to instances with `4GB` memory or greater."
+}
+
+func (v *vectorOptimizedValidator) ValidateResource(ctx context.Context, request resource.ValidateConfigRequest, response *resource.ValidateConfigResponse) {
+	var data InstanceResourceModel
+	response.Diagnostics.Append(request.Config.Get(ctx, &data)...)
+	if response.Diagnostics.HasError() {
+		return
+	}
+
+	v.validateVectorOptimized(data, response)
+}
+
+func (v *vectorOptimizedValidator) validateVectorOptimized(data InstanceResourceModel, response *resource.ValidateConfigResponse) {
+	if data.VectorOptimized.IsNull() || data.VectorOptimized.IsUnknown() || !data.VectorOptimized.ValueBool() {
+		return
+	}
+
+	if data.Memory.IsNull() || data.Memory.IsUnknown() {
+		return
+	}
+
+	memory := data.Memory.ValueString()
+	if memory == domain.InstanceMemory1GB || memory == domain.InstanceMemory2GB {
+		response.Diagnostics.AddAttributeError(
+			path.Root("vector_optimized"),
+			"Invalid Configuration",
+			fmt.Sprintf("Vector optimization is not supported for instances with %s memory.", memory),
 		)
 	}
 }
