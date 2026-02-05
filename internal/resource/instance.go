@@ -341,6 +341,7 @@ func (r *InstanceResource) ConfigValidators(_ context.Context) []resource.Config
 	return []resource.ConfigValidator{
 		&cdcTierValidator{},
 		&vectorOptimizedValidator{},
+		&graphAnalyticsPluginValidator{},
 	}
 }
 

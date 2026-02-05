@@ -23,6 +23,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/domain"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestValidateCdcTier(t *testing.T) {
@@ -99,13 +100,9 @@ func TestValidateCdcTier(t *testing.T) {
 			validator.validateCdcTier(tc.model, resp)
 
 			if tc.expectedError == "" {
-				if resp.Diagnostics.HasError() {
-					t.Fatalf("expected no error, got: %v", resp.Diagnostics)
-				}
+				assert.Falsef(t, resp.Diagnostics.HasError(), "expected no error, got: %v", resp.Diagnostics)
 			} else {
-				if !resp.Diagnostics.HasError() {
-					t.Fatalf("expected error, got none")
-				}
+				assert.True(t, resp.Diagnostics.HasError(), "expected error, got no errors")
 				found := false
 				for _, d := range resp.Diagnostics {
 					if d.Summary() == "Invalid Configuration" && d.Detail() == tc.expectedError {
@@ -113,9 +110,7 @@ func TestValidateCdcTier(t *testing.T) {
 						break
 					}
 				}
-				if !found {
-					t.Fatalf("expected error detail %q, got: %v", tc.expectedError, resp.Diagnostics)
-				}
+				assert.Truef(t, found, "expected error detail %q, got: %v", tc.expectedError, resp.Diagnostics)
 			}
 		})
 	}
@@ -177,13 +172,9 @@ func TestValidateVectorOptimized(t *testing.T) {
 			validator.validateVectorOptimized(tc.model, resp)
 
 			if tc.expectedError == "" {
-				if resp.Diagnostics.HasError() {
-					t.Fatalf("expected no error, got: %v", resp.Diagnostics)
-				}
+				assert.Falsef(t, resp.Diagnostics.HasError(), "expected no error, got: %v", resp.Diagnostics)
 			} else {
-				if !resp.Diagnostics.HasError() {
-					t.Fatalf("expected error, got none")
-				}
+				assert.True(t, resp.Diagnostics.HasError(), "expected error, got no errors")
 				found := false
 				for _, d := range resp.Diagnostics {
 					if d.Summary() == "Invalid Configuration" && d.Detail() == tc.expectedError {
@@ -191,9 +182,91 @@ func TestValidateVectorOptimized(t *testing.T) {
 						break
 					}
 				}
-				if !found {
-					t.Fatalf("expected error detail %q, got: %v", tc.expectedError, resp.Diagnostics)
+				assert.Truef(t, found, "expected error detail %q, got: %v", tc.expectedError, resp.Diagnostics)
+			}
+		})
+	}
+}
+
+func TestValidateGraphAnalyticsPlugin(t *testing.T) {
+	t.Parallel()
+
+	validator := &graphAnalyticsPluginValidator{}
+
+	cases := map[string]struct {
+		model         InstanceResourceModel
+		expectedError string
+	}{
+		"valid_professional_db_with_plugin": {
+			model: InstanceResourceModel{
+				Type:                 types.StringValue(domain.InstanceTypeProfessionalDb),
+				GraphAnalyticsPlugin: types.BoolValue(true),
+			},
+		},
+		"valid_free_db_without_plugin": {
+			model: InstanceResourceModel{
+				Type:                 types.StringValue(domain.InstanceTypeFreeDb),
+				GraphAnalyticsPlugin: types.BoolValue(false),
+			},
+		},
+		"invalid_free_db_with_plugin": {
+			model: InstanceResourceModel{
+				Type:                 types.StringValue(domain.InstanceTypeFreeDb),
+				GraphAnalyticsPlugin: types.BoolValue(true),
+			},
+			expectedError: "Graph Analytics Plugin is only supported on professional-db instance type. Instance type 'free-db' does not support Graph Analytics Plugin.",
+		},
+		"invalid_enterprise_db_with_plugin": {
+			model: InstanceResourceModel{
+				Type:                 types.StringValue(domain.InstanceTypeEnterpriseDb),
+				GraphAnalyticsPlugin: types.BoolValue(true),
+			},
+			expectedError: "Graph Analytics Plugin is only supported on professional-db instance type. Instance type 'enterprise-db' does not support Graph Analytics Plugin.",
+		},
+		"plugin_not_set": {
+			model: InstanceResourceModel{
+				Type: types.StringValue(domain.InstanceTypeFreeDb),
+			},
+		},
+		"plugin_null": {
+			model: InstanceResourceModel{
+				Type:                 types.StringValue(domain.InstanceTypeFreeDb),
+				GraphAnalyticsPlugin: types.BoolNull(),
+			},
+		},
+		"type_not_set": {
+			model: InstanceResourceModel{
+				GraphAnalyticsPlugin: types.BoolValue(true),
+			},
+		},
+		"type_null": {
+			model: InstanceResourceModel{
+				Type:                 types.StringNull(),
+				GraphAnalyticsPlugin: types.BoolValue(true),
+			},
+		},
+	}
+
+	for name, tc := range cases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			resp := &resource.ValidateConfigResponse{}
+			validator.validateGraphAnalyticsPlugin(tc.model, resp)
+
+			if tc.expectedError == "" {
+				assert.Falsef(t, resp.Diagnostics.HasError(), "expected no error, got: %v", resp.Diagnostics)
+			} else {
+				assert.True(t, resp.Diagnostics.HasError(), "expected error, got no errors")
+				found := false
+				for _, d := range resp.Diagnostics {
+					if d.Summary() == "Invalid Configuration" && d.Detail() == tc.expectedError {
+						found = true
+						break
+					}
 				}
+				assert.Truef(t, found, "expected error detail %q, got: %v", tc.expectedError, resp.Diagnostics)
 			}
 		})
 	}

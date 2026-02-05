@@ -66,16 +66,17 @@ var supportedCdcEnrichmentModes = []string{domain.CdcEnrichmentModeOff, domain.C
 var (
 	_ resource.ConfigValidator = &cdcTierValidator{}
 	_ resource.ConfigValidator = &vectorOptimizedValidator{}
+	_ resource.ConfigValidator = &graphAnalyticsPluginValidator{}
 )
 
 // cdcTierValidator validates that CDC enrichment mode is only used with supported tiers
 type cdcTierValidator struct{}
 
-func (v *cdcTierValidator) Description(ctx context.Context) string {
+func (v *cdcTierValidator) Description(_ context.Context) string {
 	return "CDC enrichment mode is only supported on business-critical and enterprise instance types"
 }
 
-func (v *cdcTierValidator) MarkdownDescription(ctx context.Context) string {
+func (v *cdcTierValidator) MarkdownDescription(_ context.Context) string {
 	return "CDC enrichment mode is only supported on `business-critical` and `enterprise` instance types"
 }
 
@@ -110,13 +111,14 @@ func (v *cdcTierValidator) validateCdcTier(data InstanceResourceModel, resp *res
 	}
 }
 
+// vectorOptimizedValidator validates that vector optimization can only be applied to instance of a certain size
 type vectorOptimizedValidator struct{}
 
-func (v *vectorOptimizedValidator) Description(ctx context.Context) string {
+func (v *vectorOptimizedValidator) Description(_ context.Context) string {
 	return "Vector optimization can only be applied to instances with 4GB memory or greater."
 }
 
-func (v *vectorOptimizedValidator) MarkdownDescription(ctx context.Context) string {
+func (v *vectorOptimizedValidator) MarkdownDescription(_ context.Context) string {
 	return "Vector optimization can only be applied to instances with `4GB` memory or greater."
 }
 
@@ -145,6 +147,45 @@ func (v *vectorOptimizedValidator) validateVectorOptimized(data InstanceResource
 			path.Root("vector_optimized"),
 			"Invalid Configuration",
 			fmt.Sprintf("Vector optimization is not supported for instances with %s memory.", memory),
+		)
+	}
+}
+
+type graphAnalyticsPluginValidator struct{}
+
+func (v *graphAnalyticsPluginValidator) Description(_ context.Context) string {
+	return "Graph Analytics Plugin can only be applied to Professional instances."
+}
+
+func (v *graphAnalyticsPluginValidator) MarkdownDescription(_ context.Context) string {
+	return "Graph Analytics Plugin can only be applied to `Professional` instances."
+}
+
+func (v *graphAnalyticsPluginValidator) ValidateResource(ctx context.Context, request resource.ValidateConfigRequest, response *resource.ValidateConfigResponse) {
+	var data InstanceResourceModel
+	response.Diagnostics.Append(request.Config.Get(ctx, &data)...)
+	if response.Diagnostics.HasError() {
+		return
+	}
+
+	v.validateGraphAnalyticsPlugin(data, response)
+}
+
+func (v *graphAnalyticsPluginValidator) validateGraphAnalyticsPlugin(data InstanceResourceModel, response *resource.ValidateConfigResponse) {
+	if data.GraphAnalyticsPlugin.IsNull() || data.GraphAnalyticsPlugin.IsUnknown() || !data.GraphAnalyticsPlugin.ValueBool() {
+		return
+	}
+
+	if data.Type.IsNull() || data.Type.IsUnknown() {
+		return
+	}
+
+	instanceType := data.Type.ValueString()
+	if instanceType != domain.InstanceTypeProfessionalDb {
+		response.Diagnostics.AddAttributeError(
+			path.Root("graph_analytics_plugin"),
+			"Invalid Configuration",
+			fmt.Sprintf("Graph Analytics Plugin is only supported on professional-db instance type. Instance type '%s' does not support Graph Analytics Plugin.", instanceType),
 		)
 	}
 }
