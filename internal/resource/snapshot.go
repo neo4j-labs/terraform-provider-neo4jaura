@@ -30,6 +30,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/client"
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/domain"
 )
 
 var (
@@ -37,6 +38,15 @@ var (
 	_ resource.ResourceWithConfigure   = &SnapshotResource{}
 	_ resource.ResourceWithImportState = &SnapshotResource{}
 )
+
+var supportedSnapshotProfiles = []string{domain.SnapshotProfileAdHoc, domain.SnapshotProfileScheduled}
+
+var supportedSnapshotStatuses = []string{
+	domain.SnapshotStatusInProgress,
+	domain.SnapshotStatusPending,
+	domain.SnapshotStatusCompleted,
+	domain.SnapshotStatusFailed,
+}
 
 func NewSnapshotResource() resource.Resource {
 	return &SnapshotResource{}
@@ -97,16 +107,16 @@ func (r *SnapshotResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				},
 			},
 			"profile": schema.StringAttribute{
-				MarkdownDescription: "Profile of the snapshot. One of [AddHoc, Scheduled]",
-				Description:         "Profile of the snapshot. One of [AddHoc, Scheduled]",
+				MarkdownDescription: fmt.Sprintf("Profile of the snapshot. One of [%s]", strings.Join(supportedSnapshotProfiles, ", ")),
+				Description:         fmt.Sprintf("Profile of the snapshot. One of [%s]", strings.Join(supportedSnapshotProfiles, ", ")),
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"status": schema.StringAttribute{
-				MarkdownDescription: "Status of the snapshot. One of [Completed, InProgress, Failed, Pending]",
-				Description:         "Status of the snapshot. One of [Completed, InProgress, Failed, Pending]",
+				MarkdownDescription: fmt.Sprintf("Status of the snapshot. One of [%s]", strings.Join(supportedSnapshotStatuses, ", ")),
+				Description:         fmt.Sprintf("Status of the snapshot. One of [%s]", strings.Join(supportedSnapshotStatuses, ", ")),
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -186,6 +196,9 @@ func (r *SnapshotResource) Delete(ctx context.Context, _ resource.DeleteRequest,
 }
 
 func (r *SnapshotResource) ImportState(ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse) {
+	if request.ID == "" {
+		return
+	}
 	idParts := strings.Split(request.ID, ",")
 
 	if len(idParts) != 2 || idParts[0] == "" || idParts[1] == "" {
