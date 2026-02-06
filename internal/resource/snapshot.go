@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -29,12 +30,23 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/client"
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/domain"
 )
 
 var (
-	_ resource.Resource              = &SnapshotResource{}
-	_ resource.ResourceWithConfigure = &SnapshotResource{}
+	_ resource.Resource                = &SnapshotResource{}
+	_ resource.ResourceWithConfigure   = &SnapshotResource{}
+	_ resource.ResourceWithImportState = &SnapshotResource{}
 )
+
+var supportedSnapshotProfiles = []string{domain.SnapshotProfileAdHoc, domain.SnapshotProfileScheduled}
+
+var supportedSnapshotStatuses = []string{
+	domain.SnapshotStatusInProgress,
+	domain.SnapshotStatusPending,
+	domain.SnapshotStatusCompleted,
+	domain.SnapshotStatusFailed,
+}
 
 func NewSnapshotResource() resource.Resource {
 	return &SnapshotResource{}
@@ -69,11 +81,11 @@ func (r *SnapshotResource) Configure(ctx context.Context, request resource.Confi
 	r.auraApi = auraApi
 }
 
-func (r *SnapshotResource) Metadata(ctx context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
+func (r *SnapshotResource) Metadata(_ context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
 	response.TypeName = request.ProviderTypeName + "_snapshot"
 }
 
-func (r *SnapshotResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
+func (r *SnapshotResource) Schema(_ context.Context, _ resource.SchemaRequest, response *resource.SchemaResponse) {
 	response.Schema = schema.Schema{
 		MarkdownDescription: "Resource for an instance snapshot",
 		Description:         "Resource for an instance snapshot",
@@ -95,16 +107,16 @@ func (r *SnapshotResource) Schema(ctx context.Context, request resource.SchemaRe
 				},
 			},
 			"profile": schema.StringAttribute{
-				MarkdownDescription: "Profile of the snapshot. One of [AddHoc, Scheduled]",
-				Description:         "Profile of the snapshot. One of [AddHoc, Scheduled]",
+				MarkdownDescription: fmt.Sprintf("Profile of the snapshot. One of [%s]", strings.Join(supportedSnapshotProfiles, ", ")),
+				Description:         fmt.Sprintf("Profile of the snapshot. One of [%s]", strings.Join(supportedSnapshotProfiles, ", ")),
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"status": schema.StringAttribute{
-				MarkdownDescription: "Status of the snapshot. One of [Completed, InProgress, Failed, Pending]",
-				Description:         "Status of the snapshot. One of [Completed, InProgress, Failed, Pending]",
+				MarkdownDescription: fmt.Sprintf("Status of the snapshot. One of [%s]", strings.Join(supportedSnapshotStatuses, ", ")),
+				Description:         fmt.Sprintf("Status of the snapshot. One of [%s]", strings.Join(supportedSnapshotStatuses, ", ")),
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -162,13 +174,41 @@ func (r *SnapshotResource) Read(ctx context.Context, request resource.ReadReques
 		return
 	}
 
+	snapshotResponse, err := r.auraApi.GetSnapshotById(ctx, data.InstanceId.ValueString(), data.SnapshotId.ValueString())
+	if err != nil {
+		response.Diagnostics.AddError("Error reading snapshot", err.Error())
+		return
+	}
+
+	data.Timestamp = types.StringValue(snapshotResponse.Data.Timestamp)
+	data.Status = types.StringValue(snapshotResponse.Data.Status)
+	data.Profile = types.StringValue(snapshotResponse.Data.Profile)
+
 	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
 }
 
-func (r *SnapshotResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
+func (r *SnapshotResource) Update(ctx context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
 	tflog.Info(ctx, "Snapshot resources are immutable and cannot be updated")
 }
 
-func (r *SnapshotResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
+func (r *SnapshotResource) Delete(ctx context.Context, _ resource.DeleteRequest, _ *resource.DeleteResponse) {
 	tflog.Info(ctx, "Snapshot resources are immutable and cannot be deleted")
+}
+
+func (r *SnapshotResource) ImportState(ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse) {
+	if request.ID == "" {
+		return
+	}
+	idParts := strings.Split(request.ID, ",")
+
+	if len(idParts) != 2 || idParts[0] == "" || idParts[1] == "" {
+		response.Diagnostics.AddError(
+			"Unexpected Import Identifier",
+			fmt.Sprintf("Expected import identifier with format: instance_id,snapshot_id. Got: %q", request.ID),
+		)
+		return
+	}
+
+	response.Diagnostics.Append(response.State.SetAttribute(ctx, path.Root("instance_id"), idParts[0])...)
+	response.Diagnostics.Append(response.State.SetAttribute(ctx, path.Root("snapshot_id"), idParts[1])...)
 }
