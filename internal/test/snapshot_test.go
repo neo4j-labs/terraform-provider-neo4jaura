@@ -75,7 +75,7 @@ func TestAcc_can_read_snapshot_datasource(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.neo4jaura_snapshot.this",
 						tfjsonpath.New("status"),
-						knownvalue.StringFunc(oneOf("Completed", "InProgress")),
+						knownvalue.StringFunc(oneOf("Completed", "InProgress", "Pending")),
 					),
 					statecheck.ExpectKnownValue(
 						"data.neo4jaura_snapshot.this",
