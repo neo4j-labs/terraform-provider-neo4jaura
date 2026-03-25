@@ -136,7 +136,7 @@ func TestAcc_can_create_instance_resource(t *testing.T) {
 					err := executeCypher(context.Background(), connectionUrlCapturer.Value, usernameCapturer.Value, passwordCapturer.Value,
 						"CREATE (a: Actor {name: 'Keanu Reeves'})-[:PLAYS]->(b: Movie {title: 'The Matrix'})")
 					assert.NoError(t, err)
-					time.Sleep(time.Minute)
+					time.Sleep(2 * time.Minute)
 				},
 				RefreshState: true,
 			},
