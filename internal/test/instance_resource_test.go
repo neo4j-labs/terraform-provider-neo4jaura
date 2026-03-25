@@ -77,6 +77,21 @@ resource "neo4jaura_instance" "this" {
 }
 `, defaultProviderConfig)
 
+var businessCriticalWithSecondariesConfig = fmt.Sprintf(`
+%[1]s
+data "neo4jaura_projects" "this" {}
+
+resource "neo4jaura_instance" "this" {
+  name                = "TestBusinessCritSecondaries"
+  cloud_provider      = "gcp"
+  region              = "us-central1"
+  memory              = "8GB"
+  type                = "business-critical"
+  project_id          = data.neo4jaura_projects.this.projects.0.id
+  secondaries_count   = 1
+}
+`, defaultProviderConfig)
+
 func TestAcc_can_create_instance_resource(t *testing.T) {
 	connectionUrlCapturer := &Capturer[string]{}
 	usernameCapturer := &Capturer[string]{}
@@ -121,7 +136,7 @@ func TestAcc_can_create_instance_resource(t *testing.T) {
 					err := executeCypher(context.Background(), connectionUrlCapturer.Value, usernameCapturer.Value, passwordCapturer.Value,
 						"CREATE (a: Actor {name: 'Keanu Reeves'})-[:PLAYS]->(b: Movie {title: 'The Matrix'})")
 					assert.NoError(t, err)
-					time.Sleep(time.Minute)
+					time.Sleep(2 * time.Minute)
 				},
 				RefreshState: true,
 			},
@@ -188,6 +203,52 @@ func TestAcc_cdc_enrichment_mode_default_value(t *testing.T) {
 						"neo4jaura_instance.this",
 						tfjsonpath.New("cdc_enrichment_mode"),
 						knownvalue.StringExact(domain.CdcEnrichmentModeFull),
+					),
+				},
+			},
+		},
+	})
+}
+
+// Test that secondaries_count is applied via PATCH after create and does not drift when API omits it on read
+func TestAcc_secondaries_count_no_drift(t *testing.T) {
+	t.Parallel()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// Create instance with secondaries_count
+				Config: businessCriticalWithSecondariesConfig,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("instance_id"),
+						knownvalue.StringFunc(nonEmptyString),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact("TestBusinessCritSecondaries"),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("secondaries_count"),
+						knownvalue.Int32Exact(1),
+					),
+				},
+			},
+			{
+				RefreshState: true,
+			},
+			{
+				// Verify secondaries_count remains after refresh (no drift when API omits field)
+				Config: businessCriticalWithSecondariesConfig,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("secondaries_count"),
+						knownvalue.Int32Exact(1),
 					),
 				},
 			},
@@ -314,6 +375,45 @@ func TestAcc_can_import_instance_resource(t *testing.T) {
 					"neo4jaura_instance.this",
 					tfjsonpath.New("cdc_enrichment_mode"),
 					knownvalue.StringExact(domain.CdcEnrichmentModeFull),
+				),
+			},
+			parallel: true,
+		},
+
+		{
+			name: "business critical tier with secondaries_count",
+			createResourceFunc: func(tt *testing.T) string {
+				ctx := context.Background()
+				instance, err := api.PostInstance(ctx, client.PostInstanceRequest{
+					Version:       domain.InstanceVersion5,
+					Name:          "TestBusinessCritSecondaries",
+					CloudProvider: domain.CloudProviderGcp,
+					Region:        "us-central1",
+					Memory:        domain.InstanceMemory8GB,
+					Type:          domain.InstanceTypeBusinessCritical,
+					TenantId:      os.Getenv("AURA_PROJECT_ID"),
+				})
+				require.NoError(tt, err)
+
+				_, err = api.WaitUntilInstanceIsInState(ctx, instance.Data.Id, func(r client.GetInstanceResponse) bool {
+					return r.Data.Status == domain.InstanceStatusRunning
+				})
+				require.NoError(tt, err)
+
+				secondariesCount := int32(1)
+				_, err = api.PatchInstanceById(ctx, instance.Data.Id, client.PatchInstanceRequest{
+					SecondariesCount: &secondariesCount,
+				})
+				require.NoError(tt, err)
+
+				return instance.Data.Id
+			},
+			config: businessCriticalWithSecondariesConfig,
+			extraStateChecks: []statecheck.StateCheck{
+				statecheck.ExpectKnownValue(
+					"neo4jaura_instance.this",
+					tfjsonpath.New("secondaries_count"),
+					knownvalue.Int32Exact(1),
 				),
 			},
 			parallel: true,

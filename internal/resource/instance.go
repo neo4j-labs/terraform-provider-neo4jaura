@@ -284,7 +284,7 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			"secondaries_count": schema.Int32Attribute{
 				MarkdownDescription: "The number of secondaries in an Instance. (VDC only)",
 				Description:         "The number of secondaries in an Instance. (VDC only)",
-				Computed:            true,
+				Optional:            true,
 				PlanModifiers: []planmodifier.Int32{
 					int32planmodifier.UseStateForUnknown(),
 				},
@@ -383,9 +383,8 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	if !data.Storage.IsUnknown() {
 		postInstanceRequest.Storage = data.Storage.ValueStringPointer()
 	}
-	if !data.SecondariesCount.IsUnknown() {
-		postInstanceRequest.SecondariesCount = data.SecondariesCount.ValueInt32Pointer()
-	}
+	// Note: secondaries count cannot be set during instance creation
+	// It must be set via PATCH after the instance is running (see below)
 	// Note: CDC enrichment mode cannot be set during instance creation
 	// It must be set via PATCH after the instance is running (see below)
 	if !data.VectorOptimized.IsUnknown() {
@@ -417,31 +416,36 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		response.Diagnostics.AddError("Instance is not running in time", err.Error())
 	}
 
-	// CDC enrichment mode must be set via PATCH after instance creation
-	// The POST /instances endpoint does not support cdc_enrichment_mode
-	// CDC is only supported on business-critical and enterprise tiers
-	// Note: Don't check IsUnknown() because Computed fields are marked Unknown during creation
+	// CDC enrichment mode and secondaries_count must be set via PATCH after instance creation
+	// (POST /instances may not apply or return these; PATCH after instance is running applies them)
 	instanceType := data.Type.ValueString()
-	if !data.CdcEnrichmentMode.IsNull() && (instanceType == domain.InstanceTypeBusinessCritical || instanceType == domain.InstanceTypeEnterpriseDb || instanceType == domain.InstanceTypeEnterpriseDs) {
-		cdcMode := data.CdcEnrichmentMode.ValueString()
-		tflog.Debug(ctx, fmt.Sprintf("Patching instance %s with CDC enrichment mode: %s", postInstanceResp.Data.Id, cdcMode))
-		patchRequest := client.PatchInstanceRequest{
-			CdcEnrichmentMode: &cdcMode,
+	needsCdcPatch := !data.CdcEnrichmentMode.IsNull() && (instanceType == domain.InstanceTypeBusinessCritical || instanceType == domain.InstanceTypeEnterpriseDb || instanceType == domain.InstanceTypeEnterpriseDs)
+	needsSecondariesPatch := !data.SecondariesCount.IsNull() && (instanceType == domain.InstanceTypeBusinessCritical || instanceType == domain.InstanceTypeEnterpriseDb)
+	if needsCdcPatch || needsSecondariesPatch {
+		patchRequest := client.PatchInstanceRequest{}
+		if needsCdcPatch {
+			cdcMode := data.CdcEnrichmentMode.ValueString()
+			patchRequest.CdcEnrichmentMode = &cdcMode
+			tflog.Debug(ctx, fmt.Sprintf("Patching instance %s with CDC enrichment mode: %s", postInstanceResp.Data.Id, cdcMode))
+		}
+		if needsSecondariesPatch {
+			sc := data.SecondariesCount.ValueInt32()
+			patchRequest.SecondariesCount = &sc
+			tflog.Debug(ctx, fmt.Sprintf("Patching instance %s with secondaries_count: %d", postInstanceResp.Data.Id, sc))
 		}
 		instance, err = r.auraApi.PatchInstanceById(ctx, postInstanceResp.Data.Id, patchRequest)
 		if err != nil {
-			response.Diagnostics.AddError("Error while patching instance CDC enrichment mode", err.Error())
+			response.Diagnostics.AddError("Error while patching instance (CDC / secondaries_count)", err.Error())
 			return
 		}
-		// Wait for instance to be running again after patch
 		instance, err = r.auraApi.WaitUntilInstanceIsInState(ctx, postInstanceResp.Data.Id, func(r client.GetInstanceResponse) bool {
 			return strings.ToLower(r.Data.Status) == domain.InstanceStatusRunning
 		})
 		if err != nil {
-			response.Diagnostics.AddError("Instance is not running after CDC patch", err.Error())
+			response.Diagnostics.AddError("Instance is not running after PATCH", err.Error())
 			return
 		}
-		tflog.Debug(ctx, fmt.Sprintf("Successfully patched CDC enrichment mode for instance %s", postInstanceResp.Data.Id))
+		tflog.Debug(ctx, fmt.Sprintf("Successfully patched instance %s", postInstanceResp.Data.Id))
 	}
 
 	if instance.Data.Storage != nil {
@@ -471,6 +475,9 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	}
 	if instance.Data.SecondariesCount != nil {
 		data.SecondariesCount = types.Int32Value(int32(*instance.Data.SecondariesCount))
+	} else if !data.SecondariesCount.IsNull() {
+		// API may omit secondaries_count in response; keep the value we set via PATCH
+		// data.SecondariesCount already has the correct planned value
 	} else {
 		data.SecondariesCount = types.Int32Null()
 	}
@@ -562,6 +569,9 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 	}
 	if instance.Data.SecondariesCount != nil {
 		stateData.SecondariesCount = types.Int32Value(int32(*instance.Data.SecondariesCount))
+	} else if !stateData.SecondariesCount.IsNull() {
+		// API may omit secondaries_count in response; keep existing state value set via PATCH
+		// stateData.SecondariesCount already has the correct state value
 	} else {
 		stateData.SecondariesCount = types.Int32Null()
 	}
@@ -612,16 +622,28 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 		}
 	}
 
-	// Regular inplace update
-	if !plan.Name.Equal(state.Name) || !plan.Memory.Equal(state.Memory) {
-		tflog.Debug(ctx, fmt.Sprintf("Updating instance details: Name: %s -> %s. Memory: %s -> %s",
-			state.Name.ValueString(), plan.Name.ValueString(), state.Memory.ValueString(), plan.Memory.ValueString()))
+	// Regular inplace update (name, memory, secondaries_count)
+	planNameOrMemoryChanged := !plan.Name.Equal(state.Name) || !plan.Memory.Equal(state.Memory)
+	planSecondariesChanged := !plan.SecondariesCount.Equal(state.SecondariesCount)
+	if planNameOrMemoryChanged || planSecondariesChanged {
+		tflog.Debug(ctx, fmt.Sprintf("Updating instance details: Name: %s -> %s. Memory: %s -> %s. SecondariesCount: %v -> %v",
+			state.Name.ValueString(), plan.Name.ValueString(), state.Memory.ValueString(), plan.Memory.ValueString(),
+			state.SecondariesCount.ValueInt32(), plan.SecondariesCount.ValueInt32()))
 
-		_, err := r.auraApi.PatchInstanceById(ctx, state.InstanceId.ValueString(), client.PatchInstanceRequest{
+		patchRequest := client.PatchInstanceRequest{
 			Name:   plan.Name.ValueStringPointer(),
 			Memory: plan.Memory.ValueStringPointer(),
-		})
+		}
+		_, err := r.auraApi.PatchInstanceById(ctx, state.InstanceId.ValueString(), patchRequest)
+		if err != nil {
+			response.Diagnostics.AddError("Error while updating the instance details", err.Error())
+			return
+		}
 
+		patchRequest = client.PatchInstanceRequest{
+			SecondariesCount: plan.SecondariesCount.ValueInt32Pointer(),
+		}
+		_, err = r.auraApi.PatchInstanceById(ctx, state.InstanceId.ValueString(), patchRequest)
 		if err != nil {
 			response.Diagnostics.AddError("Error while updating the instance details", err.Error())
 			return
@@ -632,9 +654,8 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 				resp.Data.Name == plan.Name.ValueString() &&
 				(strings.ToLower(resp.Data.Status) == domain.InstanceStatusRunning || strings.ToLower(resp.Data.Status) == string(domain.InstanceStatusPaused))
 		})
-
 		if err != nil {
-			response.Diagnostics.AddError("Error while waiting fro the instance details to be updated", err.Error())
+			response.Diagnostics.AddError("Error while waiting for the instance details to be updated", err.Error())
 			return
 		}
 	}
