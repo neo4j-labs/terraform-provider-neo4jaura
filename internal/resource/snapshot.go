@@ -75,8 +75,8 @@ func (r *SnapshotResource) Metadata(ctx context.Context, request resource.Metada
 
 func (r *SnapshotResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
 	response.Schema = schema.Schema{
-		MarkdownDescription: "Resource for an instance snapshot",
-		Description:         "Resource for an instance snapshot",
+		MarkdownDescription: "Resource for an instance snapshot. Snapshots cannot be deleted via the Aura API; running `terraform destroy` removes the snapshot from Terraform state but the snapshot will continue to exist in Aura.",
+		Description:         "Resource for an instance snapshot. Snapshots cannot be deleted via the Aura API; running terraform destroy removes the snapshot from Terraform state but the snapshot will continue to exist in Aura.",
 		Attributes: map[string]schema.Attribute{
 			"instance_id": schema.StringAttribute{
 				MarkdownDescription: "Id of the instance",
@@ -170,5 +170,6 @@ func (r *SnapshotResource) Update(ctx context.Context, request resource.UpdateRe
 }
 
 func (r *SnapshotResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
-	tflog.Info(ctx, "Snapshot resources are immutable and cannot be deleted")
+	tflog.Info(ctx, "Snapshots cannot be deleted via the Aura API; removing from Terraform state only")
+	response.State.RemoveResource(ctx)
 }
