@@ -57,7 +57,7 @@ tasks:
       updates name/memory/cdc_enrichment_mode/secondaries_count in state),
       POST /v1/instances/{id}/pause (202, transitions status to "paused"),
       POST /v1/instances/{id}/resume (202, transitions status back to "running").
-    status: pending
+    status: in_progress
     dependencies:
       - task-002
     acceptance_criteria:
@@ -79,7 +79,7 @@ tasks:
       GET /v1/instances/{id}/snapshots/{snapshotId} (200, state machine: first call
       returns InProgress, second returns Completed). Snapshot responses must include
       instance_id, snapshot_id, profile (Scheduled), status, and timestamp fields.
-    status: pending
+    status: completed
     dependencies:
       - task-002
     acceptance_criteria:
@@ -88,7 +88,7 @@ tasks:
       - "GET /v1/instances/{id}/snapshots returns 200 with array of snapshot objects"
       - "First GET /v1/instances/{id}/snapshots/{id} returns status=InProgress; second returns Completed"
       - "Snapshot response includes instance_id, snapshot_id, profile=Scheduled, status, and timestamp"
-    completed_at: null
+    completed_at: "2026-05-08T23:10:00Z"
 
   - id: task-005
     title: 'Wire TestMain to start mock server and configure provider for tests'

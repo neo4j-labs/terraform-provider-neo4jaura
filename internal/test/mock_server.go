@@ -24,8 +24,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/client"
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/domain"
 )
 
 const (
@@ -156,7 +158,7 @@ func (ms *MockServer) withAuth(next http.HandlerFunc) http.HandlerFunc {
 
 // ---------------------------------------------------------------------------
 // V1 router — dispatches based on path pattern.
-// task-003 and task-004 will replace the 404 stubs below with real handlers.
+// task-004 will replace the snapshot/tenant stubs below with real handlers.
 // ---------------------------------------------------------------------------
 
 func (ms *MockServer) routeV1(w http.ResponseWriter, r *http.Request) {
@@ -215,43 +217,228 @@ func (ms *MockServer) routeV1(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 
 func (ms *MockServer) handleGetTenants(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "not implemented yet", http.StatusNotFound)
+	resp := client.GetProjectsResponse{
+		Data: []client.ProjectResponseData{
+			{Id: "test-project-id-001", Name: "Test Project"},
+		},
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
-func (ms *MockServer) handlePostInstance(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "not implemented yet", http.StatusNotFound)
+// handlePostInstance creates a new instance in "creating" state and returns 202
+// with a PostInstanceResponse. A unique ID is generated from the current time.
+func (ms *MockServer) handlePostInstance(w http.ResponseWriter, r *http.Request) {
+	var req client.PostInstanceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	id := fmt.Sprintf("inst-%d", time.Now().UnixNano())
+
+	ms.mu.Lock()
+	ms.instances[id] = &mockInstanceState{
+		instance: client.GetInstanceData{
+			Id:            id,
+			Name:          req.Name,
+			Status:        domain.InstanceStatusCreating,
+			TenantId:      req.TenantId,
+			CloudProvider: req.CloudProvider,
+			Region:        req.Region,
+			Type:          req.Type,
+			Memory:        req.Memory,
+		},
+		getCount: 0,
+	}
+	ms.mu.Unlock()
+
+	resp := client.PostInstanceResponse{
+		Data: client.PostInstanceData{
+			Id:            id,
+			Name:          req.Name,
+			TenantId:      req.TenantId,
+			CloudProvider: req.CloudProvider,
+			Region:        req.Region,
+			Type:          req.Type,
+		},
+	}
+	writeJSON(w, http.StatusAccepted, resp)
 }
 
-func (ms *MockServer) handleGetInstance(w http.ResponseWriter, _ *http.Request, _ string) {
-	http.Error(w, "not implemented yet", http.StatusNotFound)
+// handleGetInstance returns the instance state, driving a state machine:
+//   - getCount == 1 (first real GET after creation): status="creating", no graph metrics
+//   - getCount >= 2: status="running", graph_nodes=10, graph_relationships=5
+func (ms *MockServer) handleGetInstance(w http.ResponseWriter, _ *http.Request, id string) {
+	ms.mu.Lock()
+	state, ok := ms.instances[id]
+	if !ok {
+		ms.mu.Unlock()
+		http.NotFound(w, nil)
+		return
+	}
+	state.getCount++
+	count := state.getCount
+
+	if count >= 2 {
+		state.instance.Status = domain.InstanceStatusRunning
+		nodes := int64(10)
+		rels := int64(5)
+		state.instance.GraphNodes = &nodes
+		state.instance.GraphRelationships = &rels
+	} else {
+		state.instance.Status = domain.InstanceStatusCreating
+		state.instance.GraphNodes = nil
+		state.instance.GraphRelationships = nil
+	}
+	snap := state.instance
+	ms.mu.Unlock()
+
+	writeJSON(w, http.StatusOK, client.GetInstanceResponse{Data: snap})
 }
 
-func (ms *MockServer) handleDeleteInstance(w http.ResponseWriter, _ *http.Request, _ string) {
-	http.Error(w, "not implemented yet", http.StatusNotFound)
+// handleDeleteInstance removes the instance from state and returns 202.
+// Subsequent GETs for the same ID will return 404 (handled by the not-found
+// branch in handleGetInstance), satisfying WaitUntilInstanceIsDeleted.
+func (ms *MockServer) handleDeleteInstance(w http.ResponseWriter, _ *http.Request, id string) {
+	ms.mu.Lock()
+	state, ok := ms.instances[id]
+	if !ok {
+		ms.mu.Unlock()
+		http.NotFound(w, nil)
+		return
+	}
+	snap := state.instance
+	delete(ms.instances, id)
+	ms.mu.Unlock()
+
+	writeJSON(w, http.StatusAccepted, client.GetInstanceResponse{Data: snap})
 }
 
-func (ms *MockServer) handlePatchInstance(w http.ResponseWriter, _ *http.Request, _ string) {
-	http.Error(w, "not implemented yet", http.StatusNotFound)
+// handlePatchInstance updates mutable fields (name, memory, cdc_enrichment_mode,
+// secondaries_count) and returns 202 with the updated GetInstanceResponse.
+func (ms *MockServer) handlePatchInstance(w http.ResponseWriter, r *http.Request, id string) {
+	var req client.PatchInstanceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	ms.mu.Lock()
+	state, ok := ms.instances[id]
+	if !ok {
+		ms.mu.Unlock()
+		http.NotFound(w, nil)
+		return
+	}
+	if req.Name != nil {
+		state.instance.Name = *req.Name
+	}
+	if req.Memory != nil {
+		state.instance.Memory = *req.Memory
+	}
+	if req.CdcEnrichmentMode != nil {
+		state.instance.CdcEnrichmentMode = req.CdcEnrichmentMode
+	}
+	if req.SecondariesCount != nil {
+		v := int(*req.SecondariesCount)
+		state.instance.SecondariesCount = &v
+	}
+	snap := state.instance
+	ms.mu.Unlock()
+
+	writeJSON(w, http.StatusAccepted, client.GetInstanceResponse{Data: snap})
 }
 
-func (ms *MockServer) handlePauseInstance(w http.ResponseWriter, _ *http.Request, _ string) {
-	http.Error(w, "not implemented yet", http.StatusNotFound)
+// handlePauseInstance transitions the instance status to "paused" and returns 202.
+func (ms *MockServer) handlePauseInstance(w http.ResponseWriter, _ *http.Request, id string) {
+	ms.mu.Lock()
+	state, ok := ms.instances[id]
+	if !ok {
+		ms.mu.Unlock()
+		http.NotFound(w, nil)
+		return
+	}
+	state.instance.Status = domain.InstanceStatusPaused
+	snap := state.instance
+	ms.mu.Unlock()
+
+	writeJSON(w, http.StatusAccepted, client.GetInstanceResponse{Data: snap})
 }
 
-func (ms *MockServer) handleResumeInstance(w http.ResponseWriter, _ *http.Request, _ string) {
-	http.Error(w, "not implemented yet", http.StatusNotFound)
+// handleResumeInstance transitions the instance status back to "running" and returns 202.
+func (ms *MockServer) handleResumeInstance(w http.ResponseWriter, _ *http.Request, id string) {
+	ms.mu.Lock()
+	state, ok := ms.instances[id]
+	if !ok {
+		ms.mu.Unlock()
+		http.NotFound(w, nil)
+		return
+	}
+	state.instance.Status = domain.InstanceStatusRunning
+	snap := state.instance
+	ms.mu.Unlock()
+
+	writeJSON(w, http.StatusAccepted, client.GetInstanceResponse{Data: snap})
 }
 
-func (ms *MockServer) handlePostSnapshot(w http.ResponseWriter, _ *http.Request, _ string) {
-	http.Error(w, "not implemented yet", http.StatusNotFound)
+func (ms *MockServer) handlePostSnapshot(w http.ResponseWriter, _ *http.Request, instanceId string) {
+	snapshotId := fmt.Sprintf("snap-%d", time.Now().UnixNano())
+	snap := client.GetSnapshotData{
+		InstanceId: instanceId,
+		SnapshotId: snapshotId,
+		Profile:    domain.SnapshotProfileScheduled,
+		Status:     domain.SnapshotStatusInProgress,
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+	}
+
+	ms.mu.Lock()
+	ms.snapshots[snapshotKey(instanceId, snapshotId)] = &mockSnapshotState{
+		snapshot: snap,
+		getCount: 0,
+	}
+	ms.mu.Unlock()
+
+	writeJSON(w, http.StatusAccepted, client.PostSnapshotResponse{
+		Data: client.PostSnapshotData{SnapshotId: snapshotId},
+	})
 }
 
-func (ms *MockServer) handleGetSnapshots(w http.ResponseWriter, _ *http.Request, _ string) {
-	http.Error(w, "not implemented yet", http.StatusNotFound)
+func (ms *MockServer) handleGetSnapshots(w http.ResponseWriter, _ *http.Request, instanceId string) {
+	ms.mu.Lock()
+	var snapshots []client.GetSnapshotData
+	for _, state := range ms.snapshots {
+		if state.snapshot.InstanceId == instanceId {
+			snapshots = append(snapshots, state.snapshot)
+		}
+	}
+	ms.mu.Unlock()
+
+	if snapshots == nil {
+		snapshots = []client.GetSnapshotData{}
+	}
+	writeJSON(w, http.StatusOK, client.GetSnapshotsResponse{Data: snapshots})
 }
 
-func (ms *MockServer) handleGetSnapshot(w http.ResponseWriter, _ *http.Request, _, _ string) {
-	http.Error(w, "not implemented yet", http.StatusNotFound)
+func (ms *MockServer) handleGetSnapshot(w http.ResponseWriter, _ *http.Request, instanceId, snapshotId string) {
+	key := snapshotKey(instanceId, snapshotId)
+
+	ms.mu.Lock()
+	state, ok := ms.snapshots[key]
+	if !ok {
+		ms.mu.Unlock()
+		http.NotFound(w, nil)
+		return
+	}
+	state.getCount++
+	if state.getCount >= 2 {
+		state.snapshot.Status = domain.SnapshotStatusCompleted
+	} else {
+		state.snapshot.Status = domain.SnapshotStatusInProgress
+	}
+	snap := state.snapshot
+	ms.mu.Unlock()
+
+	writeJSON(w, http.StatusOK, client.GetSnapshotResponse{Data: snap})
 }
 
 // ---------------------------------------------------------------------------

@@ -44,3 +44,42 @@ Key Decisions:
 - All map access must hold ms.mu (documented in field comments)
 
 Next Task: task-003 and task-004 (both depend on task-002, both pending)
+
+================================================================================
+TASK-004: Implement mock snapshot and tenant endpoints
+Date: 2026-05-08T23:10:00Z
+================================================================================
+
+Summary:
+Implemented four stub handlers in internal/test/mock_server.go for snapshot and
+tenant endpoints. Added `time` and `domain` imports.
+
+- handleGetTenants: returns 200 with GetProjectsResponse containing one preset
+  project {Id: "test-project-id-001", Name: "Test Project"}.
+- handlePostSnapshot: generates a snap-<nanosecond> ID, stores a GetSnapshotData
+  entry in ms.snapshots with getCount=0, Profile=Scheduled, Status=InProgress,
+  and Timestamp=RFC3339 now. Returns 202 with PostSnapshotResponse.
+- handleGetSnapshots: iterates ms.snapshots filtering by instanceId, returns 200
+  with GetSnapshotsResponse (empty array when none found).
+- handleGetSnapshot: increments getCount under the mutex; returns InProgress on
+  first call (getCount==1), Completed on second and subsequent (getCount>=2).
+  Returns 404 if snapshotKey not found. Returns 200 with GetSnapshotResponse.
+
+All map access holds ms.mu. The instance-endpoint stubs (task-003) were not
+touched.
+
+Files Changed:
+- internal/test/mock_server.go (modified: added time/domain imports; implemented
+  handleGetTenants, handlePostSnapshot, handleGetSnapshots, handleGetSnapshot)
+
+Key Decisions:
+- getCount starts at 0 for POST-created snapshots so that the first GET
+  increments to 1 (InProgress) and the second increments to 2 (Completed),
+  matching the state-machine contract in the task description.
+- SeedSnapshot continues to initialise getCount=1 so that a seeded snapshot
+  is already "past" the first GET and returns Completed on the first test GET,
+  which is the expected behaviour for import tests.
+- nil-slice guard in handleGetSnapshots ensures the JSON response is always
+  an array ([]) rather than null when no snapshots exist.
+
+Next Task: task-003 (parallel, being implemented by another agent)
