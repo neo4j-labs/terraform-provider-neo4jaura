@@ -1,5 +1,6 @@
 changesDir: .changes
 unreleasedDir: unreleased
+startingVersion: 0.0.2-beta
 headerPath: header.tpl.md
 changelogPath: CHANGELOG.md
 versionExt: md
