@@ -2,6 +2,7 @@ name: Acceptance Tests
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches: [ "main" ]
 
@@ -9,10 +10,24 @@ permissions:
   contents: read
 
 jobs:
+  mock-acceptance-tests:
+    name: Mock Acceptance Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version: '1.25'
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version_file: ".terraform-version"
+      - run: make mock-acceptance
+
   acceptance-tests:
-    name: Acceptance Tests
+    name: Acceptance Tests (live)
     runs-on: ubuntu-latest
     environment: acceptance
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
