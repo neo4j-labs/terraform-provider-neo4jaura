@@ -100,7 +100,7 @@ tasks:
       literals so tests require no environment variables. Pass a short timeout
       (10 seconds) to NewAuraApi in newTestAuraApi() so tests fail fast if the mock
       is unresponsive rather than waiting 900 seconds.
-    status: pending
+    status: completed
     dependencies:
       - task-001
       - task-002
@@ -112,7 +112,7 @@ tasks:
       - "defaultProviderConfig uses hardcoded dummy client_id and client_secret strings"
       - "newTestAuraApi() passes a 10-second instance timeout and 10-second snapshot timeout"
       - "TF_ACC=1 go test ./internal/test/... runs without any real credentials in the environment"
-    completed_at: null
+    completed_at: "2026-05-08T23:30:00Z"
 
   - id: task-006
     title: 'Update projects and snapshot data source tests to use mock'

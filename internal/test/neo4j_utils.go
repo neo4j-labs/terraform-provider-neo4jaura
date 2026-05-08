@@ -46,11 +46,12 @@ func executeCypher(ctx context.Context, connectionUrl, username, password string
 }
 
 func newTestAuraApi() *client.AuraApi {
+	timeout := int64(10)
 	return client.NewAuraApi(
 		client.NewAuraClient(
-			os.Getenv("TF_VAR_client_id"),
-			os.Getenv("TF_VAR_client_secret"),
+			"test-client-id",
+			"test-client-secret",
 			"0.0.0-tests",
 			os.Getenv("AURA_BASE_URL")),
-		nil, nil)
+		&timeout, &timeout)
 }

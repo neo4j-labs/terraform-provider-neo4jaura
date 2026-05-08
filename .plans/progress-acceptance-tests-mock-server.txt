@@ -129,3 +129,41 @@ Key Decisions:
   codebase.
 
 Next Task: task-005 (Wire TestMain)
+
+================================================================================
+TASK-005: Wire TestMain to start mock server and configure provider for tests
+Date: 2026-05-08T23:30:00Z
+================================================================================
+
+Summary:
+Updated internal/test/provider_test.go and internal/test/neo4j_utils.go to wire
+the mock server into the test suite so no real Aura credentials are required.
+
+- Added a package-level `var testMockServer *MockServer` so all tests in the
+  package can call Reset()/SeedInstance()/SeedSnapshot() on it.
+- Added TestMain: starts NewMockServer(), sets AURA_BASE_URL to mockServer.URL()
+  before m.Run(), then calls Close() and Unsetenv after m.Run() returns, then
+  os.Exit(code). Teardown is sequential (no defer) to ensure os.Exit is reached.
+- Replaced defaultProviderConfig's variable-based credentials (var.client_id /
+  var.client_secret) with hardcoded dummy strings "test-client-id" and
+  "test-client-secret". Removed the `variable "client_id" {}` and
+  `variable "client_secret" {}` declarations.
+- Updated newTestAuraApi() in neo4j_utils.go to use the same hardcoded dummy
+  credentials and to pass a 10-second timeout (int64(10)) for both instance
+  and snapshot timeouts, replacing the previous nil values (900s/300s defaults).
+
+Files Changed:
+- internal/test/provider_test.go (modified: added TestMain, testMockServer var,
+  replaced defaultProviderConfig credentials with dummy literals)
+- internal/test/neo4j_utils.go (modified: newTestAuraApi uses dummy credentials
+  and 10-second timeouts)
+
+Key Decisions:
+- os.Exit(code) is called at the end of TestMain — defers would not run past it,
+  so teardown is done explicitly before the os.Exit call.
+- AURA_BASE_URL is set before m.Run() so the provider reads it at Configure time
+  inside each resource.Test step (no provider factory restart needed).
+- testMockServer is accessible across all files in the test package, enabling
+  task-006/007/008 to call Reset() at the start of each test.
+
+Next Task: task-006 (Update projects and snapshot data source tests to use mock)
