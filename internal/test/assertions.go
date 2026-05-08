@@ -20,15 +20,12 @@ package test
 import (
 	"fmt"
 	"os"
-	"regexp"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
-
-var uuidRegex = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
 func nonEmptyString(s string) error {
 	if len(strings.TrimSpace(s)) > 0 {
@@ -59,7 +56,7 @@ func (c *Capturer[T]) Capture(f func(T) error) func(T) error {
 
 func SkipIfNotAcceptance(t *testing.T) {
 	if os.Getenv(resource.EnvTfAcc) == "" {
-		t.Skip(fmt.Sprintf("Acceptance tests skipped unless env '%s' set", resource.EnvTfAcc))
+		t.Skipf("Acceptance tests skipped unless env '%s' set", resource.EnvTfAcc)
 		return
 	}
 }

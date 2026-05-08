@@ -182,7 +182,7 @@ tasks:
       github.com/neo4j/neo4j-go-driver/v5 transitive entries from go.mod and go.sum.
       Verify that go build ./... and go vet ./... pass cleanly, and confirm the full
       test suite completes in under 60 seconds with TF_ACC=1 and no Aura credentials.
-    status: pending
+    status: completed
     dependencies:
       - task-006
       - task-007
@@ -193,4 +193,4 @@ tasks:
       - "go build ./... passes with no errors"
       - "go vet ./... passes with no errors"
       - "TF_ACC=1 go test ./internal/test/... -timeout 120s completes successfully in under 60 seconds"
-    completed_at: null
+    completed_at: "2026-05-08T23:15:00Z"

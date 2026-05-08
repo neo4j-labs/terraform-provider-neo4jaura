@@ -249,3 +249,28 @@ Key Decisions:
 - t.Parallel() removed; testMockServer.Reset() called at start for isolation
 
 Next Task: task-009 (cleanup)
+
+================================================================================
+TASK-009: Remove neo4j-go-driver dependency and clean up Cypher helpers
+Date: 2026-05-08T23:15:00Z
+================================================================================
+
+Summary:
+Deleted internal/test/neo4j_utils.go (executeCypher and newTestAuraApi no longer
+referenced anywhere). Removed uuidRegex from assertions.go (projects test now uses
+StringExact). Fixed t.Skip(fmt.Sprintf(...)) → t.Skipf(...) in assertions.go.
+Ran go mod tidy to remove neo4j-go-driver/v5 from go.mod and go.sum.
+Full acceptance test suite passes with TF_ACC=1 against the mock in ~12 seconds.
+
+Files Changed:
+- internal/test/neo4j_utils.go (deleted)
+- internal/test/assertions.go (removed uuidRegex, regexp import; t.Skipf fix)
+- go.mod (neo4j-go-driver/v5 removed)
+- go.sum (entries removed by go mod tidy)
+
+Key Decisions:
+- neo4j-go-driver removed entirely — no remaining usage in any package
+- uuidRegex removed — projects test uses StringExact("test-project-id-001")
+- t.Skipf used directly instead of t.Skip(fmt.Sprintf(...)) per Go conventions
+
+Next Task: All tasks complete
