@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'CDC enrichment mode and secondaries_count no longer cause inconsistent state errors; both are now applied via a post-create PATCH when the initial instance creation response does not include them'
+time: 2026-05-08T00:00:00Z
