@@ -19,6 +19,7 @@ package provider
 
 import (
 	"context"
+	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -88,6 +89,7 @@ func (n *Neo4jAuraProvider) Configure(ctx context.Context, request provider.Conf
 		data.ClientId.ValueString(),
 		data.ClientSecret.ValueString(),
 		n.version,
+		os.Getenv("AURA_BASE_URL"),
 	)
 	var instanceTimeoutSec *int64
 	if !data.InstanceTimeout.IsUnknown() && !data.InstanceTimeout.IsNull() {

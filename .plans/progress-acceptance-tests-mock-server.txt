@@ -1,0 +1,25 @@
+================================================================================
+TASK-001: Make AuraClient base URL configurable via AURA_BASE_URL env var
+Date: 2026-05-08T22:30:00Z
+================================================================================
+
+Summary:
+Added a `baseURL string` parameter to `NewAuraClient`. When empty, it defaults
+to `https://api.neo4j.io`. The resolved URL is stored on both `AuraClient` and
+`AuraAuth` so that `doOperation` builds API URLs from `c.baseURL` and
+`authenticate` builds the OAuth token URL from `a.baseURL`. The provider's
+`Configure` method reads `AURA_BASE_URL` from the environment and passes it
+through. The existing test helper `newTestAuraApi` in `neo4j_utils.go` was
+updated to pass the same env var.
+
+Files Changed:
+- internal/client/aura_client.go (modified: replaced auraBasePath/auraV1Path constants with defaultAuraBasePath; added baseURL field to AuraClient; updated NewAuraClient signature; doOperation uses c.baseURL)
+- internal/client/aura_auth.go (modified: added baseURL field to AuraAuth; authenticate uses a.baseURL instead of removed constant)
+- internal/provider/provider.go (modified: import "os" added; NewAuraClient call passes os.Getenv("AURA_BASE_URL"))
+- internal/test/neo4j_utils.go (modified: NewAuraClient call updated to 4-arg signature, passes os.Getenv("AURA_BASE_URL"))
+
+Key Decisions:
+- Kept `defaultAuraBasePath` constant in aura_client.go as the single source of truth for the default URL; AuraAuth receives the already-resolved URL at construction time (no second default needed in auth).
+- `AURA_BASE_URL` is read at provider Configure time (not at package init), so tests can set it before constructing the provider.
+
+Next Task: task-002

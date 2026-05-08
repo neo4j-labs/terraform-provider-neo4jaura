@@ -14,7 +14,7 @@ tasks:
       internal/client/aura_auth.go so AuraAuth receives and uses the same base URL
       for the OAuth token endpoint (POST /oauth/token), rather than referencing the
       auraBasePath constant directly.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "NewAuraClient accepts a baseURL string parameter; empty string falls back to https://api.neo4j.io"
@@ -22,7 +22,7 @@ tasks:
       - "Provider Configure reads AURA_BASE_URL env var and passes it to NewAuraClient"
       - "Unsetting AURA_BASE_URL leaves behaviour identical to today"
       - "go vet ./... and go build ./... pass after the change"
-    completed_at: null
+    completed_at: "2026-05-08T22:30:00Z"
 
   - id: task-002
     title: 'Implement mock server core: auth endpoint and in-memory state store'
