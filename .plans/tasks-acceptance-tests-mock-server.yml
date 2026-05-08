@@ -144,7 +144,7 @@ tasks:
       pre-seed the mock's state (using the mock's seed method) instead of calling
       api.PostInstance and api.WaitUntilInstanceIsInState directly. Remove all
       SkipIfNotAcceptance guards and newTestAuraApi() usages in this file.
-    status: in_progress
+    status: completed
     dependencies:
       - task-005
     acceptance_criteria:
@@ -154,7 +154,7 @@ tasks:
       - "TestAcc_cdc_enrichment_mode_default_value passes against the mock"
       - "TestAcc_secondaries_count_no_drift passes against the mock"
       - "No SkipIfNotAcceptance calls remain in this file"
-    completed_at: null
+    completed_at: "2026-05-08T23:00:00Z"
 
   - id: task-008
     title: 'Rewrite snapshot resource test to use mock'

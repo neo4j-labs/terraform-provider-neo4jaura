@@ -204,3 +204,26 @@ Key Decisions:
 - t.Parallel() removed from both tests; Reset() at start provides isolation.
 
 Next Task: task-007 (Rewrite instance resource tests to use mock)
+
+================================================================================
+TASK-007: Rewrite instance resource tests to use mock (remove Cypher steps)
+Date: 2026-05-08T23:00:00Z
+================================================================================
+
+Summary:
+Rewrote internal/test/instance_resource_test.go to run entirely against the mock
+server. Removed Cypher execution step, time.Sleep, and graph_nodes/graph_relationships
+live-count assertions. Updated graph metric assertions to use mock preset values (10/5).
+Replaced direct AuraApi calls in import tests with testMockServer.SeedInstance().
+Removed all SkipIfNotAcceptance guards and live credential usage.
+
+Files Changed:
+- internal/test/instance_resource_test.go (rewritten for mock)
+
+Key Decisions:
+- graph_nodes=10, graph_relationships=5 match mock_server.go state machine output
+- Each import sub-test calls testMockServer.Reset() then seeds its instance
+- t.Parallel() removed to avoid races on shared mock state
+- connection_url/username/password assertions dropped (mock returns empty strings)
+
+Next Task: task-008 (snapshot resource test) and task-009 (cleanup)

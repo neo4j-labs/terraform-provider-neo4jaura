@@ -18,11 +18,8 @@
 package test
 
 import (
-	"context"
 	"fmt"
-	"os"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
@@ -30,8 +27,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/client"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/domain"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 var freeTierInstanceConfig = fmt.Sprintf(`
@@ -93,14 +88,12 @@ resource "neo4jaura_instance" "this" {
 `, defaultProviderConfig)
 
 func TestAcc_can_create_instance_resource(t *testing.T) {
-	connectionUrlCapturer := &Capturer[string]{}
-	usernameCapturer := &Capturer[string]{}
-	passwordCapturer := &Capturer[string]{}
+	testMockServer.Reset()
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				// Create instance
+				// Create instance and verify it reaches running state with mock preset values
 				Config: freeTierInstanceConfig,
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
@@ -115,44 +108,13 @@ func TestAcc_can_create_instance_resource(t *testing.T) {
 					),
 					statecheck.ExpectKnownValue(
 						"neo4jaura_instance.this",
-						tfjsonpath.New("connection_url"),
-						knownvalue.StringFunc(connectionUrlCapturer.Capture(nonEmptyString)),
-					),
-					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
-						tfjsonpath.New("username"),
-						knownvalue.StringFunc(usernameCapturer.Capture(nonEmptyString)),
-					),
-					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
-						tfjsonpath.New("password"),
-						knownvalue.StringFunc(passwordCapturer.Capture(nonEmptyString)),
-					),
-				},
-			},
-			{
-				// Insert some data
-				PreConfig: func() {
-					err := executeCypher(context.Background(), connectionUrlCapturer.Value, usernameCapturer.Value, passwordCapturer.Value,
-						"CREATE (a: Actor {name: 'Keanu Reeves'})-[:PLAYS]->(b: Movie {title: 'The Matrix'})")
-					assert.NoError(t, err)
-					time.Sleep(2 * time.Minute)
-				},
-				RefreshState: true,
-			},
-			{
-				// Verify counters are updated
-				Config: freeTierInstanceConfig,
-				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
 						tfjsonpath.New("graph_nodes"),
-						knownvalue.Int64Exact(2),
+						knownvalue.Int64Exact(10),
 					),
 					statecheck.ExpectKnownValue(
 						"neo4jaura_instance.this",
 						tfjsonpath.New("graph_relationships"),
-						knownvalue.Int64Exact(1),
+						knownvalue.Int64Exact(5),
 					),
 				},
 			},
@@ -163,13 +125,13 @@ func TestAcc_can_create_instance_resource(t *testing.T) {
 // Test for issue #6: CDC enrichment mode should not cause inconsistent state
 // https://github.com/neo4j-labs/terraform-provider-neo4jaura/issues/6
 func TestAcc_cdc_enrichment_mode_default_value(t *testing.T) {
-	t.Parallel()
+	testMockServer.Reset()
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				// Create instance with CDC enrichment mode OFF
+				// Create instance with CDC enrichment mode FULL
 				Config: businessCriticalTierInstanceConfig,
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
@@ -212,7 +174,7 @@ func TestAcc_cdc_enrichment_mode_default_value(t *testing.T) {
 
 // Test that secondaries_count is applied via PATCH after create and does not drift when API omits it on read
 func TestAcc_secondaries_count_no_drift(t *testing.T) {
-	t.Parallel()
+	testMockServer.Reset()
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -257,117 +219,70 @@ func TestAcc_secondaries_count_no_drift(t *testing.T) {
 }
 
 func TestAcc_can_import_instance_resource(t *testing.T) {
-	SkipIfNotAcceptance(t)
+	cdcEnrichmentModeFull := domain.CdcEnrichmentModeFull
+	secondariesCount := 1
 
-	api := newTestAuraApi()
 	examples := []struct {
-		name               string
-		createResourceFunc func(*testing.T) string
-		config             string
-		extraStateChecks   []statecheck.StateCheck
-		parallel           bool
+		name             string
+		instance         client.GetInstanceData
+		config           string
+		extraStateChecks []statecheck.StateCheck
 	}{
 		{
 			name: "free tier",
-			createResourceFunc: func(tt *testing.T) string {
-				ctx := context.Background()
-				instance, err := api.PostInstance(ctx, client.PostInstanceRequest{
-					Version:       domain.InstanceVersion5,
-					Name:          "TestFreeTier",
-					CloudProvider: domain.CloudProviderGcp,
-					Region:        "europe-west1",
-					Memory:        domain.InstanceMemory1GB,
-					Type:          domain.InstanceTypeFreeDb,
-					TenantId:      os.Getenv("AURA_PROJECT_ID"),
-				})
-				require.NoError(tt, err)
-
-				_, err = api.WaitUntilInstanceIsInState(ctx, instance.Data.Id, func(r client.GetInstanceResponse) bool {
-					return r.Data.Status == domain.InstanceStatusRunning
-				})
-				require.NoError(tt, err)
-
-				err = executeCypher(ctx, instance.Data.ConnectionUrl, instance.Data.Username, instance.Data.Password,
-					"CREATE (a: Actor {name: 'Keanu Reeves'})-[:PLAYS]->(b: Movie {title: 'The Matrix'})")
-				require.NoError(tt, err)
-
-				_, err = api.WaitUntilInstanceIsInState(ctx, instance.Data.Id, func(r client.GetInstanceResponse) bool {
-					return r.Data.GraphRelationships != nil && r.Data.GraphNodes != nil
-				})
-				require.NoError(tt, err)
-
-				return instance.Data.Id
+			instance: client.GetInstanceData{
+				Id:            "import-free-tier-id",
+				Name:          "MyTestFreeInstance",
+				Status:        domain.InstanceStatusRunning,
+				CloudProvider: domain.CloudProviderGcp,
+				Region:        "europe-west1",
+				Memory:        domain.InstanceMemory1GB,
+				Type:          domain.InstanceTypeFreeDb,
+				TenantId:      "test-project-id-001",
 			},
 			config: freeTierInstanceConfig,
 			extraStateChecks: []statecheck.StateCheck{
 				statecheck.ExpectKnownValue(
 					"neo4jaura_instance.this",
 					tfjsonpath.New("graph_nodes"),
-					knownvalue.Int64Exact(2),
+					knownvalue.Int64Exact(10),
 				),
 				statecheck.ExpectKnownValue(
 					"neo4jaura_instance.this",
 					tfjsonpath.New("graph_relationships"),
-					knownvalue.Int64Exact(1),
+					knownvalue.Int64Exact(5),
 				),
 			},
-			parallel: false,
 		},
 
 		{
 			name: "professional tier",
-			createResourceFunc: func(tt *testing.T) string {
-				ctx := context.Background()
-				instance, err := api.PostInstance(ctx, client.PostInstanceRequest{
-					Version:       domain.InstanceVersion5,
-					Name:          "TestProfessionalTier",
-					CloudProvider: domain.CloudProviderGcp,
-					Region:        "europe-west1",
-					Memory:        domain.InstanceMemory1GB,
-					Type:          domain.InstanceTypeProfessionalDb,
-					TenantId:      os.Getenv("AURA_PROJECT_ID"),
-				})
-				require.NoError(tt, err)
-
-				_, err = api.WaitUntilInstanceIsInState(ctx, instance.Data.Id, func(r client.GetInstanceResponse) bool {
-					return r.Data.Status == domain.InstanceStatusRunning
-				})
-				require.NoError(tt, err)
-
-				return instance.Data.Id
+			instance: client.GetInstanceData{
+				Id:            "import-professional-tier-id",
+				Name:          "MyTestProfessionalInstance",
+				Status:        domain.InstanceStatusRunning,
+				CloudProvider: domain.CloudProviderGcp,
+				Region:        "europe-west1",
+				Memory:        domain.InstanceMemory1GB,
+				Type:          domain.InstanceTypeProfessionalDb,
+				TenantId:      "test-project-id-001",
 			},
 			config:           professionalTierInstanceConfig,
 			extraStateChecks: []statecheck.StateCheck{},
-			parallel:         true,
 		},
 
 		{
 			name: "business critical tier",
-			createResourceFunc: func(tt *testing.T) string {
-				ctx := context.Background()
-				instance, err := api.PostInstance(ctx, client.PostInstanceRequest{
-					Version:       domain.InstanceVersion5,
-					Name:          "TestBusinessCritInstance",
-					CloudProvider: domain.CloudProviderGcp,
-					Region:        "us-central1",
-					Memory:        domain.InstanceMemory8GB,
-					Type:          domain.InstanceTypeBusinessCritical,
-					TenantId:      os.Getenv("AURA_PROJECT_ID"),
-				})
-				require.NoError(tt, err)
-
-				_, err = api.WaitUntilInstanceIsInState(ctx, instance.Data.Id, func(r client.GetInstanceResponse) bool {
-					return r.Data.Status == domain.InstanceStatusRunning
-				})
-				require.NoError(tt, err)
-
-				cdcEnrichmentMode := domain.CdcEnrichmentModeFull
-				_, err = api.PatchInstanceById(ctx, instance.Data.Id, client.PatchInstanceRequest{
-					CdcEnrichmentMode: &cdcEnrichmentMode,
-				})
-				require.NoError(tt, err)
-
-				return instance.Data.Id
+			instance: client.GetInstanceData{
+				Id:                "import-business-critical-tier-id",
+				Name:              "TestBusinessCritInstance",
+				Status:            domain.InstanceStatusRunning,
+				CloudProvider:     domain.CloudProviderGcp,
+				Region:            "us-central1",
+				Memory:            domain.InstanceMemory8GB,
+				Type:              domain.InstanceTypeBusinessCritical,
+				TenantId:          "test-project-id-001",
+				CdcEnrichmentMode: &cdcEnrichmentModeFull,
 			},
 			config: businessCriticalTierInstanceConfig,
 			extraStateChecks: []statecheck.StateCheck{
@@ -377,36 +292,20 @@ func TestAcc_can_import_instance_resource(t *testing.T) {
 					knownvalue.StringExact(domain.CdcEnrichmentModeFull),
 				),
 			},
-			parallel: true,
 		},
 
 		{
 			name: "business critical tier with secondaries_count",
-			createResourceFunc: func(tt *testing.T) string {
-				ctx := context.Background()
-				instance, err := api.PostInstance(ctx, client.PostInstanceRequest{
-					Version:       domain.InstanceVersion5,
-					Name:          "TestBusinessCritSecondaries",
-					CloudProvider: domain.CloudProviderGcp,
-					Region:        "us-central1",
-					Memory:        domain.InstanceMemory8GB,
-					Type:          domain.InstanceTypeBusinessCritical,
-					TenantId:      os.Getenv("AURA_PROJECT_ID"),
-				})
-				require.NoError(tt, err)
-
-				_, err = api.WaitUntilInstanceIsInState(ctx, instance.Data.Id, func(r client.GetInstanceResponse) bool {
-					return r.Data.Status == domain.InstanceStatusRunning
-				})
-				require.NoError(tt, err)
-
-				secondariesCount := int32(1)
-				_, err = api.PatchInstanceById(ctx, instance.Data.Id, client.PatchInstanceRequest{
-					SecondariesCount: &secondariesCount,
-				})
-				require.NoError(tt, err)
-
-				return instance.Data.Id
+			instance: client.GetInstanceData{
+				Id:               "import-business-critical-secondaries-id",
+				Name:             "TestBusinessCritSecondaries",
+				Status:           domain.InstanceStatusRunning,
+				CloudProvider:    domain.CloudProviderGcp,
+				Region:           "us-central1",
+				Memory:           domain.InstanceMemory8GB,
+				Type:             domain.InstanceTypeBusinessCritical,
+				TenantId:         "test-project-id-001",
+				SecondariesCount: &secondariesCount,
 			},
 			config: businessCriticalWithSecondariesConfig,
 			extraStateChecks: []statecheck.StateCheck{
@@ -416,17 +315,14 @@ func TestAcc_can_import_instance_resource(t *testing.T) {
 					knownvalue.Int32Exact(1),
 				),
 			},
-			parallel: true,
 		},
 	}
 
 	for _, example := range examples {
 		t.Run(example.name, func(tt *testing.T) {
-			if example.parallel {
-				tt.Parallel()
-			}
-			instanceId := example.createResourceFunc(tt)
-			defer api.DeleteInstanceById(context.Background(), instanceId)
+			testMockServer.Reset()
+			testMockServer.SeedInstance(example.instance)
+			instanceId := example.instance.Id
 
 			stateChecks := []statecheck.StateCheck{
 				statecheck.ExpectKnownValue(
@@ -436,7 +332,7 @@ func TestAcc_can_import_instance_resource(t *testing.T) {
 				),
 			}
 			stateChecks = append(stateChecks, example.extraStateChecks...)
-			resource.Test(t, resource.TestCase{
+			resource.Test(tt, resource.TestCase{
 				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 				Steps: []resource.TestStep{
 					{
