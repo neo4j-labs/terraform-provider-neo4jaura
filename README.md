@@ -3,9 +3,11 @@
 Available as a Neo4j Labs Project ( See Disclaimer further down this README )  Neo4j Aura Terraform Provider enables a declarative, infrastructure-as-code (IaC) approach to infrastructure.  This codifies the interaction with Aura's management API for the provisioning and management of AuraDB infrastructure. Specifically Neo4j Aura Terraform provider allows for:- 
 
 * Obtaining information about a project ( tenant )
-* Create, modify, pause, resume and delete operations for AuraDB instances
-* Take and restore AuraDB snapshots.  
+* Create, modify, pause, resume, delete, and import operations for AuraDB instances
+* Take and restore AuraDB snapshots
 * Creating an Aura instance from a snapshot
+* Import existing snapshots into Terraform state
+* Configuration validation for CDC enrichment mode, vector optimisation, and graph analytics plugin
 
 __Neo4j Aura Terraform Provider is a Neo4j Labs Project.  Please read the Disclaimer at the bottom of this page before use.__
 
@@ -34,7 +36,7 @@ Then run ```terraform init```
 See [Examples](https://github.com/neo4j-labs/terraform-provider-neo4jaura/tree/main/examples) for the various possible configuration options
 
 
-## Using from GitHUb repository
+## Using from GitHub repository
 
 This is route to take if you wish to experiment with your own development of the provider or just try it out. 
 
@@ -42,22 +44,22 @@ This is route to take if you wish to experiment with your own development of the
 ### Requirements
 
 * Go 1.25+
-* Terraform 1.13.4+
+* Terraform 1.14.8+
 * A Client Id and Client Secret for access to the Aura API.  To obtain these, follow the guidance in the [Neo4j AuraDB documentation](https://neo4j.com/docs/aura/api/authentication/)
 
 
 ### Installation
 
-Clone the repositry
+Clone the repository
 
 ```Text
-git clone https://github.com/neo-technology/neo4j-aura-terraform-provider-poc.git
+git clone https://github.com/neo4j-labs/terraform-provider-neo4jaura.git
 ```
 
 Build the provider
 
 ```Text
-cd neo4j-aura-terraform-provider-poc/
+cd terraform-provider-neo4jaura/
 ./build.sh
 ```
 
@@ -87,7 +89,7 @@ export TF_VAR_client_secret="$AURA_CLIENT_SECRET"
 Move into the examples folder and then, to run an example
 
 ```Text
-/execute_example.sh <example folder name>
+./examples/execute_example.sh <example folder name>
 ```
 
 You may be prompted to enter values or text during execution.   
@@ -102,7 +104,7 @@ ___The terraform files used in the examples may require editing to match your Ne
 We welcome contributions to improve and extend the capabilities of the Neo4j Aura Terraform Provider.  If you wish to contribute, then follow these steps:-
 
 * Sign the [contributors agreement](https://neo4j.com/developer/contributing-code/#sign-cla)
-* Fork the [repository](https://github.com/neo-technology/neo4j-aura-terraform-provider-poc)
+* Fork the [repository](https://github.com/neo4j-labs/terraform-provider-neo4jaura)
 * Create a branch for your contribution on your _forked repo_
 * Submit a PR from your fork back to the Neo4j Aura Terraform Provider repository
 
