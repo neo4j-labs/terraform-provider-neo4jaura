@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
@@ -357,6 +358,80 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 	}
 }
 
+func populateInstanceModel(model *InstanceResourceModel, diags *diag.Diagnostics, instance client.GetInstanceData) {
+	model.Status = types.StringValue(instance.Status)
+	model.Name = types.StringValue(instance.Name)
+	model.Region = types.StringValue(instance.Region)
+	model.Memory = types.StringValue(instance.Memory)
+	model.Type = types.StringValue(instance.Type)
+	model.CloudProvider = types.StringValue(instance.CloudProvider)
+	model.ConnectionUrl = types.StringValue(instance.ConnectionUrl)
+
+	if instance.Storage != nil {
+		model.Storage = types.StringValue(*instance.Storage)
+	} else {
+		model.Storage = types.StringNull()
+	}
+	if instance.CreatedAt != nil {
+		model.CreatedAt = types.StringValue(*instance.CreatedAt)
+	} else {
+		model.CreatedAt = types.StringNull()
+	}
+	if instance.MetricsIntegrationUrl != nil {
+		model.MetricsIntegrationUrl = types.StringValue(*instance.MetricsIntegrationUrl)
+	} else {
+		model.MetricsIntegrationUrl = types.StringNull()
+	}
+	if instance.GraphNodes != nil {
+		graphNodes, err := strconv.ParseInt(*instance.GraphNodes, 10, 64)
+		if err != nil {
+			diags.AddWarning(
+				"Error while parsing graph nodes",
+				fmt.Sprintf("Cannot convert value to int: %s", *instance.GraphNodes),
+			)
+			model.GraphNodes = types.Int64Null()
+		} else {
+			model.GraphNodes = types.Int64Value(graphNodes)
+		}
+	} else {
+		model.GraphNodes = types.Int64Null()
+	}
+	if instance.GraphRelationships != nil {
+		graphRelationships, err := strconv.ParseInt(*instance.GraphRelationships, 10, 64)
+		if err != nil {
+			diags.AddWarning(
+				"Error while parsing graph relationships",
+				fmt.Sprintf("Cannot convert value to int: %s", *instance.GraphRelationships),
+			)
+			model.GraphRelationships = types.Int64Null()
+		} else {
+			model.GraphRelationships = types.Int64Value(graphRelationships)
+		}
+	} else {
+		model.GraphRelationships = types.Int64Null()
+	}
+	if instance.SecondariesCount != nil {
+		model.SecondariesCount = types.Int32Value(int32(*instance.SecondariesCount))
+	} else {
+		model.SecondariesCount = types.Int32Null()
+	}
+	if instance.CdcEnrichmentMode != nil {
+		model.CdcEnrichmentMode = types.StringValue(*instance.CdcEnrichmentMode)
+	} else {
+		model.CdcEnrichmentMode = types.StringNull()
+	}
+	if instance.VectorOptimized != nil {
+		model.VectorOptimized = types.BoolValue(*instance.VectorOptimized)
+	} else {
+		model.VectorOptimized = types.BoolNull()
+	}
+	if instance.GraphAnalyticsPlugin != nil {
+		model.GraphAnalyticsPlugin = types.BoolValue(*instance.GraphAnalyticsPlugin)
+	} else {
+		model.GraphAnalyticsPlugin = types.BoolNull()
+	}
+}
+
 func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
 	var data InstanceResourceModel
 
@@ -429,72 +504,8 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	if err != nil {
 		response.Diagnostics.AddError("Instance is not running in time", err.Error())
 	}
-	if instance.Data.Storage != nil {
-		data.Storage = types.StringValue(*instance.Data.Storage)
-	} else {
-		data.Storage = types.StringNull()
-	}
-	if instance.Data.CreatedAt != nil {
-		data.CreatedAt = types.StringValue(*instance.Data.CreatedAt)
-	} else {
-		data.CreatedAt = types.StringNull()
-	}
-	if instance.Data.MetricsIntegrationUrl != nil {
-		data.MetricsIntegrationUrl = types.StringValue(*instance.Data.MetricsIntegrationUrl)
-	} else {
-		data.MetricsIntegrationUrl = types.StringNull()
-	}
-	if instance.Data.GraphNodes != nil {
-		graphNodes, err := strconv.ParseInt(*instance.Data.GraphNodes, 10, 64)
-		if err != nil {
-			response.Diagnostics.AddWarning(
-				"Error while parsing graph nodes",
-				fmt.Sprintf("Cannot convert value to int: %s", *instance.Data.GraphNodes),
-			)
-			data.GraphNodes = types.Int64Null()
-		} else {
-			data.GraphNodes = types.Int64Value(graphNodes)
-		}
-	} else {
-		data.GraphNodes = types.Int64Null()
-	}
-	if instance.Data.GraphRelationships != nil {
-		graphRelationships, err := strconv.ParseInt(*instance.Data.GraphRelationships, 10, 64)
-		if err != nil {
-			response.Diagnostics.AddWarning(
-				"Error while parsing graph relationships",
-				fmt.Sprintf("Cannot convert value to int: %s", *instance.Data.GraphNodes),
-			)
-			data.GraphRelationships = types.Int64Null()
-		} else {
-			data.GraphRelationships = types.Int64Value(graphRelationships)
-		}
-	} else {
-		data.GraphRelationships = types.Int64Null()
-	}
-	if instance.Data.SecondariesCount != nil {
-		data.SecondariesCount = types.Int32Value(int32(*instance.Data.SecondariesCount))
-	} else {
-		data.SecondariesCount = types.Int32Null()
-	}
-	if instance.Data.CdcEnrichmentMode != nil {
-		data.CdcEnrichmentMode = types.StringValue(*instance.Data.CdcEnrichmentMode)
-	} else {
-		data.CdcEnrichmentMode = types.StringNull()
-	}
-	if instance.Data.VectorOptimized != nil {
-		data.VectorOptimized = types.BoolValue(*instance.Data.VectorOptimized)
-	} else {
-		data.VectorOptimized = types.BoolNull()
-	}
-	if instance.Data.GraphAnalyticsPlugin != nil {
-		data.GraphAnalyticsPlugin = types.BoolValue(*instance.Data.GraphAnalyticsPlugin)
-	} else {
-		data.GraphAnalyticsPlugin = types.BoolNull()
-	}
 
-	requestedStatus = data.Status
-	data.Status = types.StringValue(data.Status.ValueString())
+	populateInstanceModel(&data, &response.Diagnostics, instance.Data)
 
 	tflog.Debug(ctx, fmt.Sprintf("Instance %s is running", postInstanceResp.Data.Id))
 
@@ -526,74 +537,7 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 		return
 	}
 
-	stateData.Name = types.StringValue(instance.Data.Name)
-	stateData.Region = types.StringValue(instance.Data.Region)
-	stateData.Memory = types.StringValue(instance.Data.Memory)
-	stateData.Type = types.StringValue(instance.Data.Type)
-	stateData.CloudProvider = types.StringValue(instance.Data.CloudProvider)
-	stateData.ConnectionUrl = types.StringValue(instance.Data.ConnectionUrl)
-	if instance.Data.Storage != nil {
-		stateData.Storage = types.StringValue(*instance.Data.Storage)
-	} else {
-		stateData.Storage = types.StringNull()
-	}
-	stateData.Status = types.StringValue(instance.Data.Status)
-	if instance.Data.CreatedAt != nil {
-		stateData.CreatedAt = types.StringValue(*instance.Data.CreatedAt)
-	} else {
-		stateData.CreatedAt = types.StringNull()
-	}
-	if instance.Data.MetricsIntegrationUrl != nil {
-		stateData.MetricsIntegrationUrl = types.StringValue(*instance.Data.MetricsIntegrationUrl)
-	} else {
-		stateData.MetricsIntegrationUrl = types.StringNull()
-	}
-	if instance.Data.GraphNodes != nil {
-		graphNodes, err := strconv.ParseInt(*instance.Data.GraphNodes, 10, 64)
-		if err != nil {
-			response.Diagnostics.AddWarning(
-				"Error while parsing graph nodes",
-				fmt.Sprintf("Cannot convert value to int: %s", *instance.Data.GraphNodes),
-			)
-			stateData.GraphNodes = types.Int64Null()
-		}
-		stateData.GraphNodes = types.Int64Value(graphNodes)
-	} else {
-		stateData.GraphNodes = types.Int64Null()
-	}
-	if instance.Data.GraphRelationships != nil {
-		graphRelationships, err := strconv.ParseInt(*instance.Data.GraphRelationships, 10, 64)
-		if err != nil {
-			response.Diagnostics.AddWarning(
-				"Error while parsing graph relationships",
-				fmt.Sprintf("Cannot convert value to int: %s", *instance.Data.GraphNodes),
-			)
-			stateData.GraphRelationships = types.Int64Null()
-		}
-		stateData.GraphRelationships = types.Int64Value(graphRelationships)
-	} else {
-		stateData.GraphRelationships = types.Int64Null()
-	}
-	if instance.Data.SecondariesCount != nil {
-		stateData.SecondariesCount = types.Int32Value(int32(*instance.Data.SecondariesCount))
-	} else {
-		stateData.SecondariesCount = types.Int32Null()
-	}
-	if instance.Data.CdcEnrichmentMode != nil {
-		stateData.CdcEnrichmentMode = types.StringValue(*instance.Data.CdcEnrichmentMode)
-	} else {
-		stateData.CdcEnrichmentMode = types.StringNull()
-	}
-	if instance.Data.VectorOptimized != nil {
-		stateData.VectorOptimized = types.BoolValue(*instance.Data.VectorOptimized)
-	} else {
-		stateData.VectorOptimized = types.BoolNull()
-	}
-	if instance.Data.GraphAnalyticsPlugin != nil {
-		stateData.GraphAnalyticsPlugin = types.BoolValue(*instance.Data.GraphAnalyticsPlugin)
-	} else {
-		stateData.GraphAnalyticsPlugin = types.BoolNull()
-	}
+	populateInstanceModel(&stateData, &response.Diagnostics, instance.Data)
 
 	response.Diagnostics.Append(response.State.Set(ctx, &stateData)...)
 }
