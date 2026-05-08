@@ -28,8 +28,7 @@ import (
 )
 
 const (
-	auraBasePath = "https://api.neo4j.io"
-	auraV1Path   = auraBasePath + "/v1"
+	defaultAuraBasePath = "https://api.neo4j.io"
 )
 
 const (
@@ -42,9 +41,14 @@ type AuraClient struct {
 	auth       *AuraAuth
 	httpClient *retryablehttp.Client
 	userAgent  string
+	baseURL    string
 }
 
-func NewAuraClient(clientId, clientSecret string, version string) *AuraClient {
+func NewAuraClient(clientId, clientSecret string, version string, baseURL string) *AuraClient {
+	if baseURL == "" {
+		baseURL = defaultAuraBasePath
+	}
+
 	httpClient := retryablehttp.NewClient()
 	httpClient.RetryMax = maxRetries
 	httpClient.RetryWaitMin = backoffMin
@@ -60,9 +64,11 @@ func NewAuraClient(clientId, clientSecret string, version string) *AuraClient {
 			httpClient:   httpClient,
 			mutex:        &sync.Mutex{},
 			userAgent:    userAgent,
+			baseURL:      baseURL,
 		},
 		httpClient: httpClient,
 		userAgent:  userAgent,
+		baseURL:    baseURL,
 	}
 }
 
@@ -88,7 +94,7 @@ func (c *AuraClient) doOperation(ctx context.Context, method string, path string
 		return []byte{}, 0, err
 	}
 
-	absoluteUrl := fmt.Sprintf("%s/%s", auraV1Path, path)
+	absoluteUrl := fmt.Sprintf("%s/v1/%s", c.baseURL, path)
 
 	req, err := retryablehttp.NewRequestWithContext(ctx, method, absoluteUrl, payload)
 	if err != nil {

@@ -1,0 +1,196 @@
+feature: acceptance-tests-mock-server
+prd: ./prd-acceptance-tests-mock-server.md
+created_at: 2026-05-08T22:05:00Z
+updated_at: 2026-05-08T22:05:00Z
+
+tasks:
+  - id: task-001
+    title: 'Make AuraClient base URL configurable via AURA_BASE_URL env var'
+    description: |
+      Modify NewAuraClient in internal/client/aura_client.go to accept a base URL
+      string parameter, defaulting to "https://api.neo4j.io" when empty. Read the
+      AURA_BASE_URL environment variable and pass it through to NewAuraClient from
+      the provider's Configure method in internal/provider/provider.go. Update
+      internal/client/aura_auth.go so AuraAuth receives and uses the same base URL
+      for the OAuth token endpoint (POST /oauth/token), rather than referencing the
+      auraBasePath constant directly.
+    status: completed
+    dependencies: []
+    acceptance_criteria:
+      - "NewAuraClient accepts a baseURL string parameter; empty string falls back to https://api.neo4j.io"
+      - "Both doOperation (API calls) and AuraAuth.authenticate (token URL) use the configurable base URL"
+      - "Provider Configure reads AURA_BASE_URL env var and passes it to NewAuraClient"
+      - "Unsetting AURA_BASE_URL leaves behaviour identical to today"
+      - "go vet ./... and go build ./... pass after the change"
+    completed_at: "2026-05-08T22:30:00Z"
+
+  - id: task-002
+    title: 'Implement mock server core: auth endpoint and in-memory state store'
+    description: |
+      Create internal/test/mock_server.go implementing an httptest.Server-backed mock
+      for the Aura v1 API. The mock must handle POST /oauth/token (returning a dummy
+      bearer token with expires_in > 0) and verify that all non-auth requests carry a
+      matching Authorization: Bearer <token> header, returning HTTP 401 otherwise.
+      Provide a thread-safe in-memory store (sync.Mutex-protected maps) for instances
+      and snapshots, and expose a Reset() method so TestMain can clear state between
+      tests. Also expose a method to pre-seed instance/snapshot state for import tests.
+    status: completed
+    dependencies: []
+    acceptance_criteria:
+      - "POST /oauth/token returns 200 with {access_token, expires_in} JSON"
+      - "API requests with a missing or wrong Bearer token receive HTTP 401"
+      - "API requests with the correct Bearer token are routed to their handler"
+      - "Reset() clears all in-memory instance and snapshot state"
+      - "Pre-seed method accepts an instance or snapshot struct and inserts it into state"
+      - "All state access is protected by a mutex (safe for parallel sub-tests)"
+    completed_at: "2026-05-08T22:35:00Z"
+
+  - id: task-003
+    title: 'Implement mock instance endpoints with state machine'
+    description: |
+      Add handlers in internal/test/mock_server.go for the six instance endpoints:
+      POST /v1/instances (202, creates instance in "creating" state),
+      GET /v1/instances/{id} (200, state machine: first call returns "creating", second
+      and subsequent return "running" with preset graph_nodes and graph_relationships),
+      DELETE /v1/instances/{id} (202, removes from state then returns 404 on subsequent
+      GETs to satisfy WaitUntilInstanceIsDeleted), PATCH /v1/instances/{id} (202,
+      updates name/memory/cdc_enrichment_mode/secondaries_count in state),
+      POST /v1/instances/{id}/pause (202, transitions status to "paused"),
+      POST /v1/instances/{id}/resume (202, transitions status back to "running").
+    status: completed
+    dependencies:
+      - task-002
+    acceptance_criteria:
+      - "POST /v1/instances returns 202 with PostInstanceResponse JSON; instance stored in creating state"
+      - "First GET /v1/instances/{id} returns status=creating; second returns status=running"
+      - "running instance GET response includes non-nil graph_nodes and graph_relationships"
+      - "DELETE /v1/instances/{id} returns 202; subsequent GET returns 404"
+      - "PATCH /v1/instances/{id} returns 202 and updates the stored instance fields"
+      - "Pause and resume endpoints return 202 and mutate the stored status correctly"
+    completed_at: "2026-05-08T23:15:00Z"
+
+  - id: task-004
+    title: 'Implement mock snapshot and tenant endpoints'
+    description: |
+      Add handlers in internal/test/mock_server.go for the snapshot and tenant
+      endpoints: GET /v1/tenants (returns a preset list with one tenant/project),
+      POST /v1/instances/{id}/snapshots (202, creates snapshot in InProgress state),
+      GET /v1/instances/{id}/snapshots (200, lists all snapshots for the instance),
+      GET /v1/instances/{id}/snapshots/{snapshotId} (200, state machine: first call
+      returns InProgress, second returns Completed). Snapshot responses must include
+      instance_id, snapshot_id, profile (Scheduled), status, and timestamp fields.
+    status: completed
+    dependencies:
+      - task-002
+    acceptance_criteria:
+      - "GET /v1/tenants returns 200 with at least one project entry containing id and name"
+      - "POST /v1/instances/{id}/snapshots returns 202 with {snapshot_id}; snapshot stored in InProgress"
+      - "GET /v1/instances/{id}/snapshots returns 200 with array of snapshot objects"
+      - "First GET /v1/instances/{id}/snapshots/{id} returns status=InProgress; second returns Completed"
+      - "Snapshot response includes instance_id, snapshot_id, profile=Scheduled, status, and timestamp"
+    completed_at: "2026-05-08T23:10:00Z"
+
+  - id: task-005
+    title: 'Wire TestMain to start mock server and configure provider for tests'
+    description: |
+      Update internal/test/provider_test.go to add a TestMain function that starts
+      the mock server (from task-002 through task-004), sets AURA_BASE_URL to the
+      mock's URL, runs the tests, then stops the server. Replace the live-credential
+      provider config (var.client_id, var.client_secret) with fixed dummy string
+      literals so tests require no environment variables. Pass a short timeout
+      (10 seconds) to NewAuraApi in newTestAuraApi() so tests fail fast if the mock
+      is unresponsive rather than waiting 900 seconds.
+    status: completed
+    dependencies:
+      - task-001
+      - task-002
+      - task-003
+      - task-004
+    acceptance_criteria:
+      - "TestMain starts the mock server and sets AURA_BASE_URL before any test runs"
+      - "TestMain stops the mock server and unsets AURA_BASE_URL after all tests complete"
+      - "defaultProviderConfig uses hardcoded dummy client_id and client_secret strings"
+      - "newTestAuraApi() passes a 10-second instance timeout and 10-second snapshot timeout"
+      - "TF_ACC=1 go test ./internal/test/... runs without any real credentials in the environment"
+    completed_at: "2026-05-08T23:30:00Z"
+
+  - id: task-006
+    title: 'Update projects and snapshot data source tests to use mock'
+    description: |
+      Rewrite internal/test/projects_test.go and internal/test/snapshot_test.go to
+      work against the mock server. Remove any SkipIfNotAcceptance guards (mock tests
+      are cheap to run in CI). The projects test should assert on the preset tenant
+      data returned by the mock. The snapshot data source test must pre-create an
+      instance and snapshot in the mock before the test step runs, rather than relying
+      on live infrastructure. Update config strings to remove variable-based credentials.
+    status: completed
+    dependencies:
+      - task-005
+    acceptance_criteria:
+      - "TestAcc_can_read_projects_datasource passes against the mock with no live credentials"
+      - "TestAcc_can_read_snapshot_datasource passes against the mock with no live credentials"
+      - "No SkipIfNotAcceptance calls remain in these two files"
+      - "Config strings use hardcoded dummy credentials, not Terraform variables"
+    completed_at: "2026-05-08T23:50:00Z"
+
+  - id: task-007
+    title: 'Rewrite instance resource tests to use mock (remove Cypher steps)'
+    description: |
+      Rewrite internal/test/instance_resource_test.go to run against the mock.
+      Remove the Cypher execution PreConfig step and the graph_nodes/graph_relationships
+      count-assertion step from TestAcc_can_create_instance_resource; replace with an
+      assertion that verifies the provider correctly maps the preset values from the
+      mock's GET response. Rewrite TestAcc_can_import_instance_resource sub-cases to
+      pre-seed the mock's state (using the mock's seed method) instead of calling
+      api.PostInstance and api.WaitUntilInstanceIsInState directly. Remove all
+      SkipIfNotAcceptance guards and newTestAuraApi() usages in this file.
+    status: completed
+    dependencies:
+      - task-005
+    acceptance_criteria:
+      - "TestAcc_can_create_instance_resource passes without any Cypher or time.Sleep steps"
+      - "graph_nodes and graph_relationships are asserted against the mock's preset values"
+      - "All TestAcc_can_import_instance_resource sub-cases pass using mock-seeded state"
+      - "TestAcc_cdc_enrichment_mode_default_value passes against the mock"
+      - "TestAcc_secondaries_count_no_drift passes against the mock"
+      - "No SkipIfNotAcceptance calls remain in this file"
+    completed_at: "2026-05-08T23:00:00Z"
+
+  - id: task-008
+    title: 'Rewrite snapshot resource test to use mock'
+    description: |
+      Rewrite internal/test/snapshot_resource_test.go to run against the mock server.
+      Replace the WaitUntilSnapshotsMatchCondition polling step with a mock pre-seed
+      that inserts a snapshot into the mock's state before the import step runs.
+      Remove the SkipIfNotAcceptance guard and any direct AuraApi usage. Ensure
+      the import step can resolve the snapshot ID from the mock's seeded state.
+    status: completed
+    dependencies:
+      - task-005
+    acceptance_criteria:
+      - "TestAcc_can_import_snapshot passes against the mock with no live credentials"
+      - "No WaitUntilSnapshotsMatchCondition or live API calls remain in this file"
+      - "No SkipIfNotAcceptance calls remain in this file"
+      - "Snapshot import correctly resolves instance_id and snapshot_id from mock state"
+    completed_at: "2026-05-08T23:00:00Z"
+
+  - id: task-009
+    title: 'Remove neo4j-go-driver dependency and clean up Cypher helpers'
+    description: |
+      Delete internal/test/neo4j_utils.go (executeCypher and newTestAuraApi helpers)
+      once no test file references them. Run go mod tidy to remove the
+      github.com/neo4j/neo4j-go-driver/v5 transitive entries from go.mod and go.sum.
+      Verify that go build ./... and go vet ./... pass cleanly, and confirm the full
+      test suite completes in under 60 seconds with TF_ACC=1 and no Aura credentials.
+    status: completed
+    dependencies:
+      - task-006
+      - task-007
+      - task-008
+    acceptance_criteria:
+      - "internal/test/neo4j_utils.go is deleted"
+      - "neo4j-go-driver/v5 does not appear in go.mod or go.sum"
+      - "go build ./... passes with no errors"
+      - "go vet ./... passes with no errors"
+      - "TF_ACC=1 go test ./internal/test/... -timeout 120s completes successfully in under 60 seconds"
+    completed_at: "2026-05-08T23:15:00Z"

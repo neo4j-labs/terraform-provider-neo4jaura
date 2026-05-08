@@ -37,6 +37,7 @@ type AuraAuth struct {
 	token        *AuraAuthToken
 	httpClient   *retryablehttp.Client
 	userAgent    string
+	baseURL      string
 }
 
 type AuraAuthToken struct {
@@ -45,7 +46,7 @@ type AuraAuthToken struct {
 }
 
 func (a *AuraAuth) authenticate(ctx context.Context) error {
-	authUrl := fmt.Sprintf("%s/%s", auraBasePath, "oauth/token")
+	authUrl := fmt.Sprintf("%s/%s", a.baseURL, "oauth/token")
 	req, err := retryablehttp.NewRequestWithContext(ctx, "POST", authUrl, []byte("grant_type=client_credentials"))
 	if err != nil {
 		return err

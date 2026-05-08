@@ -18,54 +18,63 @@
 package test
 
 import (
-	"fmt"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/client"
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/domain"
 )
 
-var testAccSnapshotDataSourceConfig = fmt.Sprintf(`
-%[1]s
-data "neo4jaura_projects" "this" {}
+const (
+	snapTestInstanceID = "snap-test-instance-001"
+	snapTestSnapshotID = "snap-test-snapshot-001"
+)
 
-resource "neo4jaura_instance" "this" {
-  name           = "MyTestInstance"
-  cloud_provider = "gcp"
-  region         = "europe-west2"
-  memory         = "2GB"
-  storage        = "4GB"
-  type           = "professional-db"
-  project_id     = data.neo4jaura_projects.this.projects.0.id
-}
-
+const testAccSnapshotDataSourceConfig = defaultProviderConfig + `
 data "neo4jaura_snapshot" "this" {
-  instance_id = neo4jaura_instance.this.instance_id
+  instance_id = "` + snapTestInstanceID + `"
   most_recent = true
 }
-`, defaultProviderConfig)
+`
 
 func TestAcc_can_read_snapshot_datasource(t *testing.T) {
-	t.Parallel()
+	testMockServer.Reset()
+
+	// Pre-seed a running instance so the provider can resolve the instance.
+	testMockServer.SeedInstance(client.GetInstanceData{
+		Id:     snapTestInstanceID,
+		Name:   "Snapshot Test Instance",
+		Status: domain.InstanceStatusRunning,
+	})
+
+	// Pre-seed a snapshot associated with the known instance ID.
+	testMockServer.SeedSnapshot(client.GetSnapshotData{
+		InstanceId: snapTestInstanceID,
+		SnapshotId: snapTestSnapshotID,
+		Profile:    domain.SnapshotProfileScheduled,
+		Status:     domain.SnapshotStatusCompleted,
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+	})
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
-			// Read testing
 			{
-				ResourceName: "data.neo4jaura_snapshot.this",
-				Config:       testAccSnapshotDataSourceConfig,
+				Config: testAccSnapshotDataSourceConfig,
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"data.neo4jaura_snapshot.this",
 						tfjsonpath.New("instance_id"),
-						knownvalue.StringFunc(nonEmptyString),
+						knownvalue.StringExact(snapTestInstanceID),
 					),
 					statecheck.ExpectKnownValue(
 						"data.neo4jaura_snapshot.this",
 						tfjsonpath.New("snapshot_id"),
-						knownvalue.StringFunc(nonEmptyString),
+						knownvalue.StringExact(snapTestSnapshotID),
 					),
 					statecheck.ExpectKnownValue(
 						"data.neo4jaura_snapshot.this",

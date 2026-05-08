@@ -18,10 +18,30 @@
 package test
 
 import (
+	"os"
+	"testing"
+
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/provider"
 )
+
+// testMockServer is the package-level mock server instance started by TestMain.
+// Individual tests can call testMockServer.Reset(), testMockServer.SeedInstance(),
+// and testMockServer.SeedSnapshot() to prepare state before each test step.
+var testMockServer *MockServer
+
+func TestMain(m *testing.M) {
+	testMockServer = NewMockServer()
+	os.Setenv("AURA_BASE_URL", testMockServer.URL())
+
+	code := m.Run()
+
+	testMockServer.Close()
+	os.Unsetenv("AURA_BASE_URL")
+
+	os.Exit(code)
+}
 
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 	"neo4jaura": providerserver.NewProtocol6WithError(provider.New("test")()),
@@ -29,10 +49,7 @@ var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServe
 
 const defaultProviderConfig = `
 provider "neo4jaura" {
-  client_id     = var.client_id
-  client_secret = var.client_secret
+  client_id     = "test-client-id"
+  client_secret = "test-client-secret"
 }
-
-variable "client_id" {}
-variable "client_secret" {}
 `
