@@ -227,3 +227,25 @@ Key Decisions:
 - connection_url/username/password assertions dropped (mock returns empty strings)
 
 Next Task: task-008 (snapshot resource test) and task-009 (cleanup)
+
+================================================================================
+TASK-008: Rewrite snapshot resource test to use mock
+Date: 2026-05-08T23:00:00Z
+================================================================================
+
+Summary:
+Rewrote internal/test/snapshot_resource_test.go to run entirely against the mock.
+Replaced WaitUntilSnapshotsMatchCondition and live API calls with testMockServer
+pre-seeding of a known instance and snapshot. Import step uses hardcoded IDs.
+Status assertion tightened from oneOf to StringExact(Completed) since mock is deterministic.
+
+Files Changed:
+- internal/test/snapshot_resource_test.go (rewritten for mock)
+
+Key Decisions:
+- Known IDs (import-snap-instance-001 / import-snap-snapshot-001) make assertions exact
+- SeedSnapshot getCount=1 means first GET returns Completed (count increments to 2)
+- Status assertion uses StringExact(Completed) not oneOf — mock is deterministic
+- t.Parallel() removed; testMockServer.Reset() called at start for isolation
+
+Next Task: task-009 (cleanup)

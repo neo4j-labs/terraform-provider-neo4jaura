@@ -164,7 +164,7 @@ tasks:
       that inserts a snapshot into the mock's state before the import step runs.
       Remove the SkipIfNotAcceptance guard and any direct AuraApi usage. Ensure
       the import step can resolve the snapshot ID from the mock's seeded state.
-    status: in_progress
+    status: completed
     dependencies:
       - task-005
     acceptance_criteria:
@@ -172,7 +172,7 @@ tasks:
       - "No WaitUntilSnapshotsMatchCondition or live API calls remain in this file"
       - "No SkipIfNotAcceptance calls remain in this file"
       - "Snapshot import correctly resolves instance_id and snapshot_id from mock state"
-    completed_at: null
+    completed_at: "2026-05-08T23:00:00Z"
 
   - id: task-009
     title: 'Remove neo4j-go-driver dependency and clean up Cypher helpers'
