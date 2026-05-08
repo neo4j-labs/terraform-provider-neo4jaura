@@ -152,7 +152,7 @@ func (api *AuraApi) GetSnapshotsByInstanceId(ctx context.Context, instanceId str
 		return GetSnapshotsResponse{}, err
 	}
 	if status != 200 {
-		return GetSnapshotsResponse{}, err
+		return GetSnapshotsResponse{}, fmt.Errorf("aura error: Status: %+v. Response: %+v", status, string(body))
 	}
 	return util.Unmarshal[GetSnapshotsResponse](body)
 }
@@ -163,7 +163,7 @@ func (api *AuraApi) GetSnapshotById(ctx context.Context, instanceId string, snap
 		return GetSnapshotResponse{}, err
 	}
 	if status != 200 {
-		return GetSnapshotResponse{}, err
+		return GetSnapshotResponse{}, fmt.Errorf("aura error: Status: %+v. Response: %+v", status, string(body))
 	}
 	return util.Unmarshal[GetSnapshotResponse](body)
 }
