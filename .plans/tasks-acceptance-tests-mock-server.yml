@@ -34,7 +34,7 @@ tasks:
       Provide a thread-safe in-memory store (sync.Mutex-protected maps) for instances
       and snapshots, and expose a Reset() method so TestMain can clear state between
       tests. Also expose a method to pre-seed instance/snapshot state for import tests.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "POST /oauth/token returns 200 with {access_token, expires_in} JSON"
@@ -43,7 +43,7 @@ tasks:
       - "Reset() clears all in-memory instance and snapshot state"
       - "Pre-seed method accepts an instance or snapshot struct and inserts it into state"
       - "All state access is protected by a mutex (safe for parallel sub-tests)"
-    completed_at: null
+    completed_at: "2026-05-08T22:35:00Z"
 
   - id: task-003
     title: 'Implement mock instance endpoints with state machine'

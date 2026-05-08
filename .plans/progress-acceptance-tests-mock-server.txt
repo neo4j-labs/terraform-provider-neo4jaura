@@ -23,3 +23,24 @@ Key Decisions:
 - `AURA_BASE_URL` is read at provider Configure time (not at package init), so tests can set it before constructing the provider.
 
 Next Task: task-002
+
+================================================================================
+TASK-002: Implement mock server core: auth endpoint and in-memory state store
+Date: 2026-05-08T22:35:00Z
+================================================================================
+
+Summary:
+Created internal/test/mock_server.go with an httptest.Server-backed mock for the
+Aura v1 API. Implements POST /oauth/token, Bearer token auth middleware (401 on
+missing/wrong token), thread-safe in-memory state maps for instances and snapshots,
+Reset()/SeedInstance()/SeedSnapshot() methods, and stub routing for all v1 endpoints.
+
+Files Changed:
+- internal/test/mock_server.go (created)
+
+Key Decisions:
+- Manual path splitting used for routing (no external router dependency)
+- getCount field in seed methods starts at 1 to align with task-003/004 state machine contract
+- All map access must hold ms.mu (documented in field comments)
+
+Next Task: task-003 and task-004 (both depend on task-002, both pending)
