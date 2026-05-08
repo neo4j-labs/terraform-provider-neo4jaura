@@ -3,9 +3,11 @@
 Available as a Neo4j Labs Project ( See Disclaimer further down this README )  Neo4j Aura Terraform Provider enables a declarative, infrastructure-as-code (IaC) approach to infrastructure.  This codifies the interaction with Aura's management API for the provisioning and management of AuraDB infrastructure. Specifically Neo4j Aura Terraform provider allows for:- 
 
 * Obtaining information about a project ( tenant )
-* Create, modify, pause, resume and delete operations for AuraDB instances
-* Take and restore AuraDB snapshots.  
+* Create, modify, pause, resume, delete, and import operations for AuraDB instances
+* Take and restore AuraDB snapshots
 * Creating an Aura instance from a snapshot
+* Import existing snapshots into Terraform state
+* Configuration validation for CDC enrichment mode, vector optimisation, and graph analytics plugin
 
 __Neo4j Aura Terraform Provider is a Neo4j Labs Project.  Please read the Disclaimer at the bottom of this page before use.__
 
@@ -34,7 +36,7 @@ Then run ```terraform init```
 See [Examples](https://github.com/neo4j-labs/terraform-provider-neo4jaura/tree/main/examples) for the various possible configuration options
 
 
-## Using from GitHUb repository
+## Using from GitHub repository
 
 This is route to take if you wish to experiment with your own development of the provider or just try it out. 
 
@@ -42,22 +44,22 @@ This is route to take if you wish to experiment with your own development of the
 ### Requirements
 
 * Go 1.25+
-* Terraform 1.13.4+
+* Terraform 1.14.8+
 * A Client Id and Client Secret for access to the Aura API.  To obtain these, follow the guidance in the [Neo4j AuraDB documentation](https://neo4j.com/docs/aura/api/authentication/)
 
 
 ### Installation
 
-Clone the repositry
+Clone the repository
 
 ```Text
-git clone https://github.com/neo-technology/neo4j-aura-terraform-provider-poc.git
+git clone https://github.com/neo4j-labs/terraform-provider-neo4jaura.git
 ```
 
 Build the provider
 
 ```Text
-cd neo4j-aura-terraform-provider-poc/
+cd terraform-provider-neo4jaura/
 ./build.sh
 ```
 
@@ -87,7 +89,7 @@ export TF_VAR_client_secret="$AURA_CLIENT_SECRET"
 Move into the examples folder and then, to run an example
 
 ```Text
-/execute_example.sh <example folder name>
+./examples/execute_example.sh <example folder name>
 ```
 
 You may be prompted to enter values or text during execution.   
@@ -97,22 +99,57 @@ You may be prompted to enter values or text during execution.
 ___The terraform files used in the examples may require editing to match your Neo4j AuraDB environment.  In particular , those that create or modify AuraDB Instances are likely to need changes.___
 
 
-## Contributing 
+## Contributing
 
-We welcome contributions to improve and extend the capabilities of the Neo4j Aura Terraform Provider.  If you wish to contribute, then follow these steps:-
+We welcome contributions to improve and extend the capabilities of the Neo4j Aura Terraform Provider.  If you wish to contribute, then follow these steps:
 
 * Sign the [contributors agreement](https://neo4j.com/developer/contributing-code/#sign-cla)
-* Fork the [repository](https://github.com/neo-technology/neo4j-aura-terraform-provider-poc)
+* Fork the [repository](https://github.com/neo4j-labs/terraform-provider-neo4jaura)
 * Create a branch for your contribution on your _forked repo_
+* Add a changelog entry (see below)
 * Submit a PR from your fork back to the Neo4j Aura Terraform Provider repository
 
-
 ___A good pull request is focused on one feature or issue and includes a clear title that summarizes the change. In the description, you should explain what you changed and why, and reference any related issues using syntax like "Fixes #123".___
-
 
 If you get stuck, start by checking existing GitHub issues to see if others have encountered similar problems. You can also ask questions directly in pull request discussions, where maintainers and other contributors can provide guidance. For complex architectural questions or decisions that might affect the project's design, reach out to maintainers directly to get their input before investing too much time in a particular approach.
 
 Thank you for contributing to make this better!
+
+### Changelog entries
+
+Every pull request should include a changelog entry so that changes are captured in the release notes. Entries live as small YAML files under `.changes/unreleased/` and are merged into `CHANGELOG.md` automatically at release time.
+
+Create a file named `.changes/unreleased/<short-description>.yaml` with the following content:
+
+```yaml
+kind: <kind>
+body: '<description of the change>'
+time: <RFC3339 timestamp, e.g. 2026-01-01T00:00:00Z>
+```
+
+The `kind` field determines how the version number is bumped:
+
+| Kind | Version bump | When to use |
+|------|-------------|-------------|
+| `Added` | minor | New feature or capability |
+| `Changed` | major | Breaking change to existing behaviour |
+| `Deprecated` | minor | Feature marked for future removal |
+| `Removed` | major | Feature removed |
+| `Fixed` | patch | Bug fix |
+| `Security` | patch | Security fix |
+
+If you have [changie](https://changie.dev) installed you can run `changie new` to create the entry interactively.
+
+### Releasing (maintainers only)
+
+Releases are created from the `main` branch using the **Prepare Release** GitHub Actions workflow. The workflow determines the next version automatically from the changelog entry kinds (patch / minor / major), updates `CHANGELOG.md`, and creates the corresponding git tag. The **Release** workflow then fires on that tag and publishes the binaries to GitHub Releases and the Terraform Registry.
+
+To cut a release:
+
+1. Ensure all changes intended for the release have been merged to `main` and each has a changelog entry under `.changes/unreleased/`.
+2. Go to **Actions → Prepare Release → Run workflow** on GitHub.
+3. The workflow will commit the updated changelog and push a version tag (e.g. `v0.2.0`).
+4. The **Release** workflow triggers automatically on the new tag and publishes the release.
 
 
 ## Feedback, Support and Issues
