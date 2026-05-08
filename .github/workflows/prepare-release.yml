@@ -2,6 +2,11 @@ name: Prepare Release
 
 on:
   workflow_dispatch:
+    inputs:
+      prerelease:
+        description: 'Pre-release suffix (e.g. rc1, beta) — leave blank for a stable release'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -24,7 +29,12 @@ jobs:
         run: go install github.com/miniscruff/changie@latest
 
       - name: Batch unreleased changes
-        run: changie batch auto
+        run: |
+          if [ -n "${{ inputs.prerelease }}" ]; then
+            changie batch auto --prerelease "${{ inputs.prerelease }}"
+          else
+            changie batch auto
+          fi
 
       - name: Get next version
         id: next_version
