@@ -20,11 +20,10 @@ package resource
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
@@ -38,36 +37,20 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/client"
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/domain"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/util"
 )
 
 // Ensure resource defined types fully satisfy framework interfaces.
 var (
-	_ resource.Resource              = &InstanceResource{}
-	_ resource.ResourceWithConfigure = &InstanceResource{}
+	_ resource.Resource                = &InstanceResource{}
+	_ resource.ResourceWithConfigure   = &InstanceResource{}
+	_ resource.ResourceWithImportState = &InstanceResource{}
 )
 
 func NewInstanceResource() resource.Resource {
 	return &InstanceResource{}
 }
-
-var supportedStatuses = []string{
-	"creating", "destroying", "running", "pausing", "paused", "suspending", "suspended", "resuming", "loading",
-	"loading failed", "restoring", "updating", "overwriting",
-}
-var supportedMemory = []string{
-	"1GB", "2GB", "4GB", "8GB", "16GB", "24GB", "32GB", "48GB", "64GB", "128GB", "192GB", "256GB", "384GB", "512GB",
-}
-var supportedTypes = []string{
-	"enterprise-db", "enterprise-ds", "professional-db", "professional-ds", "free-db", "business-critical",
-}
-var supportedCloudProviders = []string{"gcp", "aws", "azure"}
-var supportedVersions = []string{"5"}
-var supportedStorage = []string{
-	"2GB", "4GB", "8GB", "16GB", "32GB", "48GB", "64GB", "96GB", "128GB", "192GB", "256GB", "384GB", "512GB",
-	"768GB", "1024GB", "1536GB", "2048GB",
-}
-var supportedCdcEnrichmentModes = []string{"OFF", "DIFF", "FULL"}
 
 type InstanceResource struct {
 	auraApi *client.AuraApi
@@ -107,20 +90,20 @@ type InstanceResourceSourceModel struct {
 func (m InstanceResourceModel) CanBePaused() bool {
 	return !m.Status.IsUnknown() &&
 		!m.Status.IsNull() &&
-		strings.ToLower(m.Status.ValueString()) == "running"
+		strings.ToLower(m.Status.ValueString()) == domain.InstanceStatusRunning
 }
 
 func (m InstanceResourceModel) CanBeResumed() bool {
 	return !m.Status.IsUnknown() &&
 		!m.Status.IsNull() &&
-		strings.ToLower(m.Status.ValueString()) == "paused"
+		strings.ToLower(m.Status.ValueString()) == domain.InstanceStatusPaused
 }
 
-func (r *InstanceResource) Metadata(ctx context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
+func (r *InstanceResource) Metadata(_ context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
 	response.TypeName = request.ProviderTypeName + "_instance"
 }
 
-func (r *InstanceResource) Configure(ctx context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
+func (r *InstanceResource) Configure(_ context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
 	if request.ProviderData == nil {
 		return
 	}
@@ -137,7 +120,7 @@ func (r *InstanceResource) Configure(ctx context.Context, request resource.Confi
 	r.auraApi = auraApi
 }
 
-func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
+func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, response *resource.SchemaResponse) {
 	response.Schema = schema.Schema{
 		MarkdownDescription: "Aura instance",
 		Description:         "Aura instance",
@@ -308,7 +291,6 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 				MarkdownDescription: "The number of secondaries in an Instance. (VDC only)",
 				Description:         "The number of secondaries in an Instance. (VDC only)",
 				Optional:            true,
-				Computed:            true,
 				PlanModifiers: []planmodifier.Int32{
 					int32planmodifier.UseStateForUnknown(),
 				},
@@ -317,10 +299,6 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 				MarkdownDescription: fmt.Sprintf("CDC enrichment mode. One of [%s]", strings.Join(supportedCdcEnrichmentModes, ", ")),
 				Description:         fmt.Sprintf("CDC enrichment mode. One of [%s]", strings.Join(supportedCdcEnrichmentModes, ", ")),
 				Optional:            true,
-				Computed:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
 				Validators: []validator.String{
 					stringvalidator.OneOf(supportedCdcEnrichmentModes...),
 				},
@@ -364,77 +342,12 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 	}
 }
 
-func populateInstanceModel(model *InstanceResourceModel, diags *diag.Diagnostics, instance client.GetInstanceData) {
-	model.Status = types.StringValue(instance.Status)
-	model.Name = types.StringValue(instance.Name)
-	model.Region = types.StringValue(instance.Region)
-	model.Memory = types.StringValue(instance.Memory)
-	model.Type = types.StringValue(instance.Type)
-	model.CloudProvider = types.StringValue(instance.CloudProvider)
-	model.ConnectionUrl = types.StringValue(instance.ConnectionUrl)
-
-	if instance.Storage != nil {
-		model.Storage = types.StringValue(*instance.Storage)
-	} else {
-		model.Storage = types.StringNull()
-	}
-	if instance.CreatedAt != nil {
-		model.CreatedAt = types.StringValue(*instance.CreatedAt)
-	} else {
-		model.CreatedAt = types.StringNull()
-	}
-	if instance.MetricsIntegrationUrl != nil {
-		model.MetricsIntegrationUrl = types.StringValue(*instance.MetricsIntegrationUrl)
-	} else {
-		model.MetricsIntegrationUrl = types.StringNull()
-	}
-	if instance.GraphNodes != nil {
-		graphNodes, err := strconv.ParseInt(*instance.GraphNodes, 10, 64)
-		if err != nil {
-			diags.AddWarning(
-				"Error while parsing graph nodes",
-				fmt.Sprintf("Cannot convert value to int: %s", *instance.GraphNodes),
-			)
-			model.GraphNodes = types.Int64Null()
-		} else {
-			model.GraphNodes = types.Int64Value(graphNodes)
-		}
-	} else {
-		model.GraphNodes = types.Int64Null()
-	}
-	if instance.GraphRelationships != nil {
-		graphRelationships, err := strconv.ParseInt(*instance.GraphRelationships, 10, 64)
-		if err != nil {
-			diags.AddWarning(
-				"Error while parsing graph relationships",
-				fmt.Sprintf("Cannot convert value to int: %s", *instance.GraphRelationships),
-			)
-			model.GraphRelationships = types.Int64Null()
-		} else {
-			model.GraphRelationships = types.Int64Value(graphRelationships)
-		}
-	} else {
-		model.GraphRelationships = types.Int64Null()
-	}
-	if instance.SecondariesCount != nil {
-		model.SecondariesCount = types.Int32Value(int32(*instance.SecondariesCount))
-	} else {
-		model.SecondariesCount = types.Int32Null()
-	}
-	if instance.CdcEnrichmentMode != nil {
-		model.CdcEnrichmentMode = types.StringValue(*instance.CdcEnrichmentMode)
-	} else {
-		model.CdcEnrichmentMode = types.StringNull()
-	}
-	if instance.VectorOptimized != nil {
-		model.VectorOptimized = types.BoolValue(*instance.VectorOptimized)
-	} else {
-		model.VectorOptimized = types.BoolNull()
-	}
-	if instance.GraphAnalyticsPlugin != nil {
-		model.GraphAnalyticsPlugin = types.BoolValue(*instance.GraphAnalyticsPlugin)
-	} else {
-		model.GraphAnalyticsPlugin = types.BoolNull()
+// ConfigValidators returns a list of resource-level validators
+func (r *InstanceResource) ConfigValidators(_ context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		&cdcTierValidator{},
+		&vectorOptimizedValidator{},
+		&graphAnalyticsPluginValidator{},
 	}
 }
 
@@ -476,12 +389,10 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	if !data.Storage.IsUnknown() {
 		postInstanceRequest.Storage = data.Storage.ValueStringPointer()
 	}
-	if !data.SecondariesCount.IsUnknown() {
-		postInstanceRequest.SecondariesCount = data.SecondariesCount.ValueInt32Pointer()
-	}
-	if !data.CdcEnrichmentMode.IsUnknown() {
-		postInstanceRequest.CdcEnrichmentMode = data.CdcEnrichmentMode.ValueStringPointer()
-	}
+	// Note: secondaries count cannot be set during instance creation
+	// It must be set via PATCH after the instance is running (see below)
+	// Note: CDC enrichment mode cannot be set during instance creation
+	// It must be set via PATCH after the instance is running (see below)
 	if !data.VectorOptimized.IsUnknown() {
 		postInstanceRequest.VectorOptimized = data.VectorOptimized.ValueBoolPointer()
 	}
@@ -505,18 +416,105 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	tflog.Debug(ctx, "Created an instance with id "+postInstanceResp.Data.Id)
 
 	instance, err := r.auraApi.WaitUntilInstanceIsInState(ctx, postInstanceResp.Data.Id, func(r client.GetInstanceResponse) bool {
-		return strings.ToLower(r.Data.Status) == "running"
+		return strings.ToLower(r.Data.Status) == domain.InstanceStatusRunning
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Instance is not running in time", err.Error())
 	}
 
-	populateInstanceModel(&data, &response.Diagnostics, instance.Data)
+	// CDC enrichment mode and secondaries_count must be set via PATCH after instance creation
+	// (POST /instances may not apply or return these; PATCH after instance is running applies them)
+	instanceType := data.Type.ValueString()
+	needsCdcPatch := !data.CdcEnrichmentMode.IsNull() && (instanceType == domain.InstanceTypeBusinessCritical || instanceType == domain.InstanceTypeEnterpriseDb || instanceType == domain.InstanceTypeEnterpriseDs)
+	needsSecondariesPatch := !data.SecondariesCount.IsNull() && (instanceType == domain.InstanceTypeBusinessCritical || instanceType == domain.InstanceTypeEnterpriseDb)
+	if needsCdcPatch || needsSecondariesPatch {
+		patchRequest := client.PatchInstanceRequest{}
+		if needsCdcPatch {
+			cdcMode := data.CdcEnrichmentMode.ValueString()
+			patchRequest.CdcEnrichmentMode = &cdcMode
+			tflog.Debug(ctx, fmt.Sprintf("Patching instance %s with CDC enrichment mode: %s", postInstanceResp.Data.Id, cdcMode))
+		}
+		if needsSecondariesPatch {
+			sc := data.SecondariesCount.ValueInt32()
+			patchRequest.SecondariesCount = &sc
+			tflog.Debug(ctx, fmt.Sprintf("Patching instance %s with secondaries_count: %d", postInstanceResp.Data.Id, sc))
+		}
+		instance, err = r.auraApi.PatchInstanceById(ctx, postInstanceResp.Data.Id, patchRequest)
+		if err != nil {
+			response.Diagnostics.AddError("Error while patching instance (CDC / secondaries_count)", err.Error())
+			return
+		}
+		instance, err = r.auraApi.WaitUntilInstanceIsInState(ctx, postInstanceResp.Data.Id, func(r client.GetInstanceResponse) bool {
+			return strings.ToLower(r.Data.Status) == domain.InstanceStatusRunning
+		})
+		if err != nil {
+			response.Diagnostics.AddError("Instance is not running after PATCH", err.Error())
+			return
+		}
+		tflog.Debug(ctx, fmt.Sprintf("Successfully patched instance %s", postInstanceResp.Data.Id))
+	}
+
+	if instance.Data.Storage != nil {
+		data.Storage = types.StringValue(*instance.Data.Storage)
+	} else {
+		data.Storage = types.StringNull()
+	}
+	if instance.Data.CreatedAt != nil {
+		data.CreatedAt = types.StringValue(*instance.Data.CreatedAt)
+	} else {
+		data.CreatedAt = types.StringNull()
+	}
+	if instance.Data.MetricsIntegrationUrl != nil {
+		data.MetricsIntegrationUrl = types.StringValue(*instance.Data.MetricsIntegrationUrl)
+	} else {
+		data.MetricsIntegrationUrl = types.StringNull()
+	}
+	if instance.Data.GraphNodes != nil {
+		data.GraphNodes = types.Int64Value(*instance.Data.GraphNodes)
+	} else {
+		data.GraphNodes = types.Int64Null()
+	}
+	if instance.Data.GraphRelationships != nil {
+		data.GraphRelationships = types.Int64Value(*instance.Data.GraphRelationships)
+	} else {
+		data.GraphRelationships = types.Int64Null()
+	}
+	if instance.Data.SecondariesCount != nil {
+		data.SecondariesCount = types.Int32Value(int32(*instance.Data.SecondariesCount))
+	} else if !data.SecondariesCount.IsNull() {
+		// API may omit secondaries_count in response; keep the value we set via PATCH
+		// data.SecondariesCount already has the correct planned value
+	} else {
+		data.SecondariesCount = types.Int32Null()
+	}
+	if instance.Data.CdcEnrichmentMode != nil {
+		data.CdcEnrichmentMode = types.StringValue(*instance.Data.CdcEnrichmentMode)
+	} else if !data.CdcEnrichmentMode.IsNull() {
+		// API returns null for CDC enrichment mode on business-critical tier
+		// Keep the planned value since we applied it via PATCH
+		// data.CdcEnrichmentMode already has the correct planned value
+	} else {
+		// No planned value and API returns null - leave as null
+		data.CdcEnrichmentMode = types.StringNull()
+	}
+	if instance.Data.VectorOptimized != nil {
+		data.VectorOptimized = types.BoolValue(*instance.Data.VectorOptimized)
+	} else {
+		data.VectorOptimized = types.BoolNull()
+	}
+	if instance.Data.GraphAnalyticsPlugin != nil {
+		data.GraphAnalyticsPlugin = types.BoolValue(*instance.Data.GraphAnalyticsPlugin)
+	} else {
+		data.GraphAnalyticsPlugin = types.BoolNull()
+	}
+
+	requestedStatus = data.Status
+	data.Status = types.StringValue(data.Status.ValueString())
 
 	tflog.Debug(ctx, fmt.Sprintf("Instance %s is running", postInstanceResp.Data.Id))
 
 	// Pausing new instance
-	if strings.ToLower(requestedStatus.ValueString()) == "paused" {
+	if strings.ToLower(requestedStatus.ValueString()) == domain.InstanceStatusPaused {
 		diagError := r.pauseInstance(ctx, data.InstanceId.ValueString())
 		if diagError.IsNotEmpty() {
 			response.Diagnostics.AddError(diagError.Message, diagError.Details)
@@ -543,7 +541,66 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 		return
 	}
 
-	populateInstanceModel(&stateData, &response.Diagnostics, instance.Data)
+	stateData.Name = types.StringValue(instance.Data.Name)
+	stateData.Region = types.StringValue(instance.Data.Region)
+	stateData.Memory = types.StringValue(instance.Data.Memory)
+	stateData.Type = types.StringValue(instance.Data.Type)
+	stateData.CloudProvider = types.StringValue(instance.Data.CloudProvider)
+	stateData.ConnectionUrl = types.StringValue(instance.Data.ConnectionUrl)
+	if instance.Data.Storage != nil {
+		stateData.Storage = types.StringValue(*instance.Data.Storage)
+	} else {
+		stateData.Storage = types.StringNull()
+	}
+	stateData.Status = types.StringValue(instance.Data.Status)
+	if instance.Data.CreatedAt != nil {
+		stateData.CreatedAt = types.StringValue(*instance.Data.CreatedAt)
+	} else {
+		stateData.CreatedAt = types.StringNull()
+	}
+	if instance.Data.MetricsIntegrationUrl != nil {
+		stateData.MetricsIntegrationUrl = types.StringValue(*instance.Data.MetricsIntegrationUrl)
+	} else {
+		stateData.MetricsIntegrationUrl = types.StringNull()
+	}
+	if instance.Data.GraphNodes != nil {
+		stateData.GraphNodes = types.Int64Value(*instance.Data.GraphNodes)
+	} else {
+		stateData.GraphNodes = types.Int64Null()
+	}
+	if instance.Data.GraphRelationships != nil {
+		stateData.GraphRelationships = types.Int64Value(*instance.Data.GraphRelationships)
+	} else {
+		stateData.GraphRelationships = types.Int64Null()
+	}
+	if instance.Data.SecondariesCount != nil {
+		stateData.SecondariesCount = types.Int32Value(int32(*instance.Data.SecondariesCount))
+	} else if !stateData.SecondariesCount.IsNull() {
+		// API may omit secondaries_count in response; keep existing state value set via PATCH
+		// stateData.SecondariesCount already has the correct state value
+	} else {
+		stateData.SecondariesCount = types.Int32Null()
+	}
+	if instance.Data.CdcEnrichmentMode != nil {
+		stateData.CdcEnrichmentMode = types.StringValue(*instance.Data.CdcEnrichmentMode)
+	} else if !stateData.CdcEnrichmentMode.IsNull() {
+		// API returns null for CDC enrichment mode on business-critical tier
+		// Keep the existing state value since it was set via PATCH
+		// stateData.CdcEnrichmentMode already has the correct state value
+	} else {
+		// No state value and API returns null - leave as null
+		stateData.CdcEnrichmentMode = types.StringNull()
+	}
+	if instance.Data.VectorOptimized != nil {
+		stateData.VectorOptimized = types.BoolValue(*instance.Data.VectorOptimized)
+	} else {
+		stateData.VectorOptimized = types.BoolNull()
+	}
+	if instance.Data.GraphAnalyticsPlugin != nil {
+		stateData.GraphAnalyticsPlugin = types.BoolValue(*instance.Data.GraphAnalyticsPlugin)
+	} else {
+		stateData.GraphAnalyticsPlugin = types.BoolNull()
+	}
 
 	response.Diagnostics.Append(response.State.Set(ctx, &stateData)...)
 }
@@ -563,7 +620,7 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 	}
 
 	// Resume
-	if strings.ToLower(plan.Status.ValueString()) == "running" && state.CanBeResumed() {
+	if strings.ToLower(plan.Status.ValueString()) == domain.InstanceStatusRunning && state.CanBeResumed() {
 		diagError := r.resumeInstance(ctx, state.InstanceId.ValueString())
 		if diagError.IsNotEmpty() {
 			response.Diagnostics.AddError(diagError.Message, diagError.Details)
@@ -571,16 +628,28 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 		}
 	}
 
-	// Regular inplace update
-	if !plan.Name.Equal(state.Name) || !plan.Memory.Equal(state.Memory) {
-		tflog.Debug(ctx, fmt.Sprintf("Updating instance details: Name: %s -> %s. Memory: %s -> %s",
-			state.Name.ValueString(), plan.Name.ValueString(), state.Memory.ValueString(), plan.Memory.ValueString()))
+	// Regular inplace update (name, memory, secondaries_count)
+	planNameOrMemoryChanged := !plan.Name.Equal(state.Name) || !plan.Memory.Equal(state.Memory)
+	planSecondariesChanged := !plan.SecondariesCount.Equal(state.SecondariesCount)
+	if planNameOrMemoryChanged || planSecondariesChanged {
+		tflog.Debug(ctx, fmt.Sprintf("Updating instance details: Name: %s -> %s. Memory: %s -> %s. SecondariesCount: %v -> %v",
+			state.Name.ValueString(), plan.Name.ValueString(), state.Memory.ValueString(), plan.Memory.ValueString(),
+			state.SecondariesCount.ValueInt32(), plan.SecondariesCount.ValueInt32()))
 
-		_, err := r.auraApi.PatchInstanceById(ctx, state.InstanceId.ValueString(), client.PatchInstanceRequest{
+		patchRequest := client.PatchInstanceRequest{
 			Name:   plan.Name.ValueStringPointer(),
 			Memory: plan.Memory.ValueStringPointer(),
-		})
+		}
+		_, err := r.auraApi.PatchInstanceById(ctx, state.InstanceId.ValueString(), patchRequest)
+		if err != nil {
+			response.Diagnostics.AddError("Error while updating the instance details", err.Error())
+			return
+		}
 
+		patchRequest = client.PatchInstanceRequest{
+			SecondariesCount: plan.SecondariesCount.ValueInt32Pointer(),
+		}
+		_, err = r.auraApi.PatchInstanceById(ctx, state.InstanceId.ValueString(), patchRequest)
 		if err != nil {
 			response.Diagnostics.AddError("Error while updating the instance details", err.Error())
 			return
@@ -589,17 +658,16 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 		_, err = r.auraApi.WaitUntilInstanceIsInState(ctx, plan.InstanceId.ValueString(), func(resp client.GetInstanceResponse) bool {
 			return resp.Data.Memory == plan.Memory.ValueString() &&
 				resp.Data.Name == plan.Name.ValueString() &&
-				(strings.ToLower(resp.Data.Status) == "running" || strings.ToLower(resp.Data.Status) == "paused")
+				(strings.ToLower(resp.Data.Status) == domain.InstanceStatusRunning || strings.ToLower(resp.Data.Status) == string(domain.InstanceStatusPaused))
 		})
-
 		if err != nil {
-			response.Diagnostics.AddError("Error while waiting fro the instance details to be updated", err.Error())
+			response.Diagnostics.AddError("Error while waiting for the instance details to be updated", err.Error())
 			return
 		}
 	}
 
 	// Pause
-	if strings.ToLower(plan.Status.ValueString()) == "paused" && state.CanBePaused() {
+	if strings.ToLower(plan.Status.ValueString()) == domain.InstanceStatusPaused && state.CanBePaused() {
 		diagError := r.pauseInstance(ctx, state.InstanceId.ValueString())
 		if diagError.IsNotEmpty() {
 			response.Diagnostics.AddError(diagError.Message, diagError.Details)
@@ -630,13 +698,17 @@ func (r *InstanceResource) Delete(ctx context.Context, request resource.DeleteRe
 	}
 }
 
+func (r *InstanceResource) ImportState(ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("instance_id"), request, response)
+}
+
 func (r *InstanceResource) resumeInstance(ctx context.Context, id string) util.DiagnosticsError {
 	_, err := r.auraApi.ResumeInstanceById(ctx, id)
 	if err != nil {
 		return util.NewDiagnosticsError("Error while resume the instance", err.Error())
 	}
 	_, err = r.auraApi.WaitUntilInstanceIsInState(ctx, id, func(resp client.GetInstanceResponse) bool {
-		return strings.ToLower(resp.Data.Status) == "running"
+		return strings.ToLower(resp.Data.Status) == domain.InstanceStatusRunning
 	})
 	if err != nil {
 		return util.NewDiagnosticsError("Error while waiting instance to be resumed", err.Error())
@@ -650,7 +722,7 @@ func (r *InstanceResource) pauseInstance(ctx context.Context, id string) util.Di
 		return util.NewDiagnosticsError("Error while pausing the instance", err.Error())
 	}
 	_, err = r.auraApi.WaitUntilInstanceIsInState(ctx, id, func(resp client.GetInstanceResponse) bool {
-		return strings.ToLower(resp.Data.Status) == "paused"
+		return strings.ToLower(resp.Data.Status) == domain.InstanceStatusPaused
 	})
 	if err != nil {
 		return util.NewDiagnosticsError("Error while waiting for instance to be paused", err.Error())

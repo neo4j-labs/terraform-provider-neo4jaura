@@ -17,7 +17,14 @@
 
 package client
 
-import "strings"
+import (
+	"strings"
+	"time"
+
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/domain"
+)
+
+const timeParseLayout = time.RFC3339
 
 type TokenResponse struct {
 	AccessToken string `json:"access_token"` // This will be a Bearer token
@@ -66,8 +73,8 @@ type GetInstanceData struct {
 	Storage               *string `json:"storage"`
 	CreatedAt             *string `json:"created_at"`
 	MetricsIntegrationUrl *string `json:"metrics_integration_url"`
-	GraphNodes            *string `json:"graph_nodes"`
-	GraphRelationships    *string `json:"graph_relationships"`
+	GraphNodes            *int64  `json:"graph_nodes"`
+	GraphRelationships    *int64  `json:"graph_relationships"`
 	SecondariesCount      *int    `json:"secondaries_count"`
 	CdcEnrichmentMode     *string `json:"cdc_enrichment_mode"`
 	VectorOptimized       *bool   `json:"vector_optimized"`
@@ -76,12 +83,19 @@ type GetInstanceData struct {
 
 func (d GetInstanceData) CanBePaused() bool {
 	status := strings.ToLower(d.Status)
-	return status == "running"
+	return status == domain.InstanceStatusRunning
 }
 
 func (d GetInstanceData) CanBeResumed() bool {
 	status := strings.ToLower(d.Status)
-	return status == "paused"
+	return status == domain.InstanceStatusPaused
+}
+
+func (d GetInstanceData) CreatedAtAsTime() (time.Time, error) {
+	if d.CreatedAt == nil {
+		return time.Time{}, nil
+	}
+	return time.Parse(timeParseLayout, *d.CreatedAt)
 }
 
 type GetSnapshotsResponse struct {
@@ -94,6 +108,10 @@ type GetSnapshotData struct {
 	Profile    string `json:"profile"`
 	Status     string `json:"status"`
 	Timestamp  string `json:"timestamp"`
+}
+
+func (d GetSnapshotData) TimestampAsTime() (time.Time, error) {
+	return time.Parse(timeParseLayout, d.Timestamp)
 }
 
 type GetSnapshotResponse struct {

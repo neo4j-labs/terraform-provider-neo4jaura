@@ -35,6 +35,8 @@ type PostInstanceRequest struct {
 }
 
 type PatchInstanceRequest struct {
-	Name   *string `json:"name,omitempty"`
-	Memory *string `json:"memory,omitempty"`
+	Name              *string `json:"name,omitempty"`
+	Memory            *string `json:"memory,omitempty"`
+	CdcEnrichmentMode *string `json:"cdc_enrichment_mode,omitempty"`
+	SecondariesCount  *int32  `json:"secondaries_count,omitempty"`
 }

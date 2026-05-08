@@ -36,6 +36,7 @@ type AuraAuth struct {
 	mutex        *sync.Mutex
 	token        *AuraAuthToken
 	httpClient   *retryablehttp.Client
+	userAgent    string
 }
 
 type AuraAuthToken struct {
@@ -51,6 +52,7 @@ func (a *AuraAuth) authenticate(ctx context.Context) error {
 	}
 	req.SetBasicAuth(a.clientId, a.clientSecret)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", a.userAgent)
 
 	resp, err := a.httpClient.Do(req)
 	if resp != nil && resp.Body != nil {

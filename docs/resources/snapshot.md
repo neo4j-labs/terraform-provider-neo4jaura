@@ -21,7 +21,7 @@ Resource for an instance snapshot
 
 ### Read-Only
 
-- `profile` (String) Profile of the snapshot. One of [AddHoc, Scheduled]
+- `profile` (String) Profile of the snapshot. One of [AdHoc, Scheduled]
 - `snapshot_id` (String) Id of the snapshot
-- `status` (String) Status of the snapshot. One of [Completed, InProgress, Failed, Pending]
+- `status` (String) Status of the snapshot. One of [InProgress, Pending, Completed, Failed]
 - `timestamp` (String) Timestamp of the snapshot

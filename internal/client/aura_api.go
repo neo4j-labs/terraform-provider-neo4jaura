@@ -200,6 +200,27 @@ func (api *AuraApi) WaitUntilSnapshotIsInState(
 	)
 }
 
+func (api *AuraApi) WaitUntilSnapshotsMatchCondition(
+	ctx context.Context, instanceId string,
+	condition func(data GetSnapshotsResponse) bool) (GetSnapshotsResponse, error) {
+
+	return util.WaitUntil(
+		func() (GetSnapshotsResponse, error) {
+			r, e := api.GetSnapshotsByInstanceId(ctx, instanceId)
+			tflog.Debug(ctx, fmt.Sprintf("Received response %+v and error %+v", r, e))
+			if e != nil {
+				return GetSnapshotsResponse{}, e
+			}
+			return r, e
+		},
+		func(resp GetSnapshotsResponse, e error) bool {
+			return e == nil && condition(resp)
+		},
+		time.Second,
+		api.snapshotTimeout,
+	)
+}
+
 func (api *AuraApi) WaitUntilInstanceIsInState(
 	ctx context.Context,
 	id string,
