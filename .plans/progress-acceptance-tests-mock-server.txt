@@ -167,3 +167,40 @@ Key Decisions:
   task-006/007/008 to call Reset() at the start of each test.
 
 Next Task: task-006 (Update projects and snapshot data source tests to use mock)
+
+================================================================================
+TASK-006: Update projects and snapshot data source tests to use mock
+Date: 2026-05-08T23:50:00Z
+================================================================================
+
+Summary:
+Rewrote internal/test/projects_test.go and internal/test/snapshot_test.go to run
+against the mock server with no live credentials. Both tests call
+testMockServer.Reset() at the start, use defaultProviderConfig directly, and make
+assertions on the mock's preset/seeded data rather than live infrastructure.
+
+Files Changed:
+- internal/test/projects_test.go (modified: removed fmt import; changed var to
+  const using compile-time string concatenation; removed t.Parallel(); added
+  testMockServer.Reset(); changed StringRegexp(uuidRegex) to
+  StringExact("test-project-id-001") since the mock returns a non-UUID ID)
+- internal/test/snapshot_test.go (modified: removed fmt import; added time,
+  client, domain imports; removed t.Parallel(); added testMockServer.Reset();
+  pre-seeds a running instance and a completed snapshot with known IDs
+  (snap-test-instance-001, snap-test-snapshot-001); rewrote config to use
+  a hardcoded instance_id datasource instead of creating a resource; changed
+  nonEmptyString assertions to StringExact assertions for instance_id and
+  snapshot_id; removed unused ResourceName field from test step)
+
+Key Decisions:
+- Snapshot datasource config hardcodes snapTestInstanceID as a string literal
+  (via const concatenation) to avoid the chicken-and-egg problem of needing
+  an instance_id before the instance resource is created.
+- SeedInstance is called even though the snapshot datasource doesn't reference
+  a neo4jaura_instance resource — defensive practice in case the datasource
+  validates the instance exists.
+- SeedSnapshot uses getCount=1 (SeedSnapshot contract) so the snapshot is
+  immediately in its seeded status (Completed) on the first GET.
+- t.Parallel() removed from both tests; Reset() at start provides isolation.
+
+Next Task: task-007 (Rewrite instance resource tests to use mock)

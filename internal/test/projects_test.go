@@ -18,7 +18,6 @@
 package test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -27,24 +26,22 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
-var testAccProjectsDataSourceConfig = fmt.Sprintf(`
-%[1]s
+const testAccProjectsDataSourceConfig = defaultProviderConfig + `
 data "neo4jaura_projects" "this" {}
-`, defaultProviderConfig)
+`
 
 func TestAcc_can_read_projects_datasource(t *testing.T) {
-	t.Parallel()
+	testMockServer.Reset()
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
-			// Read testing
 			{
 				Config: testAccProjectsDataSourceConfig,
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"data.neo4jaura_projects.this",
 						tfjsonpath.New("projects").AtSliceIndex(0).AtMapKey("id"),
-						knownvalue.StringRegexp(uuidRegex),
+						knownvalue.StringExact("test-project-id-001"),
 					),
 					statecheck.ExpectKnownValue(
 						"data.neo4jaura_projects.this",

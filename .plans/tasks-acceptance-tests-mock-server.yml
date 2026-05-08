@@ -123,7 +123,7 @@ tasks:
       data returned by the mock. The snapshot data source test must pre-create an
       instance and snapshot in the mock before the test step runs, rather than relying
       on live infrastructure. Update config strings to remove variable-based credentials.
-    status: pending
+    status: completed
     dependencies:
       - task-005
     acceptance_criteria:
@@ -131,7 +131,7 @@ tasks:
       - "TestAcc_can_read_snapshot_datasource passes against the mock with no live credentials"
       - "No SkipIfNotAcceptance calls remain in these two files"
       - "Config strings use hardcoded dummy credentials, not Terraform variables"
-    completed_at: null
+    completed_at: "2026-05-08T23:50:00Z"
 
   - id: task-007
     title: 'Rewrite instance resource tests to use mock (remove Cypher steps)'
@@ -144,7 +144,7 @@ tasks:
       pre-seed the mock's state (using the mock's seed method) instead of calling
       api.PostInstance and api.WaitUntilInstanceIsInState directly. Remove all
       SkipIfNotAcceptance guards and newTestAuraApi() usages in this file.
-    status: pending
+    status: in_progress
     dependencies:
       - task-005
     acceptance_criteria:
@@ -164,7 +164,7 @@ tasks:
       that inserts a snapshot into the mock's state before the import step runs.
       Remove the SkipIfNotAcceptance guard and any direct AuraApi usage. Ensure
       the import step can resolve the snapshot ID from the mock's seeded state.
-    status: pending
+    status: in_progress
     dependencies:
       - task-005
     acceptance_criteria:

@@ -33,3 +33,6 @@ Run acceptance tests only when a mock server is in place (task-005+). Until then
 - `AuraAuth.baseURL` is set at construction time from the same value — there is no separate default in `aura_auth.go`.
 - The `auraBasePath` and `auraV1Path` constants were removed in task-001; use `defaultAuraBasePath` if you need the literal default URL string.
 - `go vet` is strict about unused imports — always check after editing provider/test files.
+- Test configs that depend on mock-seeded state must use `const` string concatenation (not `fmt.Sprintf`) when embedding known IDs — this avoids the `var` initialisation order issue and makes IDs available at compile time.
+- The snapshot datasource config should hardcode `instance_id` as a string literal; do not reference a `neo4jaura_instance` resource, which would require live infra or complex multi-step test setup.
+- `t.Parallel()` must be removed from tests that call `testMockServer.Reset()` — parallel tests sharing a single mock server will race on state.
