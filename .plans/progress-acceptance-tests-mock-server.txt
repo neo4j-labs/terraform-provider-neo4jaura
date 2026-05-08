@@ -83,3 +83,49 @@ Key Decisions:
   an array ([]) rather than null when no snapshots exist.
 
 Next Task: task-003 (parallel, being implemented by another agent)
+
+================================================================================
+TASK-003: Implement mock instance endpoints with state machine
+Date: 2026-05-08T23:15:00Z
+================================================================================
+
+Summary:
+Replaced the six stub instance handlers in internal/test/mock_server.go with
+real implementations. All handlers are mutex-guarded and return the correct
+HTTP status codes and response shapes as defined in client/aura_responses.go.
+
+- handlePostInstance: parses PostInstanceRequest, generates a nanosecond-based
+  ID (fmt.Sprintf("inst-%d", time.Now().UnixNano())), stores a GetInstanceData
+  entry with status=creating and getCount=0, returns 202 with PostInstanceResponse.
+- handleGetInstance: increments getCount under lock; getCount==1 returns
+  status=creating with nil graph metrics; getCount>=2 returns status=running
+  with GraphNodes=10 and GraphRelationships=5. Returns 404 if ID not found.
+- handleDeleteInstance: removes instance from ms.instances under lock, returns
+  202 with GetInstanceResponse. Subsequent GETs return 404, satisfying
+  WaitUntilInstanceIsDeleted.
+- handlePatchInstance: parses PatchInstanceRequest and updates name, memory,
+  CdcEnrichmentMode, and SecondariesCount fields in-place. Returns 202 with
+  updated GetInstanceResponse.
+- handlePauseInstance: sets status=paused under lock, returns 202 with
+  GetInstanceResponse.
+- handleResumeInstance: sets status=running under lock, returns 202 with
+  GetInstanceResponse.
+
+Files Changed:
+- internal/test/mock_server.go (modified: replaced six stub instance handlers
+  with real implementations; time and domain imports already added by task-004)
+
+Key Decisions:
+- getCount starts at 0 (not 1) for POST-created instances so that the state
+  machine correctly returns creating on the first GET (count==1) and running
+  on the second and subsequent GETs (count>=2).
+- SeedInstance continues to initialise getCount=1 so that seeded instances
+  immediately return their seeded status on the first test GET, matching the
+  import test contract.
+- State mutation is performed inside the lock and a value copy (snap) is taken
+  before releasing, so the JSON encoder runs outside the lock.
+- domain constants (InstanceStatusCreating, InstanceStatusRunning,
+  InstanceStatusPaused) used throughout for consistency with the rest of the
+  codebase.
+
+Next Task: task-005 (Wire TestMain)

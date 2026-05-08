@@ -57,7 +57,7 @@ tasks:
       updates name/memory/cdc_enrichment_mode/secondaries_count in state),
       POST /v1/instances/{id}/pause (202, transitions status to "paused"),
       POST /v1/instances/{id}/resume (202, transitions status back to "running").
-    status: in_progress
+    status: completed
     dependencies:
       - task-002
     acceptance_criteria:
@@ -67,7 +67,7 @@ tasks:
       - "DELETE /v1/instances/{id} returns 202; subsequent GET returns 404"
       - "PATCH /v1/instances/{id} returns 202 and updates the stored instance fields"
       - "Pause and resume endpoints return 202 and mutate the stored status correctly"
-    completed_at: null
+    completed_at: "2026-05-08T23:15:00Z"
 
   - id: task-004
     title: 'Implement mock snapshot and tenant endpoints'
