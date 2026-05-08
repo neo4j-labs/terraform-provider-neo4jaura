@@ -1,3 +1,0 @@
-kind: Added
-body: 'neo4jaura_snapshot resources can now be imported with terraform import using the format instance_id,snapshot_id'
-time: 2026-05-08T00:00:00Z

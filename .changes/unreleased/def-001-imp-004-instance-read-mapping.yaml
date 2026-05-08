@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'graph_nodes and graph_relationships are now correctly typed as integers in the API response, removing the need for string parsing and eliminating incorrect state values'
-time: 2026-05-08T00:00:00Z

@@ -1,3 +1,0 @@
-kind: Added
-body: 'Configuration validators now enforce that CDC enrichment mode is only used with business-critical and enterprise tiers, vector_optimized requires at least 4GB memory, and graph_analytics_plugin is only supported on professional-db'
-time: 2026-05-08T00:00:00Z
