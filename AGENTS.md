@@ -36,3 +36,5 @@ Run acceptance tests only when a mock server is in place (task-005+). Until then
 - Test configs that depend on mock-seeded state must use `const` string concatenation (not `fmt.Sprintf`) when embedding known IDs — this avoids the `var` initialisation order issue and makes IDs available at compile time.
 - The snapshot datasource config should hardcode `instance_id` as a string literal; do not reference a `neo4jaura_instance` resource, which would require live infra or complex multi-step test setup.
 - `t.Parallel()` must be removed from tests that call `testMockServer.Reset()` — parallel tests sharing a single mock server will race on state.
+- `sort.Slice` comparators cannot return errors. Use a closure-captured `var sortErr error` variable; set it on error, return `false`, then check after sort completes.
+- `WaitUntil` takes `ctx context.Context` as its first argument (added in task-003). Always pass the request/operation context so cancellations are respected during polling.

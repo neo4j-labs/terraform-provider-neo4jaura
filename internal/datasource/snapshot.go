@@ -181,19 +181,27 @@ func (ds *SnapshotDataSource) readMostRecentSnapshot(ctx context.Context, instan
 		}
 	}
 	tflog.Debug(ctx, fmt.Sprintf("Snapshots: %+v", snapshots.Data))
+	var sortErr error
 	sort.Slice(snapshots.Data, func(i1, i2 int) bool {
+		if sortErr != nil {
+			return false
+		}
 		timestamp1, err := snapshots.Data[i1].TimestampAsTime()
 		if err != nil {
-			tflog.Error(ctx, "Fail to parse timestamp: "+snapshots.Data[i1].Timestamp)
-			return true
+			sortErr = fmt.Errorf("failed to parse snapshot timestamp %q: %w", snapshots.Data[i1].Timestamp, err)
+			return false
 		}
 		timestamp2, err := snapshots.Data[i2].TimestampAsTime()
 		if err != nil {
-			tflog.Error(ctx, "Fail to parse timestamp: "+snapshots.Data[i2].Timestamp)
-			return true
+			sortErr = fmt.Errorf("failed to parse snapshot timestamp %q: %w", snapshots.Data[i2].Timestamp, err)
+			return false
 		}
 		return timestamp1.Before(timestamp2)
 	})
+	if sortErr != nil {
+		response.Diagnostics.AddError("Failed to sort snapshots by timestamp", sortErr.Error())
+		return nil
+	}
 	return &snapshots.Data[len(snapshots.Data)-1]
 }
 

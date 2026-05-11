@@ -50,7 +50,7 @@ tasks:
       ctx.Done() select, meaning Terraform plan cancellations are not respected during wait intervals.
       Add context.Context as the first parameter to WaitUntil and replace time.Sleep with a select on
       ctx.Done(). Update all callers in aura_api.go accordingly. Add changelog entries for both fixes.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "readMostRecentSnapshot returns a diagnostic error (not a silently mis-sorted list) when any snapshot timestamp is unparseable"
@@ -59,7 +59,7 @@ tasks:
       - "All callers in aura_api.go pass the context argument correctly"
       - "All existing mock-acceptance tests pass after the change"
       - "Changelog entries are present under .changes/unreleased/ describing both fixes"
-    completed_at: null
+    completed_at: 2026-05-11T14:33:00Z
 
   - id: task-004
     title: "Fix data.Status assignment in Create and replace magic strings (D-06, D-07)"

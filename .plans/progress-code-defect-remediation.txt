@@ -49,3 +49,32 @@ Key Decisions:
   condition is met without a real wait — correct behavior.
 
 Next Task: task-003
+
+================================================================================
+TASK-003: Fix sort antisymmetry in readMostRecentSnapshot and add ctx to WaitUntil (D-04, D-05)
+Date: 2026-05-11T14:33:00Z
+================================================================================
+
+Summary:
+D-04: Fixed sort antisymmetry in readMostRecentSnapshot by replacing the
+`return true` on parse error with a closure-captured `sortErr` variable. The
+comparator now returns `false` on error and subsequent calls short-circuit via
+`if sortErr != nil { return false }`. After sort, `sortErr` is checked and
+surfaced as a Terraform diagnostic rather than silently producing undefined order.
+D-05: Added `context.Context` as the first parameter to `WaitUntil` and replaced
+`time.Sleep(delay)` with a `select` on `ctx.Done()` so Terraform plan/apply
+cancellations are respected during polling wait intervals. All 4 callers in
+`aura_api.go` updated to pass `ctx`.
+
+Files Changed:
+- internal/datasource/snapshot.go (modified: sort error capture pattern in readMostRecentSnapshot)
+- internal/util/waiter.go (modified: added ctx param, replaced time.Sleep with select)
+- internal/client/aura_api.go (modified: added ctx as first arg to all 4 WaitUntil calls)
+- .changes/unreleased/fix-sort-antisymmetry-in-read-most-recent-snapshot.yaml (created: changelog entry)
+- .changes/unreleased/fix-wait-until-context-cancellation.yaml (created: changelog entry)
+
+Key Decisions:
+- Closure-captured `sortErr` is the idiomatic pattern for surfacing errors from `sort.Slice` comparators, which cannot return errors directly.
+- `time.After` in the select creates a new timer each iteration; acceptable for polling intervals of 1+ seconds.
+
+Next Task: task-004

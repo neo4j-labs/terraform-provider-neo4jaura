@@ -18,11 +18,12 @@
 package util
 
 import (
+	"context"
 	"errors"
 	"time"
 )
 
-func WaitUntil[T any](get func() (T, error), condition func(T, error) bool, delay time.Duration, maxWaitTime time.Duration) (T, error) {
+func WaitUntil[T any](ctx context.Context, get func() (T, error), condition func(T, error) bool, delay time.Duration, maxWaitTime time.Duration) (T, error) {
 	end := time.Now().Add(maxWaitTime)
 	for {
 		res, err := get()
@@ -32,6 +33,10 @@ func WaitUntil[T any](get func() (T, error), condition func(T, error) bool, dela
 		if time.Now().After(end) {
 			return res, errors.New("waiting condition wasn't reached in time")
 		}
-		time.Sleep(delay)
+		select {
+		case <-ctx.Done():
+			return res, ctx.Err()
+		case <-time.After(delay):
+		}
 	}
 }
