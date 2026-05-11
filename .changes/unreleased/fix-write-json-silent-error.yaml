@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Mock server writeJSON now panics on JSON encoding failure instead of silently discarding the error, making test failures visible'
-time: 2026-05-11T00:00:00Z
