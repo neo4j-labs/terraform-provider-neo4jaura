@@ -125,3 +125,30 @@ Key Decisions:
 - deleteInstanceOutOfBand reads instance_id from state attributes (not rs.Primary.ID which is always "id-attribute-not-set" for this resource)
 - TestAcc_instance_disappears uses a single step with ExpectNonEmptyPlan: true — the out-of-band delete in Check triggers a non-empty post-step refresh plan; no second step needed
 - Delete idempotency (ErrNotFound → return) is required so the disappears test's post-test cleanup doesn't fail when Terraform tries to destroy an already-gone instance
+
+================================================================================
+TASK-010: Add unit tests for util/ package and aura_responses helpers
+Date: 2026-05-11T18:00:00Z
+================================================================================
+
+Summary:
+Added unit tests for two previously uncovered packages. internal/util/errors_test.go covers
+all three DiagnosticsError helpers (NoDiagnosticsError, NewDiagnosticsError, IsNotEmpty) with
+table-driven tests and zero-value identity assertions. internal/client/aura_responses_test.go
+covers CanBePaused, CanBeResumed, CreatedAtAsTime, and TimestampAsTime with table-driven tests
+covering happy path, case-insensitivity, all non-triggering statuses, nil pointer, empty string,
+and invalid timestamp format edge cases.
+
+Files Changed:
+- internal/util/errors_test.go (created — unit tests for DiagnosticsError helpers)
+- internal/client/aura_responses_test.go (created — unit tests for response helper methods)
+- .changes/unreleased/unit-tests-util-aura-responses.yaml (created — changelog entry)
+
+Key Decisions:
+- Tests placed in the same package (package util / package client) to allow access to unexported symbols without extra exports
+- strPtr helper defined at package level in aura_responses_test.go — no conflict risk since no other test files exist in client/
+- mustParseTime uses t.Helper() for clean failure attribution
+- CreatedAtAsTime nil pointer case correctly expects (time.Time{}, nil) matching the implementation
+- TimestampAsTime empty string and non-RFC3339 format both expect errors (consistent with time.Parse behaviour)
+
+Next Task: All tasks complete

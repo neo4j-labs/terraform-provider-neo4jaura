@@ -48,3 +48,6 @@ Run acceptance tests only when a mock server is in place (task-005+). Until then
 - `InstanceResource.Update` ends with a `GetInstanceById` call to refresh all computed fields from the API — do not write `resp.State.Set(ctx, &plan)` without first refreshing all fields from the API response.
 - Every `AddError` detail string must include the resource ID: `fmt.Sprintf("instance_id=%s: %s", id, err.Error())` or `fmt.Sprintf("instance_id=%s snapshot_id=%s: %s", iid, sid, err.Error())`.
 - Every `resp.State.Set` and `resp.State.SetAttribute` call must be immediately followed by `if response.Diagnostics.HasError() { return }`.
+- Unit tests for pure functions in `internal/util/` and `internal/client/` run without `TF_ACC=1` via `go test ./internal/util/... ./internal/client/...`. Keep these fast and dependency-free.
+- `GetInstanceData.CreatedAtAsTime()` returns `(time.Time{}, nil)` when `CreatedAt` is nil — the nil-pointer case is not an error. Test this explicitly.
+- Place test helper functions (e.g. `strPtr`, `mustParseTime`) in the same `_test.go` file where they are first used; promote to a shared `testhelpers_test.go` only when multiple test files in the same package need them.

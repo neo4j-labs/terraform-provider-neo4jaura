@@ -131,7 +131,7 @@ tasks:
       verify the snapshot reaches Completed state, then destroy it and verify deletion
       via CheckDestroy. Ensure the mock server's handlePostSnapshot and
       handleDeleteSnapshot paths are exercised. Add a changelog entry.
-    status: pending
+    status: in_progress
     dependencies: []
     acceptance_criteria:
       - "TestAcc_snapshot_lifecycle exists and passes — creates and destroys a snapshot"
@@ -151,7 +151,7 @@ tasks:
       the instance reaches paused state. Add a third step that resumes it back to running.
       The mock server's handlePauseInstance and handleResumeInstance handlers must be
       exercised. Add a changelog entry.
-    status: pending
+    status: in_progress
     dependencies: []
     acceptance_criteria:
       - "TestAcc_instance_pause_resume exists and passes with the mock server"
@@ -170,7 +170,7 @@ tasks:
       snapshot_id, provide only instance_id) and verify that the datasource correctly
       returns the most recent completed snapshot. Also add a test for the
       isInstanceRecentlyCreated guard path. Add a changelog entry.
-    status: pending
+    status: in_progress
     dependencies: []
     acceptance_criteria:
       - "readMostRecentSnapshot coverage exceeds 70%"
@@ -188,7 +188,7 @@ tasks:
       pure functions that don't require a running server — add unit tests directly in
       internal/util/ and internal/client/ covering the happy path and key edge cases
       (nil pointer, empty string, invalid timestamp format). Add a changelog entry.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "util/errors.go DiagnosticsError helpers have unit test coverage"
@@ -196,4 +196,4 @@ tasks:
       - "make test passes (unit tests, no TF_ACC required)"
       - "Overall internal/ coverage increases measurably"
       - "Changelog entry present under .changes/unreleased/"
-    completed_at: null
+    completed_at: 2026-05-11T18:00:00Z
