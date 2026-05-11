@@ -84,6 +84,35 @@ func testAccCheckInstanceDestroyed(ms *MockServer) func(*terraform.State) error 
 	}
 }
 
+// testAccCheckSnapshotNotDeleted returns a CheckDestroy function for
+// neo4jaura_snapshot resources. Because the Aura API does not expose a delete
+// endpoint for snapshots, SnapshotResource.Delete is intentionally a no-op.
+// The framework passes the pre-destroy Terraform state to CheckDestroy, so this
+// function reads the snapshot IDs from that state and verifies each snapshot
+// still exists in the mock server — confirming that no API-level delete was
+// issued during destroy.
+func testAccCheckSnapshotNotDeleted(ms *MockServer) func(*terraform.State) error {
+	return func(s *terraform.State) error {
+		for name, rs := range s.RootModule().Resources {
+			if rs.Type != "neo4jaura_snapshot" {
+				continue
+			}
+			instanceID := rs.Primary.Attributes["instance_id"]
+			snapshotID := rs.Primary.Attributes["snapshot_id"]
+			if instanceID == "" || snapshotID == "" {
+				continue
+			}
+			if !ms.SnapshotExists(instanceID, snapshotID) {
+				return fmt.Errorf(
+					"neo4jaura_snapshot %s (instance_id=%s snapshot_id=%s) was unexpectedly deleted from the mock server during destroy; SnapshotResource.Delete should be a no-op",
+					name, instanceID, snapshotID,
+				)
+			}
+		}
+		return nil
+	}
+}
+
 // deleteInstanceOutOfBand returns a resource.TestCheckFunc that reads the
 // instance_id attribute from Terraform state for resourceName, then removes
 // that instance from the mock server without going through Terraform's delete

@@ -170,7 +170,7 @@ tasks:
       snapshot_id, provide only instance_id) and verify that the datasource correctly
       returns the most recent completed snapshot. Also add a test for the
       isInstanceRecentlyCreated guard path. Add a changelog entry.
-    status: in_progress
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "readMostRecentSnapshot coverage exceeds 70%"
@@ -178,7 +178,7 @@ tasks:
       - "A test exercises the most-recent snapshot lookup path (no snapshot_id in config)"
       - "All mock-acceptance tests pass"
       - "Changelog entry present under .changes/unreleased/"
-    completed_at: null
+    completed_at: 2026-05-11T17:15:00Z
 
   - id: task-010
     title: "Add unit tests for util/ package and aura_responses helpers"

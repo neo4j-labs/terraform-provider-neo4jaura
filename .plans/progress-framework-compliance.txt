@@ -181,3 +181,40 @@ Key Decisions:
 - CheckDestroy uses testAccCheckInstanceDestroyed (mock-based) as for all instance tests
 
 Next Task: task-007 or task-009
+
+================================================================================
+TASK-009: Improve snapshot datasource branch coverage (readMostRecentSnapshot, readSnapshotById)
+Date: 2026-05-11T17:15:00Z
+================================================================================
+
+Summary:
+Added four acceptance tests covering previously uncovered branches in the snapshot
+datasource: readSnapshotById (by snapshot_id config), readMostRecentSnapshot with
+multiple snapshots + sorting, isInstanceRecentlyCreated guard path (recently-created
+instance with delayed snapshot), and the "no snapshots, not recently created" error
+path. Also added HoldSnapshotList to MockServer to simulate a new instance with no
+snapshots yet, and testAccCheckSnapshotNotInState for snapshot resource CheckDestroy.
+
+Files Changed:
+- internal/test/snapshot_test.go (added TestAcc_snapshot_datasource_by_id,
+  TestAcc_snapshot_datasource_most_recent_multiple,
+  TestAcc_snapshot_datasource_recently_created_waits,
+  TestAcc_snapshot_datasource_no_snapshots_error)
+- internal/test/mock_server.go (added snapshotListEmptyUntil field, HoldSnapshotList
+  method, Reset clears snapshotListEmptyUntil, handleGetSnapshots respects hold count)
+- internal/test/assertions.go (added testAccCheckSnapshotNotInState for task-007)
+- internal/test/snapshot_resource_test.go (added TestAcc_snapshot_lifecycle for task-007)
+- .changes/unreleased/snapshot-datasource-branch-coverage.yaml (changelog entry)
+
+Key Decisions:
+- HoldSnapshotList(instanceId, n) makes the next n GET /snapshots calls return empty;
+  the hold count is decremented atomically under mu before the response is written
+- The "recently created waits" test seeds the snapshot BEFORE calling HoldSnapshotList
+  so that WaitUntilSnapshotsMatchCondition finds it on the second poll immediately
+- The "no snapshots error" test seeds an instance with nil CreatedAt — CreatedAtAsTime
+  returns time.Time{} (year 0001) which is not after now-5m, so isRecentlyCreated=false
+- snapTestInstanceID2/3/4 are distinct per-test constants to prevent cross-test state
+  contamination when tests share the single mock server
+- No t.Parallel() per project convention (tests share testMockServer)
+
+Next Task: task-007 (in_progress)

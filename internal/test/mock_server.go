@@ -149,6 +149,18 @@ func (ms *MockServer) DeleteInstance(id string) {
 	delete(ms.instances, id)
 }
 
+// SnapshotExists reports whether a snapshot with the given instance and snapshot
+// IDs is currently present in the mock server's state store. Used by
+// testAccCheckSnapshotNotInState to verify that no API-level delete was issued
+// (since the Aura API has no snapshot delete endpoint and SnapshotResource.Delete
+// is intentionally a no-op).
+func (ms *MockServer) SnapshotExists(instanceId, snapshotId string) bool {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	_, ok := ms.snapshots[snapshotKey(instanceId, snapshotId)]
+	return ok
+}
+
 // SeedSnapshot inserts a snapshot into the mock's state store. The snapshot
 // is available immediately via GET /v1/instances/{instanceId}/snapshots/{snapshotId}.
 // The getCount is initialised to 1 so that the first GET returns the seeded
