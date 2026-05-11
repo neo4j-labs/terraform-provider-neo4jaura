@@ -563,7 +563,10 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 	stateData.Memory = types.StringValue(instance.Data.Memory)
 	stateData.Type = types.StringValue(instance.Data.Type)
 	stateData.CloudProvider = types.StringValue(instance.Data.CloudProvider)
-	stateData.ConnectionUrl = types.StringValue(instance.Data.ConnectionUrl)
+	// Aura API returns connection_url="" for paused instances; preserve the prior state value.
+	if instance.Data.ConnectionUrl != "" {
+		stateData.ConnectionUrl = types.StringValue(instance.Data.ConnectionUrl)
+	}
 	if instance.Data.Storage != nil {
 		stateData.Storage = types.StringValue(*instance.Data.Storage)
 	} else {
@@ -727,7 +730,13 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 	plan.Memory = types.StringValue(updatedInstance.Data.Memory)
 	plan.Type = types.StringValue(updatedInstance.Data.Type)
 	plan.CloudProvider = types.StringValue(updatedInstance.Data.CloudProvider)
-	plan.ConnectionUrl = types.StringValue(updatedInstance.Data.ConnectionUrl)
+	// Aura API returns connection_url="" for paused instances; preserve the prior state
+	// value so Terraform does not see a spurious diff against the planned (UseStateForUnknown) value.
+	if updatedInstance.Data.ConnectionUrl != "" {
+		plan.ConnectionUrl = types.StringValue(updatedInstance.Data.ConnectionUrl)
+	} else {
+		plan.ConnectionUrl = state.ConnectionUrl
+	}
 	plan.Status = types.StringValue(updatedInstance.Data.Status)
 	if updatedInstance.Data.Storage != nil {
 		plan.Storage = types.StringValue(*updatedInstance.Data.Storage)
