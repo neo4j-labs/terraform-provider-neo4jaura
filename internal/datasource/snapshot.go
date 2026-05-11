@@ -129,12 +129,14 @@ func (ds *SnapshotDataSource) Read(ctx context.Context, request datasource.ReadR
 		return
 	}
 
-	if snapshot != nil {
-		data.SnapshotId = types.StringValue(snapshot.SnapshotId)
-		data.Status = types.StringValue(snapshot.Status)
-		data.Profile = types.StringValue(snapshot.Profile)
-		data.Timestamp = types.StringValue(snapshot.Timestamp)
+	if snapshot == nil {
+		return
 	}
+
+	data.SnapshotId = types.StringValue(snapshot.SnapshotId)
+	data.Status = types.StringValue(snapshot.Status)
+	data.Profile = types.StringValue(snapshot.Profile)
+	data.Timestamp = types.StringValue(snapshot.Timestamp)
 
 	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
 }

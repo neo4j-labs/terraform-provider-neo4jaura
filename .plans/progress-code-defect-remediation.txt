@@ -107,3 +107,33 @@ Key Decisions:
   No performance concern at polling intervals of seconds.
 
 Next Task: task-005
+
+================================================================================
+TASK-005: Fix mock server silent JSON errors and datasource nil guard (D-08, D-09)
+Date: 2026-05-11T15:05:00Z
+================================================================================
+
+Summary:
+D-08: Replaced the silent `_ = json.NewEncoder(w).Encode(v)` discard in `writeJSON`
+with a checked error that calls `panic` on failure. `MockServer` has no `*testing.T`
+available at call sites (it is a package-level fixture started in `TestMain`), so
+`panic` is the correct mechanism — it causes any running test to fail with a clear
+stack trace rather than silently producing a truncated/empty response body.
+D-09: Inverted the nil check in `SnapshotDataSource.Read` from `if snapshot != nil { ... }`
+to `if snapshot == nil { return }`. When `snapshot == nil`, an error diagnostic has
+already been appended by one of the three dispatch branches above; returning early
+prevents `State.Set` from being called with partially-zero `data` fields.
+
+Files Changed:
+- internal/test/mock_server.go (modified: writeJSON panics on encode error)
+- internal/datasource/snapshot.go (modified: early return when snapshot == nil)
+- .changes/unreleased/fix-write-json-silent-error.yaml (created: changelog entry for D-08)
+- .changes/unreleased/fix-snapshot-datasource-nil-guard.yaml (created: changelog entry for D-09)
+
+Key Decisions:
+- `panic` rather than `t.Fatal` because `MockServer` does not hold a `*testing.T` — it
+  is constructed once in `TestMain` and shared across tests without a per-test T.
+- The nil-guard inversion improves readability by removing a level of indentation from
+  the happy path.
+
+Next Task: All tasks complete

@@ -89,11 +89,11 @@ tasks:
       visibly. D-09: SnapshotDataSource.Read calls State.Set with zero values when snapshot == nil
       instead of returning early. Add a nil check that returns without setting state when the
       snapshot lookup returns nil. Add changelog entries for both fixes.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "A JSON encoding failure in writeJSON causes the test to fail (via t.Fatal or panic)"
       - "SnapshotDataSource.Read returns without calling State.Set when snapshot is nil"
       - "All existing mock-acceptance tests pass after the change"
       - "Changelog entries are present under .changes/unreleased/ describing both fixes"
-    completed_at: null
+    completed_at: 2026-05-11T15:05:00Z

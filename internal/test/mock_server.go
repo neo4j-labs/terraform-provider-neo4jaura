@@ -452,5 +452,7 @@ func snapshotKey(instanceId, snapshotId string) string {
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		panic(fmt.Sprintf("writeJSON: failed to encode response: %v", err))
+	}
 }

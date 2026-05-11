@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'SnapshotDataSource.Read now returns early without calling State.Set when snapshot lookup returns nil, preventing zero values from being written to state'
+time: 2026-05-11T00:00:00Z
