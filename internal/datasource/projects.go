@@ -137,4 +137,7 @@ func (ds *ProjectsDataSource) Read(ctx context.Context, request datasource.ReadR
 	data.Id = types.StringValue("projects")
 
 	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
+	if response.Diagnostics.HasError() {
+		return
+	}
 }

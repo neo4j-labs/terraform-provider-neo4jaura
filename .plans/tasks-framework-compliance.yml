@@ -68,7 +68,7 @@ tasks:
       internal/resource/ and internal/datasource/ to include the resource ID in the detail
       string, and add HasError() guards with early returns after every resp.State.Set and
       resp.State.SetAttribute call. Add a changelog entry.
-    status: in_progress
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "After an in-place update, computed fields in state reflect the API response values, not the plan values"
@@ -76,7 +76,7 @@ tasks:
       - "Every resp.State.Set call is followed by a HasError() guard and early return"
       - "All mock-acceptance tests pass"
       - "Changelog entry present under .changes/unreleased/"
-    completed_at: null
+    completed_at: 2026-05-11T16:30:00Z
 
   - id: task-005
     title: "Add update test, disappears test, PreCheck, and CheckDestroy to acceptance tests (REQ-F-011 to F-014)"
