@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Fix "unexpected new value: .connection_url" error when pausing an instance — the Aura API returns an empty connection_url for paused instances; the provider now preserves the prior state value in both Update and Read instead of overwriting with empty string'
-time: 2026-05-11T00:00:00Z
