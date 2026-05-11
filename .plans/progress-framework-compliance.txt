@@ -1,0 +1,24 @@
+================================================================================
+TASK-001: Add ErrNotFound sentinel to AuraClient and handle 404 in Read
+Date: 2026-05-11T15:50:00Z
+================================================================================
+
+Summary:
+Introduced a sentinel ErrNotFound error in the client package and updated both
+InstanceResource.Read and SnapshotResource.Read to call response.State.RemoveResource(ctx)
+on 404, enabling Terraform drift detection and planned recreation instead of hard errors.
+
+Files Changed:
+- internal/client/aura_client.go (added ErrNotFound sentinel using errors.New)
+- internal/client/aura_api.go (GetInstanceById and GetSnapshotById return fmt.Errorf with %w wrapping ErrNotFound on HTTP 404)
+- internal/resource/instance.go (Read uses errors.Is(err, client.ErrNotFound) → RemoveResource)
+- internal/resource/snapshot.go (Read uses errors.Is(err, client.ErrNotFound) → RemoveResource)
+- .changes/unreleased/errnotfound-404-read.yaml (changelog entry)
+
+Key Decisions:
+- ErrNotFound lives in aura_client.go alongside the transport layer, not aura_api.go, keeping the sentinel close to the HTTP layer
+- fmt.Errorf with %w preserves errors.Is chain through wrapping (includes resource ID in message for debuggability)
+- Both GetInstanceById and GetSnapshotById handle 404 explicitly before the generic non-200 error path
+- WaitUntilInstanceIsDeleted correctly polls for status==404 at the raw HTTP level and is unaffected by this change
+
+Next Task: task-002

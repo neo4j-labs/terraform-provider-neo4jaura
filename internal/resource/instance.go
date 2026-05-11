@@ -19,6 +19,7 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -539,6 +540,10 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 
 	instance, err := r.auraApi.GetInstanceById(ctx, stateData.InstanceId.ValueString())
 	if err != nil {
+		if errors.Is(err, client.ErrNotFound) {
+			response.State.RemoveResource(ctx)
+			return
+		}
 		response.Diagnostics.AddError("Error while getting instance details", err.Error())
 		return
 	}

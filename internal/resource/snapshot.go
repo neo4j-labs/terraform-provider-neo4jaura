@@ -19,6 +19,7 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -176,6 +177,10 @@ func (r *SnapshotResource) Read(ctx context.Context, request resource.ReadReques
 
 	snapshotResponse, err := r.auraApi.GetSnapshotById(ctx, data.InstanceId.ValueString(), data.SnapshotId.ValueString())
 	if err != nil {
+		if errors.Is(err, client.ErrNotFound) {
+			response.State.RemoveResource(ctx)
+			return
+		}
 		response.Diagnostics.AddError("Error reading snapshot", err.Error())
 		return
 	}

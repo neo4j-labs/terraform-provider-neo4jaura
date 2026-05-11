@@ -40,3 +40,4 @@ Run acceptance tests only when a mock server is in place (task-005+). Until then
 - `WaitUntil` takes `ctx context.Context` as its first argument (added in task-003). Always pass the request/operation context so cancellations are respected during polling.
 - After `WaitUntilInstanceIsInState` in `Create`, write `data.Status = types.StringValue(instance.Data.Status)` — not `data.Status.ValueString()` which is the planned value, not the API value.
 - Use `strings.ToLower(domain.SnapshotStatusCompleted)` (not the literal `"completed"`) for all snapshot status comparisons. The domain constant is `"Completed"`.
+- `client.ErrNotFound` (defined in `aura_client.go`) is returned by `GetInstanceById` and `GetSnapshotById` on HTTP 404 via `fmt.Errorf("...: %w", ErrNotFound)`. Resource Read methods detect it with `errors.Is(err, client.ErrNotFound)` and call `response.State.RemoveResource(ctx)` for drift detection.

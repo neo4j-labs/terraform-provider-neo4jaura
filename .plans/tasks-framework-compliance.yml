@@ -12,7 +12,7 @@ tasks:
       InstanceResource.Read and SnapshotResource.Read to check for ErrNotFound and call
       resp.State.RemoveResource(ctx) instead of AddError, so Terraform detects drift and plans
       recreation rather than surfacing a hard error. Add a changelog entry for this fix.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "AuraClient returns a sentinel ErrNotFound (or wraps it) on HTTP 404 responses"
@@ -21,7 +21,7 @@ tasks:
       - "Resource layer uses errors.Is(err, ErrNotFound) — no string parsing"
       - "All mock-acceptance tests pass"
       - "Changelog entry present under .changes/unreleased/"
-    completed_at: null
+    completed_at: 2026-05-11T15:50:00Z
 
   - id: task-002
     title: "Add RequiresReplace to source block and root id to projects datasource (REQ-F-004, F-005)"
