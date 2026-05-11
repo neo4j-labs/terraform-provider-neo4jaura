@@ -30,7 +30,7 @@ tasks:
       planSecondariesChanged is true. If the secondaries PATCH fails after the name/memory PATCH
       already succeeded, the error message must clearly state that the name/memory update succeeded
       but secondaries_count failed. Add a changelog entry for this fix.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "When only name or memory changes, exactly one PATCH is sent (no secondaries_count PATCH)"
@@ -38,7 +38,7 @@ tasks:
       - "If the secondaries_count PATCH fails after the name/memory PATCH succeeded, the diagnostic error message indicates which update succeeded"
       - "All existing mock-acceptance tests pass after the change"
       - "A changelog entry is present under .changes/unreleased/ describing the fix"
-    completed_at: null
+    completed_at: 2026-05-11T11:42:00Z
 
   - id: task-003
     title: "Fix sort antisymmetry in readMostRecentSnapshot and add ctx to WaitUntil (D-04, D-05)"
