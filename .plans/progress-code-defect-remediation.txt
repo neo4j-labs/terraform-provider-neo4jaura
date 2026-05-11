@@ -1,0 +1,51 @@
+================================================================================
+TASK-001: Fix missing returns after error in InstanceResource.Create (D-01, D-02)
+Date: 2026-05-11T11:32:00Z
+================================================================================
+
+Summary:
+Added two missing `return` statements in InstanceResource.Create to prevent
+execution continuing with invalid state after error diagnostics are appended.
+D-01: return after WaitUntilSnapshotIsInState failure (line ~385) so PostInstance
+is never called with an incomplete request. D-02: return after the first
+WaitUntilInstanceIsInState failure (line ~424) so the zero-value GetInstanceResponse
+is never used to populate Terraform state fields.
+
+Files Changed:
+- internal/resource/instance.go (modified: added 2 return statements)
+- .changes/unreleased/fix-missing-returns-in-create.yaml (created: changelog entry)
+
+Key Decisions:
+- Both fixes are a single-line `return` insertion — no refactoring needed.
+- The changelog entry uses `kind: Fixed` as these are defect fixes.
+- All existing mock-acceptance tests pass unchanged.
+
+Next Task: task-002
+
+================================================================================
+TASK-002: Conditionalize PATCH calls in InstanceResource.Update (D-03)
+Date: 2026-05-11T11:42:00Z
+================================================================================
+
+Summary:
+Refactored InstanceResource.Update to only issue each PATCH call when the
+corresponding fields actually changed. Previously, both the name/memory PATCH
+and the secondaries_count PATCH were issued unconditionally whenever either
+changed. Now the name/memory PATCH is guarded by `planNameOrMemoryChanged`
+and the secondaries_count PATCH by `planSecondariesChanged`. When the
+secondaries PATCH fails after the name/memory PATCH already succeeded, the
+error message clearly states which update succeeded.
+
+Files Changed:
+- internal/resource/instance.go (modified: conditionalized PATCH calls in Update)
+- .changes/unreleased/fix-conditional-patch-in-update.yaml (created: changelog entry)
+
+Key Decisions:
+- Used a `nameMemoryUpdateSucceeded` boolean (set at runtime after success) rather
+  than just reusing `planNameOrMemoryChanged`, to correctly track whether the
+  API call actually completed vs. just being planned.
+- The WaitUntilInstanceIsInState call uses plan name/memory values; when only
+  secondaries_count changed, these equal the current state values, so the
+  condition is met without a real wait — correct behavior.
+
+Next Task: task-003

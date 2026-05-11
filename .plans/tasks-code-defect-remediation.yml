@@ -1,0 +1,99 @@
+feature: code-defect-remediation
+prd: ./prd-code-defect-remediation.md
+created_at: 2026-05-11T00:00:00Z
+updated_at: 2026-05-11T00:00:00Z
+
+tasks:
+  - id: task-001
+    title: "Fix missing returns after error in InstanceResource.Create (D-01, D-02)"
+    description: |
+      Two adjacent call sites in InstanceResource.Create omit a return after appending an error
+      diagnostic, allowing execution to continue with invalid state. D-01: add return after
+      WaitUntilSnapshotIsInState failure so PostInstance is never called. D-02: add return after
+      the first WaitUntilInstanceIsInState failure so the zero-value GetInstanceResponse is never
+      used to populate Terraform state. Add a changelog entry for this fix.
+    status: completed
+    dependencies: []
+    acceptance_criteria:
+      - "When WaitUntilSnapshotIsInState returns an error, Create returns immediately and PostInstance is not called"
+      - "When the first WaitUntilInstanceIsInState returns an error, Create returns immediately and no state is written"
+      - "All existing mock-acceptance tests pass after the change"
+      - "A changelog entry is present under .changes/unreleased/ describing the fix"
+    completed_at: 2026-05-11T11:32:00Z
+
+  - id: task-002
+    title: "Conditionalize PATCH calls in InstanceResource.Update (D-03)"
+    description: |
+      InstanceResource.Update unconditionally issues two PATCH calls (one for name/memory, one for
+      secondaries_count) even when only one field changed. Refactor so the name/memory PATCH is sent
+      only when planNameOrMemoryChanged is true, and the secondaries_count PATCH is sent only when
+      planSecondariesChanged is true. If the secondaries PATCH fails after the name/memory PATCH
+      already succeeded, the error message must clearly state that the name/memory update succeeded
+      but secondaries_count failed. Add a changelog entry for this fix.
+    status: completed
+    dependencies: []
+    acceptance_criteria:
+      - "When only name or memory changes, exactly one PATCH is sent (no secondaries_count PATCH)"
+      - "When only secondaries_count changes, exactly one PATCH is sent (no name/memory PATCH)"
+      - "If the secondaries_count PATCH fails after the name/memory PATCH succeeded, the diagnostic error message indicates which update succeeded"
+      - "All existing mock-acceptance tests pass after the change"
+      - "A changelog entry is present under .changes/unreleased/ describing the fix"
+    completed_at: 2026-05-11T11:42:00Z
+
+  - id: task-003
+    title: "Fix sort antisymmetry in readMostRecentSnapshot and add ctx to WaitUntil (D-04, D-05)"
+    description: |
+      D-04: the sort.Slice comparator in readMostRecentSnapshot returns true for both less(i,j) and
+      less(j,i) when a timestamp parse error occurs, violating the antisymmetry invariant and
+      producing undefined sort order. The comparator must surface the parse error and abort sorting
+      rather than returning true for both orderings. D-05: WaitUntil calls time.Sleep with no
+      ctx.Done() select, meaning Terraform plan cancellations are not respected during wait intervals.
+      Add context.Context as the first parameter to WaitUntil and replace time.Sleep with a select on
+      ctx.Done(). Update all callers in aura_api.go accordingly. Add changelog entries for both fixes.
+    status: pending
+    dependencies: []
+    acceptance_criteria:
+      - "readMostRecentSnapshot returns a diagnostic error (not a silently mis-sorted list) when any snapshot timestamp is unparseable"
+      - "WaitUntil signature is func WaitUntil[T any](ctx context.Context, get func() (T, error), ...) (T, error)"
+      - "WaitUntil exits within one polling tick after ctx is cancelled"
+      - "All callers in aura_api.go pass the context argument correctly"
+      - "All existing mock-acceptance tests pass after the change"
+      - "Changelog entries are present under .changes/unreleased/ describing both fixes"
+    completed_at: null
+
+  - id: task-004
+    title: "Fix data.Status assignment in Create and replace magic strings (D-06, D-07)"
+    description: |
+      D-06: in the Create path, lines 511-512 assign data.Status redundantly with its own value
+      rather than with the actual API status. Replace them with
+      data.Status = types.StringValue(instance.Data.Status) so state reflects the real API status.
+      D-07: the literal string "completed" is used for snapshot status comparisons in instance.go
+      and snapshot.go instead of the domain constant. Replace all occurrences with
+      strings.ToLower(domain.SnapshotStatusCompleted) or the constant directly. Add changelog
+      entries for both fixes.
+    status: pending
+    dependencies: []
+    acceptance_criteria:
+      - "After Create, data.Status in state equals instance.Data.Status from the API response, not the planned value"
+      - "No literal string \"completed\" is used for snapshot status comparisons anywhere under internal/"
+      - "All snapshot status comparisons use the domain constant or strings.ToLower(domain.SnapshotStatusCompleted)"
+      - "All existing mock-acceptance tests pass after the change"
+      - "Changelog entries are present under .changes/unreleased/ describing both fixes"
+    completed_at: null
+
+  - id: task-005
+    title: "Fix mock server silent JSON errors and datasource nil guard (D-08, D-09)"
+    description: |
+      D-08: writeJSON in mock_server.go silently discards JSON encoding errors, masking test
+      failures. Change it to call t.Fatal (or panic) so encoding failures cause the test to fail
+      visibly. D-09: SnapshotDataSource.Read calls State.Set with zero values when snapshot == nil
+      instead of returning early. Add a nil check that returns without setting state when the
+      snapshot lookup returns nil. Add changelog entries for both fixes.
+    status: pending
+    dependencies: []
+    acceptance_criteria:
+      - "A JSON encoding failure in writeJSON causes the test to fail (via t.Fatal or panic)"
+      - "SnapshotDataSource.Read returns without calling State.Set when snapshot is nil"
+      - "All existing mock-acceptance tests pass after the change"
+      - "Changelog entries are present under .changes/unreleased/ describing both fixes"
+    completed_at: null

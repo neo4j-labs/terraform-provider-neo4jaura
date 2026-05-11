@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'Conditionalize PATCH calls in InstanceResource.Update: name/memory PATCH is now sent only when those fields change, and secondaries_count PATCH is sent only when that field changes; if the secondaries_count PATCH fails after a name/memory PATCH already succeeded the error message clearly indicates which update succeeded'
+time: 2026-05-11T00:00:00Z

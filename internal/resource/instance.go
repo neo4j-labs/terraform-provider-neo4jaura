@@ -382,6 +382,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 				})
 			if err != nil {
 				response.Diagnostics.AddError("Error while waiting snapshot to be completed", err.Error())
+				return
 			}
 			postInstanceRequest.SourceSnapshotId = sourceData.SnapshotId.ValueStringPointer()
 		}
@@ -420,6 +421,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Instance is not running in time", err.Error())
+		return
 	}
 
 	// CDC enrichment mode and secondaries_count must be set via PATCH after instance creation
@@ -636,26 +638,39 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 			state.Name.ValueString(), plan.Name.ValueString(), state.Memory.ValueString(), plan.Memory.ValueString(),
 			state.SecondariesCount.ValueInt32(), plan.SecondariesCount.ValueInt32()))
 
-		patchRequest := client.PatchInstanceRequest{
-			Name:   plan.Name.ValueStringPointer(),
-			Memory: plan.Memory.ValueStringPointer(),
-		}
-		_, err := r.auraApi.PatchInstanceById(ctx, state.InstanceId.ValueString(), patchRequest)
-		if err != nil {
-			response.Diagnostics.AddError("Error while updating the instance details", err.Error())
-			return
-		}
-
-		patchRequest = client.PatchInstanceRequest{
-			SecondariesCount: plan.SecondariesCount.ValueInt32Pointer(),
-		}
-		_, err = r.auraApi.PatchInstanceById(ctx, state.InstanceId.ValueString(), patchRequest)
-		if err != nil {
-			response.Diagnostics.AddError("Error while updating the instance details", err.Error())
-			return
+		nameMemoryUpdateSucceeded := false
+		if planNameOrMemoryChanged {
+			patchRequest := client.PatchInstanceRequest{
+				Name:   plan.Name.ValueStringPointer(),
+				Memory: plan.Memory.ValueStringPointer(),
+			}
+			_, err := r.auraApi.PatchInstanceById(ctx, state.InstanceId.ValueString(), patchRequest)
+			if err != nil {
+				response.Diagnostics.AddError("Error while updating the instance name/memory", err.Error())
+				return
+			}
+			nameMemoryUpdateSucceeded = true
 		}
 
-		_, err = r.auraApi.WaitUntilInstanceIsInState(ctx, plan.InstanceId.ValueString(), func(resp client.GetInstanceResponse) bool {
+		if planSecondariesChanged {
+			patchRequest := client.PatchInstanceRequest{
+				SecondariesCount: plan.SecondariesCount.ValueInt32Pointer(),
+			}
+			_, err := r.auraApi.PatchInstanceById(ctx, state.InstanceId.ValueString(), patchRequest)
+			if err != nil {
+				if nameMemoryUpdateSucceeded {
+					response.Diagnostics.AddError(
+						"Error while updating secondaries_count (name/memory update succeeded)",
+						fmt.Sprintf("The name/memory update succeeded but the secondaries_count update failed: %s", err.Error()),
+					)
+				} else {
+					response.Diagnostics.AddError("Error while updating the instance secondaries_count", err.Error())
+				}
+				return
+			}
+		}
+
+		_, err := r.auraApi.WaitUntilInstanceIsInState(ctx, plan.InstanceId.ValueString(), func(resp client.GetInstanceResponse) bool {
 			return resp.Data.Memory == plan.Memory.ValueString() &&
 				resp.Data.Name == plan.Name.ValueString() &&
 				(strings.ToLower(resp.Data.Status) == domain.InstanceStatusRunning || strings.ToLower(resp.Data.Status) == string(domain.InstanceStatusPaused))
