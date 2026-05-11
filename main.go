@@ -20,7 +20,7 @@ func main() {
 	flag.Parse()
 
 	opts := providerserver.ServeOpts{
-		Address: "terraform.local/local/aura",
+		Address: "registry.terraform.io/neo4j-labs/neo4jaura",
 		Debug:   debug,
 	}
 

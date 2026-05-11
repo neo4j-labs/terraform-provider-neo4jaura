@@ -22,3 +22,28 @@ Key Decisions:
 - WaitUntilInstanceIsDeleted correctly polls for status==404 at the raw HTTP level and is unaffected by this change
 
 Next Task: task-002
+
+================================================================================
+TASK-003: Add env var fallback for credentials and fix registry address
+Date: 2026-05-11T16:00:00Z
+================================================================================
+
+Summary:
+Updated provider.Configure to fall back to AURA_CLIENT_ID and AURA_CLIENT_SECRET
+environment variables when the HCL provider block attributes are null/unknown/empty,
+matching the existing AURA_BASE_URL pattern. Changed client_id and client_secret schema
+attributes from Required to Optional to allow omitting them when env vars are set.
+Updated main.go registry address to the production value.
+
+Files Changed:
+- internal/provider/provider.go (client_id/client_secret Required→Optional; Configure reads AURA_CLIENT_ID and AURA_CLIENT_SECRET as fallback)
+- main.go (Address updated from "terraform.local/local/aura" to "registry.terraform.io/neo4j-labs/neo4jaura")
+- .changes/unreleased/env-var-credentials-registry-address.yaml (changelog entry)
+
+Key Decisions:
+- Fallback logic uses IsNull() || IsUnknown() || == "" — same triple-guard used for AURA_BASE_URL — so any non-value config state correctly defers to the env var
+- HCL values always take precedence: env var is only read when the HCL value is absent or empty
+- Schema attributes changed to Optional (not Optional+Computed) — there is no API that can "read back" these credentials, so Computed would be incorrect
+- Provider does not error when credentials are missing entirely; that error will surface at the first API call (consistent with how AURA_BASE_URL works)
+
+Next Task: task-004

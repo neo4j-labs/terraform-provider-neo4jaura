@@ -51,15 +51,15 @@ func (n *Neo4jAuraProvider) Schema(ctx context.Context, request provider.SchemaR
 	response.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"client_id": schema.StringAttribute{
-				Description:         "Aura Client ID",
-				MarkdownDescription: "Aura Client ID",
-				Required:            true,
+				Description:         "Aura Client ID. Can also be set via the AURA_CLIENT_ID environment variable.",
+				MarkdownDescription: "Aura Client ID. Can also be set via the `AURA_CLIENT_ID` environment variable.",
+				Optional:            true,
 				Sensitive:           true,
 			},
 			"client_secret": schema.StringAttribute{
-				Description:         "Aura Client Secret",
-				MarkdownDescription: "Aura Client Secret",
-				Required:            true,
+				Description:         "Aura Client Secret. Can also be set via the AURA_CLIENT_SECRET environment variable.",
+				MarkdownDescription: "Aura Client Secret. Can also be set via the `AURA_CLIENT_SECRET` environment variable.",
+				Optional:            true,
 				Sensitive:           true,
 			},
 			"instance_timeout": schema.Int64Attribute{
@@ -85,9 +85,19 @@ func (n *Neo4jAuraProvider) Configure(ctx context.Context, request provider.Conf
 		return
 	}
 
+	clientId := data.ClientId.ValueString()
+	if data.ClientId.IsNull() || data.ClientId.IsUnknown() || clientId == "" {
+		clientId = os.Getenv("AURA_CLIENT_ID")
+	}
+
+	clientSecret := data.ClientSecret.ValueString()
+	if data.ClientSecret.IsNull() || data.ClientSecret.IsUnknown() || clientSecret == "" {
+		clientSecret = os.Getenv("AURA_CLIENT_SECRET")
+	}
+
 	auraClient := client.NewAuraClient(
-		data.ClientId.ValueString(),
-		data.ClientSecret.ValueString(),
+		clientId,
+		clientSecret,
 		n.version,
 		os.Getenv("AURA_BASE_URL"),
 	)

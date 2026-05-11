@@ -31,7 +31,7 @@ tasks:
       rather than a no-op update. Also add a root id Computed attribute to the
       neo4jaura_projects data source schema and set it to the constant "projects" in Read,
       satisfying HashiCorp data source conventions. Add a changelog entry for both fixes.
-    status: pending
+    status: in_progress
     dependencies: []
     acceptance_criteria:
       - "Changing the source block on an existing neo4jaura_instance shows 'forces replacement' in terraform plan"
@@ -49,7 +49,7 @@ tasks:
       config block, matching the existing AURA_BASE_URL pattern. Also update main.go to use
       the production registry address registry.terraform.io/neo4j-labs/neo4jaura. Add a
       changelog entry for both fixes.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "Provider configures successfully when only AURA_CLIENT_ID and AURA_CLIENT_SECRET env vars are set and no HCL provider block attributes are given"
@@ -57,7 +57,7 @@ tasks:
       - "main.go uses registry.terraform.io/neo4j-labs/neo4jaura as the provider address"
       - "All mock-acceptance tests pass"
       - "Changelog entry present under .changes/unreleased/"
-    completed_at: null
+    completed_at: 2026-05-11T16:00:00Z
 
   - id: task-004
     title: "Fix Update to refresh from API and harden AddError and State.Set call sites (REQ-F-007, F-008, F-009)"
@@ -68,7 +68,7 @@ tasks:
       internal/resource/ and internal/datasource/ to include the resource ID in the detail
       string, and add HasError() guards with early returns after every resp.State.Set and
       resp.State.SetAttribute call. Add a changelog entry.
-    status: pending
+    status: in_progress
     dependencies: []
     acceptance_criteria:
       - "After an in-place update, computed fields in state reflect the API response values, not the plan values"
