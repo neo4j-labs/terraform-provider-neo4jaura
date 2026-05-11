@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Fix redundant data.Status assignment in InstanceResource.Create so that state reflects the real API status instead of the planned value'
-time: 2026-05-11T00:00:00Z

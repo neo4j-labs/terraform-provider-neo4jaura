@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Replace hardcoded "completed" magic string in snapshot status comparisons with the domain.SnapshotStatusCompleted constant'
-time: 2026-05-11T00:00:00Z

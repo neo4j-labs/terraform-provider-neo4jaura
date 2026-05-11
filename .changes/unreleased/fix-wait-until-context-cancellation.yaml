@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'Add context.Context to WaitUntil so Terraform plan/apply cancellations are respected during polling wait intervals'
-time: 2026-05-11T00:00:00Z
