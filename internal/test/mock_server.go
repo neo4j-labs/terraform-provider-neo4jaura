@@ -57,14 +57,19 @@ type MockServer struct {
 	instances map[string]*mockInstanceState
 	// snapshots is keyed by "<instanceId>/<snapshotId>"; all access must hold mu.
 	snapshots map[string]*mockSnapshotState
+	// snapshotListEmptyUntil tracks, per instance, how many more GET /snapshots
+	// calls should return an empty list before returning seeded snapshots.
+	// Used to simulate a recently-created instance with no snapshots yet.
+	snapshotListEmptyUntil map[string]int
 }
 
 // NewMockServer creates a new MockServer, registers all handlers, and starts
 // the underlying httptest.Server. Call Close() when finished.
 func NewMockServer() *MockServer {
 	ms := &MockServer{
-		instances: make(map[string]*mockInstanceState),
-		snapshots: make(map[string]*mockSnapshotState),
+		instances:              make(map[string]*mockInstanceState),
+		snapshots:              make(map[string]*mockSnapshotState),
+		snapshotListEmptyUntil: make(map[string]int),
 	}
 
 	mux := http.NewServeMux()
@@ -96,6 +101,18 @@ func (ms *MockServer) Reset() {
 	defer ms.mu.Unlock()
 	ms.instances = make(map[string]*mockInstanceState)
 	ms.snapshots = make(map[string]*mockSnapshotState)
+	ms.snapshotListEmptyUntil = make(map[string]int)
+}
+
+// HoldSnapshotList makes the next n calls to GET /v1/instances/{instanceId}/snapshots
+// return an empty list, regardless of seeded snapshots. After n calls the seeded
+// snapshots are returned normally. This simulates a recently-created instance that
+// does not yet have any completed snapshots, allowing isInstanceRecentlyCreated to
+// be exercised.
+func (ms *MockServer) HoldSnapshotList(instanceId string, n int) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	ms.snapshotListEmptyUntil[instanceId] = n
 }
 
 // SeedInstance inserts an instance into the mock's state store. The instance
@@ -109,6 +126,39 @@ func (ms *MockServer) SeedInstance(instance client.GetInstanceData) {
 		instance: instance,
 		getCount: 1,
 	}
+}
+
+// InstanceExists reports whether an instance with the given ID is currently
+// present in the mock server's state store. Used by testAccCheckInstanceDestroyed
+// to verify the instance was actually deleted.
+func (ms *MockServer) InstanceExists(id string) bool {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	_, ok := ms.instances[id]
+	return ok
+}
+
+// DeleteInstance removes an instance from the mock's state store out-of-band,
+// simulating an external deletion without going through the Terraform delete path.
+// After calling this, GET /v1/instances/{id} returns 404, which triggers
+// resp.State.RemoveResource in InstanceResource.Read and causes Terraform to
+// plan recreation on the next apply.
+func (ms *MockServer) DeleteInstance(id string) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	delete(ms.instances, id)
+}
+
+// SnapshotExists reports whether a snapshot with the given instance and snapshot
+// IDs is currently present in the mock server's state store. Used by
+// testAccCheckSnapshotNotInState to verify that no API-level delete was issued
+// (since the Aura API has no snapshot delete endpoint and SnapshotResource.Delete
+// is intentionally a no-op).
+func (ms *MockServer) SnapshotExists(instanceId, snapshotId string) bool {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	_, ok := ms.snapshots[snapshotKey(instanceId, snapshotId)]
+	return ok
 }
 
 // SeedSnapshot inserts a snapshot into the mock's state store. The snapshot
@@ -267,7 +317,8 @@ func (ms *MockServer) handlePostInstance(w http.ResponseWriter, r *http.Request)
 
 // handleGetInstance returns the instance state, driving a state machine:
 //   - getCount == 1 (first real GET after creation): status="creating", no graph metrics
-//   - getCount >= 2: status="running", graph_nodes=10, graph_relationships=5
+//   - getCount >= 2 and status is still "creating": status="running", graph_nodes=10, graph_relationships=5
+//   - getCount >= 2 and status has been explicitly set (e.g. via pause/resume): status is preserved
 func (ms *MockServer) handleGetInstance(w http.ResponseWriter, _ *http.Request, id string) {
 	ms.mu.Lock()
 	state, ok := ms.instances[id]
@@ -279,13 +330,15 @@ func (ms *MockServer) handleGetInstance(w http.ResponseWriter, _ *http.Request, 
 	state.getCount++
 	count := state.getCount
 
-	if count >= 2 {
+	if count >= 2 && state.instance.Status == domain.InstanceStatusCreating {
+		// Drive the initial creating → running transition only.
+		// If the status has been explicitly changed by pause/resume, preserve it.
 		state.instance.Status = domain.InstanceStatusRunning
 		nodes := int64(10)
 		rels := int64(5)
 		state.instance.GraphNodes = &nodes
 		state.instance.GraphRelationships = &rels
-	} else {
+	} else if count < 2 {
 		state.instance.Status = domain.InstanceStatusCreating
 		state.instance.GraphNodes = nil
 		state.instance.GraphRelationships = nil
@@ -405,6 +458,13 @@ func (ms *MockServer) handlePostSnapshot(w http.ResponseWriter, _ *http.Request,
 
 func (ms *MockServer) handleGetSnapshots(w http.ResponseWriter, _ *http.Request, instanceId string) {
 	ms.mu.Lock()
+	// If there are remaining hold counts for this instance, decrement and return empty.
+	if count := ms.snapshotListEmptyUntil[instanceId]; count > 0 {
+		ms.snapshotListEmptyUntil[instanceId] = count - 1
+		ms.mu.Unlock()
+		writeJSON(w, http.StatusOK, client.GetSnapshotsResponse{Data: []client.GetSnapshotData{}})
+		return
+	}
 	var snapshots []client.GetSnapshotData
 	for _, state := range ms.snapshots {
 		if state.snapshot.InstanceId == instanceId {

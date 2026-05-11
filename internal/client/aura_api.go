@@ -91,6 +91,9 @@ func (api *AuraApi) GetInstanceById(ctx context.Context, id string) (GetInstance
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}
+	if status == 404 {
+		return GetInstanceResponse{}, fmt.Errorf("instance %s: %w", id, ErrNotFound)
+	}
 	if status != 200 {
 		return GetInstanceResponse{}, fmt.Errorf("aura error: Status: %+v. Response: %+v", status, string(payload))
 	}
@@ -101,6 +104,9 @@ func (api *AuraApi) DeleteInstanceById(ctx context.Context, id string) (GetInsta
 	payload, status, err := api.auraClient.Delete(ctx, "instances/"+id)
 	if err != nil {
 		return GetInstanceResponse{}, err
+	}
+	if status == 404 {
+		return GetInstanceResponse{}, fmt.Errorf("instance %s not found: %w", id, ErrNotFound)
 	}
 	if status != 202 {
 		return GetInstanceResponse{}, fmt.Errorf("aura error: Status: %+v. Response: %+v", status, string(payload))
@@ -161,6 +167,9 @@ func (api *AuraApi) GetSnapshotById(ctx context.Context, instanceId string, snap
 	body, status, err := api.auraClient.Get(ctx, fmt.Sprintf("instances/%s/snapshots/%s", instanceId, snapshotId))
 	if err != nil {
 		return GetSnapshotResponse{}, err
+	}
+	if status == 404 {
+		return GetSnapshotResponse{}, fmt.Errorf("snapshot %s (instance %s): %w", snapshotId, instanceId, ErrNotFound)
 	}
 	if status != 200 {
 		return GetSnapshotResponse{}, fmt.Errorf("aura error: Status: %+v. Response: %+v", status, string(body))

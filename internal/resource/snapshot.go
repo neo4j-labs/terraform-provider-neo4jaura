@@ -19,6 +19,7 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -144,7 +145,8 @@ func (r *SnapshotResource) Create(ctx context.Context, request resource.CreateRe
 
 	postResponse, err := r.auraApi.PostSnapshot(ctx, data.InstanceId.ValueString())
 	if err != nil {
-		response.Diagnostics.AddError("Error while creating a snapshot", err.Error())
+		response.Diagnostics.AddError("Error while creating a snapshot",
+			fmt.Sprintf("instance_id=%s: %s", data.InstanceId.ValueString(), err.Error()))
 		return
 	}
 
@@ -153,7 +155,8 @@ func (r *SnapshotResource) Create(ctx context.Context, request resource.CreateRe
 			return strings.EqualFold(resp.Status, domain.SnapshotStatusCompleted)
 		})
 	if err != nil {
-		response.Diagnostics.AddError("Error while waiting for a snapshot", err.Error())
+		response.Diagnostics.AddError("Error while waiting for a snapshot",
+			fmt.Sprintf("instance_id=%s snapshot_id=%s: %s", data.InstanceId.ValueString(), postResponse.Data.SnapshotId, err.Error()))
 		return
 	}
 
@@ -163,6 +166,9 @@ func (r *SnapshotResource) Create(ctx context.Context, request resource.CreateRe
 	data.Profile = types.StringValue(snapshot.Profile)
 
 	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
+	if response.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *SnapshotResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
@@ -176,7 +182,12 @@ func (r *SnapshotResource) Read(ctx context.Context, request resource.ReadReques
 
 	snapshotResponse, err := r.auraApi.GetSnapshotById(ctx, data.InstanceId.ValueString(), data.SnapshotId.ValueString())
 	if err != nil {
-		response.Diagnostics.AddError("Error reading snapshot", err.Error())
+		if errors.Is(err, client.ErrNotFound) {
+			response.State.RemoveResource(ctx)
+			return
+		}
+		response.Diagnostics.AddError("Error reading snapshot",
+			fmt.Sprintf("instance_id=%s snapshot_id=%s: %s", data.InstanceId.ValueString(), data.SnapshotId.ValueString(), err.Error()))
 		return
 	}
 
@@ -185,6 +196,9 @@ func (r *SnapshotResource) Read(ctx context.Context, request resource.ReadReques
 	data.Profile = types.StringValue(snapshotResponse.Data.Profile)
 
 	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
+	if response.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *SnapshotResource) Update(ctx context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
@@ -210,5 +224,11 @@ func (r *SnapshotResource) ImportState(ctx context.Context, request resource.Imp
 	}
 
 	response.Diagnostics.Append(response.State.SetAttribute(ctx, path.Root("instance_id"), idParts[0])...)
+	if response.Diagnostics.HasError() {
+		return
+	}
 	response.Diagnostics.Append(response.State.SetAttribute(ctx, path.Root("snapshot_id"), idParts[1])...)
+	if response.Diagnostics.HasError() {
+		return
+	}
 }

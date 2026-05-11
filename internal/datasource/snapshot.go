@@ -125,7 +125,7 @@ func (ds *SnapshotDataSource) Read(ctx context.Context, request datasource.ReadR
 		snapshot = ds.readSnapshotById(ctx, data.InstanceId.ValueString(), data.SnapshotId.ValueString(), response)
 	} else {
 		response.Diagnostics.AddError("Provide either snapshot_id or most_recent",
-			fmt.Errorf("missing required attribute: snapshot_id or most_recent").Error())
+			fmt.Sprintf("instance_id=%s: missing required attribute: snapshot_id or most_recent", instanceId))
 		return
 	}
 
@@ -139,6 +139,9 @@ func (ds *SnapshotDataSource) Read(ctx context.Context, request datasource.ReadR
 	data.Timestamp = types.StringValue(snapshot.Timestamp)
 
 	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
+	if response.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (ds *SnapshotDataSource) Configure(ctx context.Context, request datasource.ConfigureRequest, response *datasource.ConfigureResponse) {
@@ -160,7 +163,8 @@ func (ds *SnapshotDataSource) Configure(ctx context.Context, request datasource.
 func (ds *SnapshotDataSource) readMostRecentSnapshot(ctx context.Context, instanceId string, response *datasource.ReadResponse) *client.GetSnapshotData {
 	snapshots, err := ds.auraApi.GetSnapshotsByInstanceId(ctx, instanceId)
 	if err != nil {
-		response.Diagnostics.AddError("Error while reading instance snapshots", err.Error())
+		response.Diagnostics.AddError("Error while reading instance snapshots",
+			fmt.Sprintf("instance_id=%s: %s", instanceId, err.Error()))
 		return nil
 	}
 	if len(snapshots.Data) == 0 {
@@ -201,7 +205,8 @@ func (ds *SnapshotDataSource) readMostRecentSnapshot(ctx context.Context, instan
 		return timestamp1.Before(timestamp2)
 	})
 	if sortErr != nil {
-		response.Diagnostics.AddError("Failed to sort snapshots by timestamp", sortErr.Error())
+		response.Diagnostics.AddError("Failed to sort snapshots by timestamp",
+			fmt.Sprintf("instance_id=%s: %s", instanceId, sortErr.Error()))
 		return nil
 	}
 	return &snapshots.Data[len(snapshots.Data)-1]
@@ -222,7 +227,8 @@ func (ds *SnapshotDataSource) isInstanceRecentlyCreated(ctx context.Context, ins
 func (ds *SnapshotDataSource) readSnapshotById(ctx context.Context, instanceId, snapshotId string, response *datasource.ReadResponse) *client.GetSnapshotData {
 	snapshots, err := ds.auraApi.GetSnapshotsByInstanceId(ctx, instanceId)
 	if err != nil {
-		response.Diagnostics.AddError("Error while reading instance snapshots", err.Error())
+		response.Diagnostics.AddError("Error while reading instance snapshots",
+			fmt.Sprintf("instance_id=%s: %s", instanceId, err.Error()))
 		return nil
 	}
 	if len(snapshots.Data) == 0 {

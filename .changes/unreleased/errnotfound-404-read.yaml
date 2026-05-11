@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'InstanceResource.Read and SnapshotResource.Read now remove the resource from state on HTTP 404 (out-of-band deletion) instead of surfacing a hard error, enabling Terraform drift detection and planned recreation. A new ErrNotFound sentinel in the client layer allows errors.Is-based detection without string parsing.'
+time: 2026-05-11T00:00:00Z

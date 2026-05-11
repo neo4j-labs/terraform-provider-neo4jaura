@@ -1,0 +1,256 @@
+================================================================================
+TASK-001: Add ErrNotFound sentinel to AuraClient and handle 404 in Read
+Date: 2026-05-11T15:50:00Z
+================================================================================
+
+Summary:
+Introduced a sentinel ErrNotFound error in the client package and updated both
+InstanceResource.Read and SnapshotResource.Read to call response.State.RemoveResource(ctx)
+on 404, enabling Terraform drift detection and planned recreation instead of hard errors.
+
+Files Changed:
+- internal/client/aura_client.go (added ErrNotFound sentinel using errors.New)
+- internal/client/aura_api.go (GetInstanceById and GetSnapshotById return fmt.Errorf with %w wrapping ErrNotFound on HTTP 404)
+- internal/resource/instance.go (Read uses errors.Is(err, client.ErrNotFound) → RemoveResource)
+- internal/resource/snapshot.go (Read uses errors.Is(err, client.ErrNotFound) → RemoveResource)
+- .changes/unreleased/errnotfound-404-read.yaml (changelog entry)
+
+Key Decisions:
+- ErrNotFound lives in aura_client.go alongside the transport layer, not aura_api.go, keeping the sentinel close to the HTTP layer
+- fmt.Errorf with %w preserves errors.Is chain through wrapping (includes resource ID in message for debuggability)
+- Both GetInstanceById and GetSnapshotById handle 404 explicitly before the generic non-200 error path
+- WaitUntilInstanceIsDeleted correctly polls for status==404 at the raw HTTP level and is unaffected by this change
+
+Next Task: task-002
+
+================================================================================
+TASK-003: Add env var fallback for credentials and fix registry address
+Date: 2026-05-11T16:00:00Z
+================================================================================
+
+Summary:
+Updated provider.Configure to fall back to AURA_CLIENT_ID and AURA_CLIENT_SECRET
+environment variables when the HCL provider block attributes are null/unknown/empty,
+matching the existing AURA_BASE_URL pattern. Changed client_id and client_secret schema
+attributes from Required to Optional to allow omitting them when env vars are set.
+Updated main.go registry address to the production value.
+
+Files Changed:
+- internal/provider/provider.go (client_id/client_secret Required→Optional; Configure reads AURA_CLIENT_ID and AURA_CLIENT_SECRET as fallback)
+- main.go (Address updated from "terraform.local/local/aura" to "registry.terraform.io/neo4j-labs/neo4jaura")
+- .changes/unreleased/env-var-credentials-registry-address.yaml (changelog entry)
+
+Key Decisions:
+- Fallback logic uses IsNull() || IsUnknown() || == "" — same triple-guard used for AURA_BASE_URL — so any non-value config state correctly defers to the env var
+- HCL values always take precedence: env var is only read when the HCL value is absent or empty
+- Schema attributes changed to Optional (not Optional+Computed) — there is no API that can "read back" these credentials, so Computed would be incorrect
+- Provider does not error when credentials are missing entirely; that error will surface at the first API call (consistent with how AURA_BASE_URL works)
+
+Next Task: task-004
+
+================================================================================
+TASK-002: Add RequiresReplace to source block and root id to projects datasource
+Date: 2026-05-11T16:05:00Z
+================================================================================
+Summary: Added objectplanmodifier.RequiresReplace() to the source SingleNestedAttribute
+on InstanceResource so changing source after creation triggers resource replacement.
+Added a root id Computed attribute to neo4jaura_projects data source schema, set to
+the constant "projects" in Read, satisfying HashiCorp data source conventions.
+Files Changed:
+- internal/resource/instance.go (added objectplanmodifier import + RequiresReplace on source block)
+- internal/datasource/projects.go (added Id field to ProjectsModel, root id schema attr, data.Id assignment in Read)
+- .changes/unreleased/source-requires-replace-projects-id.yaml (changelog entry)
+Key Decisions:
+- objectplanmodifier.RequiresReplace() added via PlanModifiers: []planmodifier.Object{...} on the SingleNestedAttribute
+- Root id uses the string literal "projects" (constant, not tied to any API concept) per HashiCorp data source conventions
+- Id field in ProjectsModel uses Go convention (Id not ID) with tfsdk:"id" tag
+Next Task: task-005
+
+================================================================================
+TASK-004: Fix Update to refresh from API and harden AddError and State.Set call sites
+Date: 2026-05-11T16:30:00Z
+================================================================================
+
+Summary:
+Replaced the final resp.State.Set(ctx, &plan) in InstanceResource.Update with a
+GetInstanceById call after all mutations, populating all computed fields from the API
+response to prevent computed-field drift. Audited every AddError call in resource/ and
+datasource/ to include the relevant resource ID (instance_id, snapshot_id) in the detail
+string. Added HasError() guards with early returns after every resp.State.Set and
+resp.State.SetAttribute call.
+
+Files Changed:
+- internal/resource/instance.go (Update refreshes from API; all AddError calls include instance_id; HasError guards in Create and Read)
+- internal/resource/snapshot.go (AddError calls include instance_id/snapshot_id; HasError guards in Create, Read, ImportState)
+- internal/datasource/snapshot.go (AddError calls include instance_id; HasError guard in Read)
+- internal/datasource/projects.go (HasError guard added after State.Set in Read)
+- .changes/unreleased/update-api-refresh-adderror-ids-haserror-guards.yaml (changelog entry)
+
+Key Decisions:
+- Update's GetInstanceById refresh uses the same nullable-field pattern as Create and Read (if != nil → StringValue, else → StringNull); preserves planned CdcEnrichmentMode / SecondariesCount when API returns null
+- All AddError detail strings follow the pattern "instance_id=<id>: <error>" or "instance_id=<id> snapshot_id=<id>: <error>" for easy log filtering
+- HasError() guards after State.Set use early return (not os.Exit or panic) — this is the correct terraform-plugin-framework pattern
+- At Create time, instance_id is available from postInstanceResp.Data.Id before the WaitUntilInstanceIsInState call, so it can appear in all subsequent error messages
+
+Next Task: task-006
+
+================================================================================
+TASK-005: Add update test, disappears test, PreCheck, and CheckDestroy
+Date: 2026-05-11T16:45:00Z
+================================================================================
+
+Summary:
+Added testAccPreCheck (wired into every resource.TestCase), testAccCheckInstanceDestroyed
+(a factory that checks the mock server, wired into every instance TestCase), and two new
+tests: TestAcc_instance_update (two-step name change, in-place) and
+TestAcc_instance_disappears (out-of-band delete via mock, ExpectNonEmptyPlan). Also made
+Delete idempotent by treating ErrNotFound as success.
+
+Files Changed:
+- internal/test/provider_test.go (added testAccPreCheck; added terraform-plugin-testing/helper/resource import)
+- internal/test/assertions.go (added testAccCheckInstanceDestroyed factory + deleteInstanceOutOfBand helper; added terraform import)
+- internal/test/mock_server.go (added InstanceExists and DeleteInstance methods)
+- internal/test/instance_resource_test.go (wired PreCheck+CheckDestroy into all TestCases; added TestAcc_instance_update and TestAcc_instance_disappears)
+- internal/test/projects_test.go (wired PreCheck)
+- internal/test/snapshot_resource_test.go (wired PreCheck)
+- internal/test/snapshot_test.go (wired PreCheck)
+- internal/client/aura_api.go (DeleteInstanceById returns ErrNotFound on HTTP 404)
+- internal/resource/instance.go (Delete treats ErrNotFound as success; added early return after non-404 error)
+- .changes/unreleased/acceptance-test-precheck-checkdestroy-update-disappears.yaml (changelog entry)
+
+Key Decisions:
+- testAccCheckInstanceDestroyed is a factory func(*MockServer) so it can be defined in non-test assertions.go while still accessing mock state; call sites pass testMockServer
+- CheckDestroy receives state *before* destroy (by framework design), so we look up instance_id from attributes and query the mock rather than checking Terraform state emptiness
+- InstanceExists / DeleteInstance are public methods on MockServer protected by mu, safe for concurrent sub-tests
+- deleteInstanceOutOfBand reads instance_id from state attributes (not rs.Primary.ID which is always "id-attribute-not-set" for this resource)
+- TestAcc_instance_disappears uses a single step with ExpectNonEmptyPlan: true — the out-of-band delete in Check triggers a non-empty post-step refresh plan; no second step needed
+- Delete idempotency (ErrNotFound → return) is required so the disappears test's post-test cleanup doesn't fail when Terraform tries to destroy an already-gone instance
+
+================================================================================
+TASK-010: Add unit tests for util/ package and aura_responses helpers
+Date: 2026-05-11T18:00:00Z
+================================================================================
+
+Summary:
+Added unit tests for two previously uncovered packages. internal/util/errors_test.go covers
+all three DiagnosticsError helpers (NoDiagnosticsError, NewDiagnosticsError, IsNotEmpty) with
+table-driven tests and zero-value identity assertions. internal/client/aura_responses_test.go
+covers CanBePaused, CanBeResumed, CreatedAtAsTime, and TimestampAsTime with table-driven tests
+covering happy path, case-insensitivity, all non-triggering statuses, nil pointer, empty string,
+and invalid timestamp format edge cases.
+
+Files Changed:
+- internal/util/errors_test.go (created — unit tests for DiagnosticsError helpers)
+- internal/client/aura_responses_test.go (created — unit tests for response helper methods)
+- .changes/unreleased/unit-tests-util-aura-responses.yaml (created — changelog entry)
+
+Key Decisions:
+- Tests placed in the same package (package util / package client) to allow access to unexported symbols without extra exports
+- strPtr helper defined at package level in aura_responses_test.go — no conflict risk since no other test files exist in client/
+- mustParseTime uses t.Helper() for clean failure attribution
+- CreatedAtAsTime nil pointer case correctly expects (time.Time{}, nil) matching the implementation
+- TimestampAsTime empty string and non-RFC3339 format both expect errors (consistent with time.Parse behaviour)
+
+Next Task: All tasks complete
+
+================================================================================
+TASK-008: Add pause and resume instance acceptance tests
+Date: 2026-05-11T18:30:00Z
+================================================================================
+
+Summary:
+Added TestAcc_instance_pause_resume — a three-step acceptance test covering the full
+pause/resume lifecycle: create (running), pause (paused), resume (running). Also fixed
+handleGetInstance in the mock server so it only drives the creating→running transition
+when the current status is still "creating", preserving explicitly-set statuses (paused,
+running via resume) across subsequent GET calls.
+
+Files Changed:
+- internal/test/instance_resource_test.go (added TestAcc_instance_pause_resume)
+- internal/test/mock_server.go (fixed handleGetInstance state-machine condition)
+- .changes/unreleased/pause-resume-acceptance-tests.yaml (changelog entry)
+
+Key Decisions:
+- handleGetInstance state-machine condition changed from `count >= 2` to
+  `count >= 2 && status == "creating"` so that pause/resume status changes
+  are preserved across WaitUntilInstanceIsInState polling calls
+- The test uses `status = "running"` explicitly in configRunning so both the
+  create and resume steps use the same config without relying on computed defaults
+- Three-step test structure reuses the same testMockServer shared instance;
+  no t.Parallel() per project conventions
+- CheckDestroy uses testAccCheckInstanceDestroyed (mock-based) as for all instance tests
+
+Next Task: task-007 or task-009
+
+================================================================================
+TASK-009: Improve snapshot datasource branch coverage (readMostRecentSnapshot, readSnapshotById)
+Date: 2026-05-11T17:15:00Z
+================================================================================
+
+Summary:
+Added four acceptance tests covering previously uncovered branches in the snapshot
+datasource: readSnapshotById (by snapshot_id config), readMostRecentSnapshot with
+multiple snapshots + sorting, isInstanceRecentlyCreated guard path (recently-created
+instance with delayed snapshot), and the "no snapshots, not recently created" error
+path. Also added HoldSnapshotList to MockServer to simulate a new instance with no
+snapshots yet, and testAccCheckSnapshotNotInState for snapshot resource CheckDestroy.
+
+Files Changed:
+- internal/test/snapshot_test.go (added TestAcc_snapshot_datasource_by_id,
+  TestAcc_snapshot_datasource_most_recent_multiple,
+  TestAcc_snapshot_datasource_recently_created_waits,
+  TestAcc_snapshot_datasource_no_snapshots_error)
+- internal/test/mock_server.go (added snapshotListEmptyUntil field, HoldSnapshotList
+  method, Reset clears snapshotListEmptyUntil, handleGetSnapshots respects hold count)
+- internal/test/assertions.go (added testAccCheckSnapshotNotInState for task-007)
+- internal/test/snapshot_resource_test.go (added TestAcc_snapshot_lifecycle for task-007)
+- .changes/unreleased/snapshot-datasource-branch-coverage.yaml (changelog entry)
+
+Key Decisions:
+- HoldSnapshotList(instanceId, n) makes the next n GET /snapshots calls return empty;
+  the hold count is decremented atomically under mu before the response is written
+- The "recently created waits" test seeds the snapshot BEFORE calling HoldSnapshotList
+  so that WaitUntilSnapshotsMatchCondition finds it on the second poll immediately
+- The "no snapshots error" test seeds an instance with nil CreatedAt — CreatedAtAsTime
+  returns time.Time{} (year 0001) which is not after now-5m, so isRecentlyCreated=false
+- snapTestInstanceID2/3/4 are distinct per-test constants to prevent cross-test state
+  contamination when tests share the single mock server
+- No t.Parallel() per project convention (tests share testMockServer)
+
+Next Task: task-007 (in_progress)
+
+================================================================================
+TASK-007: Add SnapshotResource Create and Delete acceptance tests
+Date: 2026-05-11T16:36:00Z
+================================================================================
+
+Summary:
+Added TestAcc_snapshot_lifecycle — a single-step acceptance test that seeds an
+instance, creates a snapshot via Terraform (exercising SnapshotResource.Create and
+WaitUntilSnapshotIsInState), verifies the snapshot reaches Completed state via
+ConfigStateChecks, then destroys it (exercising SnapshotResource.Delete, which is a
+no-op at the API level). Also added SnapshotExists to MockServer and replaced the
+broken testAccCheckSnapshotNotInState function (which incorrectly checked the
+pre-destroy state) with testAccCheckSnapshotNotDeleted — a factory that verifies each
+snapshot still exists in the mock after destroy, confirming no API-level delete was
+issued.
+
+Files Changed:
+- internal/test/snapshot_resource_test.go (updated CheckDestroy to use testAccCheckSnapshotNotDeleted)
+- internal/test/assertions.go (replaced testAccCheckSnapshotNotInState with testAccCheckSnapshotNotDeleted factory)
+- internal/test/mock_server.go (added SnapshotExists method)
+- .plans/tasks-framework-compliance.yml (marked task-007 completed)
+
+Key Decisions:
+- The terraform-plugin-testing framework passes the pre-destroy state to CheckDestroy
+  (not post-destroy), so testAccCheckSnapshotNotInState always found the snapshot
+  present and incorrectly returned an error. The fix queries the mock server instead.
+- testAccCheckSnapshotNotDeleted verifies the snapshot is still present in the mock
+  after destroy — this is the correct check for a resource whose Delete is a no-op
+  at the API level (the snapshot should never leave the mock server).
+- SnapshotExists mirrors InstanceExists in design: public method, protected by mu,
+  reads instance+snapshot IDs from the pre-destroy Terraform state attributes.
+- The framework automatically removes resources from Terraform state after Delete
+  returns without error, so no explicit resp.State.RemoveResource(ctx) call is needed.
+
+Next Task: All tasks complete

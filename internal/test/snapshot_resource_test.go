@@ -30,6 +30,58 @@ import (
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/domain"
 )
 
+// TestAcc_snapshot_lifecycle creates a snapshot via Terraform (exercising
+// SnapshotResource.Create and WaitUntilSnapshotIsInState) and then destroys it
+// (exercising SnapshotResource.Delete). Because the Aura API does not support
+// snapshot deletion, Delete is a no-op that only removes the resource from
+// Terraform state; CheckDestroy therefore verifies state-level removal.
+func TestAcc_snapshot_lifecycle(t *testing.T) {
+	const lifecycleInstanceID = "lifecycle-snap-instance-001"
+
+	snapshotConfig := fmt.Sprintf(`
+%s
+resource "neo4jaura_snapshot" "this" {
+  instance_id = "%s"
+}
+`, defaultProviderConfig, lifecycleInstanceID)
+
+	testMockServer.Reset()
+	testMockServer.SeedInstance(client.GetInstanceData{
+		Id:     lifecycleInstanceID,
+		Name:   "lifecycle-snap-instance",
+		Status: domain.InstanceStatusRunning,
+	})
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckSnapshotNotDeleted(testMockServer),
+		Steps: []resource.TestStep{
+			{
+				// Create the snapshot and verify it reaches Completed state.
+				Config: snapshotConfig,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_snapshot.this",
+						tfjsonpath.New("instance_id"),
+						knownvalue.StringExact(lifecycleInstanceID),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_snapshot.this",
+						tfjsonpath.New("snapshot_id"),
+						knownvalue.StringFunc(nonEmptyString),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_snapshot.this",
+						tfjsonpath.New("status"),
+						knownvalue.StringExact(domain.SnapshotStatusCompleted),
+					),
+				},
+			},
+		},
+	})
+}
+
 func TestAcc_can_import_snapshot(t *testing.T) {
 	instanceId := "import-snap-instance-001"
 	snapshotId := "import-snap-snapshot-001"
@@ -54,6 +106,7 @@ resource "neo4jaura_snapshot" "this" {}
 	})
 
 	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{

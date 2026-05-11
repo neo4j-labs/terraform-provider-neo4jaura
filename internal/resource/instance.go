@@ -19,6 +19,7 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -325,6 +327,9 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				MarkdownDescription: "Information about source for the instance",
 				Description:         "Information about source for the instance",
 				Optional:            true,
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.RequiresReplace(),
+				},
 				Attributes: map[string]schema.Attribute{
 					"instance_id": schema.StringAttribute{
 						MarkdownDescription: "Instance Id that contains the source database of the instance",
@@ -381,7 +386,8 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 					return strings.EqualFold(resp.Status, domain.SnapshotStatusCompleted)
 				})
 			if err != nil {
-				response.Diagnostics.AddError("Error while waiting snapshot to be completed", err.Error())
+				response.Diagnostics.AddError("Error while waiting snapshot to be completed",
+					fmt.Sprintf("instance_id=%s snapshot_id=%s: %s", sourceData.InstanceId.ValueString(), sourceData.SnapshotId.ValueString(), err.Error()))
 				return
 			}
 			postInstanceRequest.SourceSnapshotId = sourceData.SnapshotId.ValueStringPointer()
@@ -407,8 +413,6 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		return
 	}
 
-	requestedStatus := data.Status
-
 	data.InstanceId = types.StringValue(postInstanceResp.Data.Id)
 	data.ConnectionUrl = types.StringValue(postInstanceResp.Data.ConnectionUrl)
 	data.Username = types.StringValue(postInstanceResp.Data.Username)
@@ -420,7 +424,8 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		return strings.ToLower(r.Data.Status) == domain.InstanceStatusRunning
 	})
 	if err != nil {
-		response.Diagnostics.AddError("Instance is not running in time", err.Error())
+		response.Diagnostics.AddError("Instance is not running in time",
+			fmt.Sprintf("instance_id=%s: %s", postInstanceResp.Data.Id, err.Error()))
 		return
 	}
 
@@ -443,14 +448,16 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		}
 		instance, err = r.auraApi.PatchInstanceById(ctx, postInstanceResp.Data.Id, patchRequest)
 		if err != nil {
-			response.Diagnostics.AddError("Error while patching instance (CDC / secondaries_count)", err.Error())
+			response.Diagnostics.AddError("Error while patching instance (CDC / secondaries_count)",
+				fmt.Sprintf("instance_id=%s: %s", postInstanceResp.Data.Id, err.Error()))
 			return
 		}
 		instance, err = r.auraApi.WaitUntilInstanceIsInState(ctx, postInstanceResp.Data.Id, func(r client.GetInstanceResponse) bool {
 			return strings.ToLower(r.Data.Status) == domain.InstanceStatusRunning
 		})
 		if err != nil {
-			response.Diagnostics.AddError("Instance is not running after PATCH", err.Error())
+			response.Diagnostics.AddError("Instance is not running after PATCH",
+				fmt.Sprintf("instance_id=%s: %s", postInstanceResp.Data.Id, err.Error()))
 			return
 		}
 		tflog.Debug(ctx, fmt.Sprintf("Successfully patched instance %s", postInstanceResp.Data.Id))
@@ -510,7 +517,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		data.GraphAnalyticsPlugin = types.BoolNull()
 	}
 
-	requestedStatus = data.Status
+	requestedStatus := data.Status
 	data.Status = types.StringValue(instance.Data.Status)
 
 	tflog.Debug(ctx, fmt.Sprintf("Instance %s is running", postInstanceResp.Data.Id))
@@ -526,6 +533,9 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	}
 
 	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
+	if response.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *InstanceResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
@@ -539,7 +549,12 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 
 	instance, err := r.auraApi.GetInstanceById(ctx, stateData.InstanceId.ValueString())
 	if err != nil {
-		response.Diagnostics.AddError("Error while getting instance details", err.Error())
+		if errors.Is(err, client.ErrNotFound) {
+			response.State.RemoveResource(ctx)
+			return
+		}
+		response.Diagnostics.AddError("Error while getting instance details",
+			fmt.Sprintf("instance_id=%s: %s", stateData.InstanceId.ValueString(), err.Error()))
 		return
 	}
 
@@ -605,6 +620,9 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 	}
 
 	response.Diagnostics.Append(response.State.Set(ctx, &stateData)...)
+	if response.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
@@ -646,7 +664,8 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 			}
 			_, err := r.auraApi.PatchInstanceById(ctx, state.InstanceId.ValueString(), patchRequest)
 			if err != nil {
-				response.Diagnostics.AddError("Error while updating the instance name/memory", err.Error())
+				response.Diagnostics.AddError("Error while updating the instance name/memory",
+					fmt.Sprintf("instance_id=%s: %s", state.InstanceId.ValueString(), err.Error()))
 				return
 			}
 			nameMemoryUpdateSucceeded = true
@@ -661,10 +680,11 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 				if nameMemoryUpdateSucceeded {
 					response.Diagnostics.AddError(
 						"Error while updating secondaries_count (name/memory update succeeded)",
-						fmt.Sprintf("The name/memory update succeeded but the secondaries_count update failed: %s", err.Error()),
+						fmt.Sprintf("instance_id=%s: the name/memory update succeeded but the secondaries_count update failed: %s", state.InstanceId.ValueString(), err.Error()),
 					)
 				} else {
-					response.Diagnostics.AddError("Error while updating the instance secondaries_count", err.Error())
+					response.Diagnostics.AddError("Error while updating the instance secondaries_count",
+						fmt.Sprintf("instance_id=%s: %s", state.InstanceId.ValueString(), err.Error()))
 				}
 				return
 			}
@@ -676,7 +696,8 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 				(strings.ToLower(resp.Data.Status) == domain.InstanceStatusRunning || strings.ToLower(resp.Data.Status) == string(domain.InstanceStatusPaused))
 		})
 		if err != nil {
-			response.Diagnostics.AddError("Error while waiting for the instance details to be updated", err.Error())
+			response.Diagnostics.AddError("Error while waiting for the instance details to be updated",
+				fmt.Sprintf("instance_id=%s: %s", plan.InstanceId.ValueString(), err.Error()))
 			return
 		}
 	}
@@ -690,7 +711,78 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 		}
 	}
 
+	// Refresh state from the API after all updates so computed fields reflect the actual API response.
+	instanceId := plan.InstanceId.ValueString()
+	updatedInstance, err := r.auraApi.GetInstanceById(ctx, instanceId)
+	if err != nil {
+		response.Diagnostics.AddError(
+			"Error reading instance after update",
+			fmt.Sprintf("instance_id=%s: %s", instanceId, err.Error()),
+		)
+		return
+	}
+
+	plan.Name = types.StringValue(updatedInstance.Data.Name)
+	plan.Region = types.StringValue(updatedInstance.Data.Region)
+	plan.Memory = types.StringValue(updatedInstance.Data.Memory)
+	plan.Type = types.StringValue(updatedInstance.Data.Type)
+	plan.CloudProvider = types.StringValue(updatedInstance.Data.CloudProvider)
+	plan.ConnectionUrl = types.StringValue(updatedInstance.Data.ConnectionUrl)
+	plan.Status = types.StringValue(updatedInstance.Data.Status)
+	if updatedInstance.Data.Storage != nil {
+		plan.Storage = types.StringValue(*updatedInstance.Data.Storage)
+	} else {
+		plan.Storage = types.StringNull()
+	}
+	if updatedInstance.Data.CreatedAt != nil {
+		plan.CreatedAt = types.StringValue(*updatedInstance.Data.CreatedAt)
+	} else {
+		plan.CreatedAt = types.StringNull()
+	}
+	if updatedInstance.Data.MetricsIntegrationUrl != nil {
+		plan.MetricsIntegrationUrl = types.StringValue(*updatedInstance.Data.MetricsIntegrationUrl)
+	} else {
+		plan.MetricsIntegrationUrl = types.StringNull()
+	}
+	if updatedInstance.Data.GraphNodes != nil {
+		plan.GraphNodes = types.Int64Value(*updatedInstance.Data.GraphNodes)
+	} else {
+		plan.GraphNodes = types.Int64Null()
+	}
+	if updatedInstance.Data.GraphRelationships != nil {
+		plan.GraphRelationships = types.Int64Value(*updatedInstance.Data.GraphRelationships)
+	} else {
+		plan.GraphRelationships = types.Int64Null()
+	}
+	if updatedInstance.Data.SecondariesCount != nil {
+		plan.SecondariesCount = types.Int32Value(int32(*updatedInstance.Data.SecondariesCount))
+	} else if !plan.SecondariesCount.IsNull() {
+		// API may omit secondaries_count; keep the planned value
+	} else {
+		plan.SecondariesCount = types.Int32Null()
+	}
+	if updatedInstance.Data.CdcEnrichmentMode != nil {
+		plan.CdcEnrichmentMode = types.StringValue(*updatedInstance.Data.CdcEnrichmentMode)
+	} else if !plan.CdcEnrichmentMode.IsNull() {
+		// API returns null for CDC enrichment mode on some tiers; keep the planned value
+	} else {
+		plan.CdcEnrichmentMode = types.StringNull()
+	}
+	if updatedInstance.Data.VectorOptimized != nil {
+		plan.VectorOptimized = types.BoolValue(*updatedInstance.Data.VectorOptimized)
+	} else {
+		plan.VectorOptimized = types.BoolNull()
+	}
+	if updatedInstance.Data.GraphAnalyticsPlugin != nil {
+		plan.GraphAnalyticsPlugin = types.BoolValue(*updatedInstance.Data.GraphAnalyticsPlugin)
+	} else {
+		plan.GraphAnalyticsPlugin = types.BoolNull()
+	}
+
 	response.Diagnostics.Append(response.State.Set(ctx, &plan)...)
+	if response.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *InstanceResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
@@ -703,13 +795,19 @@ func (r *InstanceResource) Delete(ctx context.Context, request resource.DeleteRe
 	}
 
 	_, err := r.auraApi.DeleteInstanceById(ctx, data.InstanceId.ValueString())
-	// todo should we wait until instance is deleted
 	if err != nil {
-		response.Diagnostics.AddError("Error while deleting an instance", err.Error())
+		// If the instance is already gone, treat as success (idempotent delete).
+		if errors.Is(err, client.ErrNotFound) {
+			return
+		}
+		response.Diagnostics.AddError("Error while deleting an instance",
+			fmt.Sprintf("instance_id=%s: %s", data.InstanceId.ValueString(), err.Error()))
+		return
 	}
 	err = r.auraApi.WaitUntilInstanceIsDeleted(ctx, data.InstanceId.ValueString())
 	if err != nil {
-		response.Diagnostics.AddError("Error while waiting for deleting an instance", err.Error())
+		response.Diagnostics.AddError("Error while waiting for deleting an instance",
+			fmt.Sprintf("instance_id=%s: %s", data.InstanceId.ValueString(), err.Error()))
 	}
 }
 

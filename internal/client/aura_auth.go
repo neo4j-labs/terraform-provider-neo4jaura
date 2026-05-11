@@ -57,7 +57,7 @@ func (a *AuraAuth) authenticate(ctx context.Context) error {
 
 	resp, err := a.httpClient.Do(req)
 	if resp != nil && resp.Body != nil {
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // response body close errors are unactionable in defer
 	}
 	if err != nil {
 		return err

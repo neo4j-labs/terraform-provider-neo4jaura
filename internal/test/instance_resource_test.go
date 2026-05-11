@@ -90,7 +90,9 @@ resource "neo4jaura_instance" "this" {
 func TestAcc_can_create_instance_resource(t *testing.T) {
 	testMockServer.Reset()
 	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckInstanceDestroyed(testMockServer),
 		Steps: []resource.TestStep{
 			{
 				// Create instance and verify it reaches running state with mock preset values
@@ -128,7 +130,9 @@ func TestAcc_cdc_enrichment_mode_default_value(t *testing.T) {
 	testMockServer.Reset()
 
 	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckInstanceDestroyed(testMockServer),
 		Steps: []resource.TestStep{
 			{
 				// Create instance with CDC enrichment mode FULL
@@ -177,7 +181,9 @@ func TestAcc_secondaries_count_no_drift(t *testing.T) {
 	testMockServer.Reset()
 
 	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckInstanceDestroyed(testMockServer),
 		Steps: []resource.TestStep{
 			{
 				// Create instance with secondaries_count
@@ -333,7 +339,9 @@ func TestAcc_can_import_instance_resource(t *testing.T) {
 			}
 			stateChecks = append(stateChecks, example.extraStateChecks...)
 			resource.Test(tt, resource.TestCase{
+				PreCheck:                 func() { testAccPreCheck(tt) },
 				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+				CheckDestroy:             testAccCheckInstanceDestroyed(testMockServer),
 				Steps: []resource.TestStep{
 					{
 						Config:            example.config,
@@ -346,4 +354,192 @@ func TestAcc_can_import_instance_resource(t *testing.T) {
 			})
 		})
 	}
+}
+
+// TestAcc_instance_update verifies that an in-place name change is applied
+// without replacing the resource (the instance_id must remain the same).
+func TestAcc_instance_update(t *testing.T) {
+	testMockServer.Reset()
+
+	configStep1 := fmt.Sprintf(`
+%[1]s
+data "neo4jaura_projects" "this" {}
+
+resource "neo4jaura_instance" "this" {
+  name           = "OriginalName"
+  cloud_provider = "gcp"
+  region         = "europe-west1"
+  memory         = "1GB"
+  type           = "free-db"
+  project_id     = data.neo4jaura_projects.this.projects.0.id
+}
+`, defaultProviderConfig)
+
+	configStep2 := fmt.Sprintf(`
+%[1]s
+data "neo4jaura_projects" "this" {}
+
+resource "neo4jaura_instance" "this" {
+  name           = "UpdatedName"
+  cloud_provider = "gcp"
+  region         = "europe-west1"
+  memory         = "1GB"
+  type           = "free-db"
+  project_id     = data.neo4jaura_projects.this.projects.0.id
+}
+`, defaultProviderConfig)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckInstanceDestroyed(testMockServer),
+		Steps: []resource.TestStep{
+			{
+				// Step 1: create the instance with the original name.
+				Config: configStep1,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact("OriginalName"),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("instance_id"),
+						knownvalue.StringFunc(nonEmptyString),
+					),
+				},
+			},
+			{
+				// Step 2: update the name in-place. The instance_id must not change.
+				Config: configStep2,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact("UpdatedName"),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("instance_id"),
+						knownvalue.StringFunc(nonEmptyString),
+					),
+				},
+			},
+		},
+	})
+}
+
+// TestAcc_instance_pause_resume verifies the three-step pause/resume lifecycle:
+//  1. Create a free-tier instance (reaches "running" state).
+//  2. Update status to "paused" → triggers PauseInstanceById + WaitUntilInstanceIsInState.
+//  3. Update status back to "running" → triggers ResumeInstanceById + WaitUntilInstanceIsInState.
+//
+// This exercises handlePauseInstance and handleResumeInstance in the mock server,
+// as well as the pauseInstance and resumeInstance helpers in InstanceResource.
+// Do NOT call t.Parallel() — this test calls testMockServer.Reset().
+func TestAcc_instance_pause_resume(t *testing.T) {
+	testMockServer.Reset()
+
+	configRunning := fmt.Sprintf(`
+%[1]s
+data "neo4jaura_projects" "this" {}
+
+resource "neo4jaura_instance" "this" {
+  name           = "PauseResumeInstance"
+  cloud_provider = "gcp"
+  region         = "europe-west1"
+  memory         = "1GB"
+  type           = "free-db"
+  project_id     = data.neo4jaura_projects.this.projects.0.id
+  status         = "running"
+}
+`, defaultProviderConfig)
+
+	configPaused := fmt.Sprintf(`
+%[1]s
+data "neo4jaura_projects" "this" {}
+
+resource "neo4jaura_instance" "this" {
+  name           = "PauseResumeInstance"
+  cloud_provider = "gcp"
+  region         = "europe-west1"
+  memory         = "1GB"
+  type           = "free-db"
+  project_id     = data.neo4jaura_projects.this.projects.0.id
+  status         = "paused"
+}
+`, defaultProviderConfig)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckInstanceDestroyed(testMockServer),
+		Steps: []resource.TestStep{
+			{
+				// Step 1: create the instance; it should reach "running" state.
+				Config: configRunning,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("instance_id"),
+						knownvalue.StringFunc(nonEmptyString),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("status"),
+						knownvalue.StringExact(domain.InstanceStatusRunning),
+					),
+				},
+			},
+			{
+				// Step 2: update status to "paused" — exercises pauseInstance + PauseInstanceById.
+				Config: configPaused,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("status"),
+						knownvalue.StringExact(domain.InstanceStatusPaused),
+					),
+				},
+			},
+			{
+				// Step 3: resume back to "running" — exercises resumeInstance + ResumeInstanceById.
+				Config: configRunning,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("status"),
+						knownvalue.StringExact(domain.InstanceStatusRunning),
+					),
+				},
+			},
+		},
+	})
+}
+
+// TestAcc_instance_disappears verifies that when an instance is deleted
+// out-of-band (without going through Terraform), the post-apply refresh
+// produces a non-empty plan (recreation proposed) rather than erroring.
+// This relies on InstanceResource.Read calling resp.State.RemoveResource
+// on 404 (task-001). The framework automatically runs a refresh after the
+// step's Check; ExpectNonEmptyPlan: true asserts that refresh shows a diff.
+func TestAcc_instance_disappears(t *testing.T) {
+	testMockServer.Reset()
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckInstanceDestroyed(testMockServer),
+		Steps: []resource.TestStep{
+			{
+				// Create the instance, then delete it out-of-band inside Check.
+				// The framework's post-step refresh then calls Read, which returns
+				// 404 and removes the resource from state, producing a non-empty plan.
+				Config:             freeTierInstanceConfig,
+				Check:              deleteInstanceOutOfBand(testMockServer, "neo4jaura_instance.this"),
+				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
 }

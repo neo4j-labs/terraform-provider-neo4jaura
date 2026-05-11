@@ -1,0 +1,3 @@
+kind: Added
+body: 'Add testAccPreCheck, testAccCheckInstanceDestroyed, TestAcc_instance_update, and TestAcc_instance_disappears to acceptance test suite; wire PreCheck and CheckDestroy into every resource.TestCase'
+time: 2026-05-11T00:00:00Z

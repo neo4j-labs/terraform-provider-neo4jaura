@@ -19,6 +19,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -26,6 +27,11 @@ import (
 
 	"github.com/hashicorp/go-retryablehttp"
 )
+
+// ErrNotFound is returned by AuraApi methods when the Aura API responds with
+// HTTP 404. Callers should use errors.Is(err, ErrNotFound) to detect this
+// condition and remove the resource from state (drift detection).
+var ErrNotFound = errors.New("resource not found")
 
 const (
 	defaultAuraBasePath = "https://api.neo4j.io"
@@ -106,7 +112,7 @@ func (c *AuraClient) doOperation(ctx context.Context, method string, path string
 
 	resp, err := c.httpClient.Do(req)
 	if resp != nil && resp.Body != nil {
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // response body close errors are unactionable in defer
 	}
 	if err != nil {
 		return []byte{}, 0, err

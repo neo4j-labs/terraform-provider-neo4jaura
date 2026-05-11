@@ -1,0 +1,3 @@
+kind: Added
+body: 'Add TestAcc_snapshot_lifecycle acceptance test covering SnapshotResource Create (with WaitUntilSnapshotIsInState) and Delete (no-op) lifecycle'
+time: 2026-05-11T00:00:00Z
