@@ -71,7 +71,7 @@ tasks:
       and snapshot.go instead of the domain constant. Replace all occurrences with
       strings.ToLower(domain.SnapshotStatusCompleted) or the constant directly. Add changelog
       entries for both fixes.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "After Create, data.Status in state equals instance.Data.Status from the API response, not the planned value"
@@ -79,7 +79,7 @@ tasks:
       - "All snapshot status comparisons use the domain constant or strings.ToLower(domain.SnapshotStatusCompleted)"
       - "All existing mock-acceptance tests pass after the change"
       - "Changelog entries are present under .changes/unreleased/ describing both fixes"
-    completed_at: null
+    completed_at: 2026-05-11T14:50:00Z
 
   - id: task-005
     title: "Fix mock server silent JSON errors and datasource nil guard (D-08, D-09)"

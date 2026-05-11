@@ -78,3 +78,32 @@ Key Decisions:
 - `time.After` in the select creates a new timer each iteration; acceptable for polling intervals of 1+ seconds.
 
 Next Task: task-004
+
+================================================================================
+TASK-004: Fix data.Status assignment in Create and replace magic strings (D-06, D-07)
+Date: 2026-05-11T14:50:00Z
+================================================================================
+
+Summary:
+D-06: Fixed redundant data.Status assignment in InstanceResource.Create. The original
+code `data.Status = types.StringValue(data.Status.ValueString())` was a no-op that kept
+the planned value rather than reflecting the actual API status. Changed to
+`data.Status = types.StringValue(instance.Data.Status)` so state stores what the API
+reported after the instance reached running state.
+D-07: Replaced two occurrences of the hardcoded magic string `"completed"` in snapshot
+status comparisons with `strings.ToLower(domain.SnapshotStatusCompleted)`. Both
+occurrences were in WaitUntilSnapshotIsInState callbacks: one in InstanceResource.Create
+(source snapshot wait) and one in SnapshotResource.Create.
+
+Files Changed:
+- internal/resource/instance.go (modified: D-06 status fix + D-07 magic string replacement)
+- internal/resource/snapshot.go (modified: D-07 magic string replacement)
+- .changes/unreleased/fix-status-assignment-in-create.yaml (created: changelog entry for D-06)
+- .changes/unreleased/fix-snapshot-completed-magic-string.yaml (created: changelog entry for D-07)
+
+Key Decisions:
+- `strings.ToLower(domain.SnapshotStatusCompleted)` is evaluated at runtime each polling tick.
+  This is defensive — if the constant's capitalisation ever changes, comparisons still work.
+  No performance concern at polling intervals of seconds.
+
+Next Task: task-005

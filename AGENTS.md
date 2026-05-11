@@ -38,3 +38,5 @@ Run acceptance tests only when a mock server is in place (task-005+). Until then
 - `t.Parallel()` must be removed from tests that call `testMockServer.Reset()` — parallel tests sharing a single mock server will race on state.
 - `sort.Slice` comparators cannot return errors. Use a closure-captured `var sortErr error` variable; set it on error, return `false`, then check after sort completes.
 - `WaitUntil` takes `ctx context.Context` as its first argument (added in task-003). Always pass the request/operation context so cancellations are respected during polling.
+- After `WaitUntilInstanceIsInState` in `Create`, write `data.Status = types.StringValue(instance.Data.Status)` — not `data.Status.ValueString()` which is the planned value, not the API value.
+- Use `strings.ToLower(domain.SnapshotStatusCompleted)` (not the literal `"completed"`) for all snapshot status comparisons. The domain constant is `"Completed"`.

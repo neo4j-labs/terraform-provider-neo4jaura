@@ -150,7 +150,7 @@ func (r *SnapshotResource) Create(ctx context.Context, request resource.CreateRe
 
 	snapshot, err := r.auraApi.WaitUntilSnapshotIsInState(ctx, data.InstanceId.ValueString(), postResponse.Data.SnapshotId,
 		func(resp client.GetSnapshotData) bool {
-			return strings.ToLower(resp.Status) == "completed"
+			return strings.ToLower(resp.Status) == strings.ToLower(domain.SnapshotStatusCompleted)
 		})
 	if err != nil {
 		response.Diagnostics.AddError("Error while waiting for a snapshot", err.Error())
