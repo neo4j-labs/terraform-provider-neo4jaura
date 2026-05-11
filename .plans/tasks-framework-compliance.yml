@@ -107,7 +107,7 @@ tasks:
       on any violations. Add a .golangci.yml config in the repo root enabling at minimum
       staticcheck, errcheck, govet, and SA6005. Ensure all existing code passes the new rules
       before enabling the gate. Add a changelog entry.
-    status: pending
+    status: completed
     dependencies:
       - task-001
       - task-002
@@ -120,4 +120,4 @@ tasks:
       - "tfproviderlint ./... passes on the current codebase"
       - ".golangci.yml exists in the repo root with staticcheck, errcheck, govet, and SA6005 enabled"
       - "Changelog entry present under .changes/unreleased/"
-    completed_at: null
+    completed_at: 2026-05-11T16:30:00Z

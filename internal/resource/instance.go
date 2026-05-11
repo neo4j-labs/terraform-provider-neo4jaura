@@ -413,8 +413,6 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		return
 	}
 
-	requestedStatus := data.Status
-
 	data.InstanceId = types.StringValue(postInstanceResp.Data.Id)
 	data.ConnectionUrl = types.StringValue(postInstanceResp.Data.ConnectionUrl)
 	data.Username = types.StringValue(postInstanceResp.Data.Username)
@@ -519,7 +517,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		data.GraphAnalyticsPlugin = types.BoolNull()
 	}
 
-	requestedStatus = data.Status
+	requestedStatus := data.Status
 	data.Status = types.StringValue(instance.Data.Status)
 
 	tflog.Debug(ctx, fmt.Sprintf("Instance %s is running", postInstanceResp.Data.Id))

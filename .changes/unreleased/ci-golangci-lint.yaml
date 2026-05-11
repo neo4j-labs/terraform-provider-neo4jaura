@@ -1,0 +1,3 @@
+kind: Added
+body: 'Add golangci-lint CI job (govet, errcheck, staticcheck) and .golangci.yml config; fix all pre-existing lint violations'
+time: 2026-05-11T00:00:00Z

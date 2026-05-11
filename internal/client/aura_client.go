@@ -112,7 +112,7 @@ func (c *AuraClient) doOperation(ctx context.Context, method string, path string
 
 	resp, err := c.httpClient.Do(req)
 	if resp != nil && resp.Body != nil {
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // response body close errors are unactionable in defer
 	}
 	if err != nil {
 		return []byte{}, 0, err

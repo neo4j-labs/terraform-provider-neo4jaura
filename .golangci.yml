@@ -1,0 +1,12 @@
+version: "2"
+
+linters:
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+
+linters-settings:
+  errcheck:
+    # Report on assignments to blank identifier (e.g. _ = f())
+    check-blank: false

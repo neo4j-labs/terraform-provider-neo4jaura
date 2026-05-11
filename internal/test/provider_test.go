@@ -34,12 +34,16 @@ var testMockServer *MockServer
 
 func TestMain(m *testing.M) {
 	testMockServer = NewMockServer()
-	os.Setenv("AURA_BASE_URL", testMockServer.URL())
+	if err := os.Setenv("AURA_BASE_URL", testMockServer.URL()); err != nil {
+		panic("failed to set AURA_BASE_URL: " + err.Error())
+	}
 
 	code := m.Run()
 
 	testMockServer.Close()
-	os.Unsetenv("AURA_BASE_URL")
+	if err := os.Unsetenv("AURA_BASE_URL"); err != nil {
+		panic("failed to unset AURA_BASE_URL: " + err.Error())
+	}
 
 	os.Exit(code)
 }
