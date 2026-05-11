@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'Fix sort antisymmetry in readMostRecentSnapshot: a timestamp parse error now returns a diagnostic instead of silently producing an undefined sort order'
+time: 2026-05-11T00:00:00Z

@@ -378,7 +378,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		if !sourceData.SnapshotId.IsNull() {
 			_, err := r.auraApi.WaitUntilSnapshotIsInState(ctx, sourceData.InstanceId.ValueString(), sourceData.SnapshotId.ValueString(),
 				func(resp client.GetSnapshotData) bool {
-					return strings.ToLower(resp.Status) == "completed"
+					return strings.EqualFold(resp.Status, domain.SnapshotStatusCompleted)
 				})
 			if err != nil {
 				response.Diagnostics.AddError("Error while waiting snapshot to be completed", err.Error())
@@ -511,7 +511,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	}
 
 	requestedStatus = data.Status
-	data.Status = types.StringValue(data.Status.ValueString())
+	data.Status = types.StringValue(instance.Data.Status)
 
 	tflog.Debug(ctx, fmt.Sprintf("Instance %s is running", postInstanceResp.Data.Id))
 

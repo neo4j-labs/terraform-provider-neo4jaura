@@ -184,6 +184,7 @@ func (api *AuraApi) WaitUntilSnapshotIsInState(
 	condition func(data GetSnapshotData) bool) (GetSnapshotData, error) {
 
 	return util.WaitUntil(
+		ctx,
 		func() (GetSnapshotData, error) {
 			r, e := api.GetSnapshotById(ctx, instanceId, snapshotId)
 			tflog.Debug(ctx, fmt.Sprintf("Received response %+v and error %+v", r, e))
@@ -205,6 +206,7 @@ func (api *AuraApi) WaitUntilSnapshotsMatchCondition(
 	condition func(data GetSnapshotsResponse) bool) (GetSnapshotsResponse, error) {
 
 	return util.WaitUntil(
+		ctx,
 		func() (GetSnapshotsResponse, error) {
 			r, e := api.GetSnapshotsByInstanceId(ctx, instanceId)
 			tflog.Debug(ctx, fmt.Sprintf("Received response %+v and error %+v", r, e))
@@ -226,6 +228,7 @@ func (api *AuraApi) WaitUntilInstanceIsInState(
 	id string,
 	condition func(GetInstanceResponse) bool) (GetInstanceResponse, error) {
 	return util.WaitUntil(
+		ctx,
 		func() (GetInstanceResponse, error) {
 			resp, err := api.GetInstanceById(ctx, id)
 			tflog.Trace(ctx, fmt.Sprintf("Received response %+v and error %+v", resp, err))
@@ -241,6 +244,7 @@ func (api *AuraApi) WaitUntilInstanceIsInState(
 
 func (api *AuraApi) WaitUntilInstanceIsDeleted(ctx context.Context, id string) (err error) {
 	_, err = util.WaitUntil(
+		ctx,
 		func() (status int, err error) {
 			_, status, err = api.auraClient.Get(ctx, "instances/"+id)
 			tflog.Trace(ctx, fmt.Sprintf("Received response status %+d and error %+v", status, err))

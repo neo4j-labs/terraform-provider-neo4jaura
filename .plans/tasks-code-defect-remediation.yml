@@ -50,7 +50,7 @@ tasks:
       ctx.Done() select, meaning Terraform plan cancellations are not respected during wait intervals.
       Add context.Context as the first parameter to WaitUntil and replace time.Sleep with a select on
       ctx.Done(). Update all callers in aura_api.go accordingly. Add changelog entries for both fixes.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "readMostRecentSnapshot returns a diagnostic error (not a silently mis-sorted list) when any snapshot timestamp is unparseable"
@@ -59,7 +59,7 @@ tasks:
       - "All callers in aura_api.go pass the context argument correctly"
       - "All existing mock-acceptance tests pass after the change"
       - "Changelog entries are present under .changes/unreleased/ describing both fixes"
-    completed_at: null
+    completed_at: 2026-05-11T14:33:00Z
 
   - id: task-004
     title: "Fix data.Status assignment in Create and replace magic strings (D-06, D-07)"
@@ -71,7 +71,7 @@ tasks:
       and snapshot.go instead of the domain constant. Replace all occurrences with
       strings.ToLower(domain.SnapshotStatusCompleted) or the constant directly. Add changelog
       entries for both fixes.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "After Create, data.Status in state equals instance.Data.Status from the API response, not the planned value"
@@ -79,7 +79,7 @@ tasks:
       - "All snapshot status comparisons use the domain constant or strings.ToLower(domain.SnapshotStatusCompleted)"
       - "All existing mock-acceptance tests pass after the change"
       - "Changelog entries are present under .changes/unreleased/ describing both fixes"
-    completed_at: null
+    completed_at: 2026-05-11T14:50:00Z
 
   - id: task-005
     title: "Fix mock server silent JSON errors and datasource nil guard (D-08, D-09)"
@@ -89,11 +89,11 @@ tasks:
       visibly. D-09: SnapshotDataSource.Read calls State.Set with zero values when snapshot == nil
       instead of returning early. Add a nil check that returns without setting state when the
       snapshot lookup returns nil. Add changelog entries for both fixes.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "A JSON encoding failure in writeJSON causes the test to fail (via t.Fatal or panic)"
       - "SnapshotDataSource.Read returns without calling State.Set when snapshot is nil"
       - "All existing mock-acceptance tests pass after the change"
       - "Changelog entries are present under .changes/unreleased/ describing both fixes"
-    completed_at: null
+    completed_at: 2026-05-11T15:05:00Z

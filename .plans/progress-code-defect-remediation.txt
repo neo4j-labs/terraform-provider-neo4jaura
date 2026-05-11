@@ -49,3 +49,91 @@ Key Decisions:
   condition is met without a real wait — correct behavior.
 
 Next Task: task-003
+
+================================================================================
+TASK-003: Fix sort antisymmetry in readMostRecentSnapshot and add ctx to WaitUntil (D-04, D-05)
+Date: 2026-05-11T14:33:00Z
+================================================================================
+
+Summary:
+D-04: Fixed sort antisymmetry in readMostRecentSnapshot by replacing the
+`return true` on parse error with a closure-captured `sortErr` variable. The
+comparator now returns `false` on error and subsequent calls short-circuit via
+`if sortErr != nil { return false }`. After sort, `sortErr` is checked and
+surfaced as a Terraform diagnostic rather than silently producing undefined order.
+D-05: Added `context.Context` as the first parameter to `WaitUntil` and replaced
+`time.Sleep(delay)` with a `select` on `ctx.Done()` so Terraform plan/apply
+cancellations are respected during polling wait intervals. All 4 callers in
+`aura_api.go` updated to pass `ctx`.
+
+Files Changed:
+- internal/datasource/snapshot.go (modified: sort error capture pattern in readMostRecentSnapshot)
+- internal/util/waiter.go (modified: added ctx param, replaced time.Sleep with select)
+- internal/client/aura_api.go (modified: added ctx as first arg to all 4 WaitUntil calls)
+- .changes/unreleased/fix-sort-antisymmetry-in-read-most-recent-snapshot.yaml (created: changelog entry)
+- .changes/unreleased/fix-wait-until-context-cancellation.yaml (created: changelog entry)
+
+Key Decisions:
+- Closure-captured `sortErr` is the idiomatic pattern for surfacing errors from `sort.Slice` comparators, which cannot return errors directly.
+- `time.After` in the select creates a new timer each iteration; acceptable for polling intervals of 1+ seconds.
+
+Next Task: task-004
+
+================================================================================
+TASK-004: Fix data.Status assignment in Create and replace magic strings (D-06, D-07)
+Date: 2026-05-11T14:50:00Z
+================================================================================
+
+Summary:
+D-06: Fixed redundant data.Status assignment in InstanceResource.Create. The original
+code `data.Status = types.StringValue(data.Status.ValueString())` was a no-op that kept
+the planned value rather than reflecting the actual API status. Changed to
+`data.Status = types.StringValue(instance.Data.Status)` so state stores what the API
+reported after the instance reached running state.
+D-07: Replaced two occurrences of the hardcoded magic string `"completed"` in snapshot
+status comparisons with `strings.ToLower(domain.SnapshotStatusCompleted)`. Both
+occurrences were in WaitUntilSnapshotIsInState callbacks: one in InstanceResource.Create
+(source snapshot wait) and one in SnapshotResource.Create.
+
+Files Changed:
+- internal/resource/instance.go (modified: D-06 status fix + D-07 magic string replacement)
+- internal/resource/snapshot.go (modified: D-07 magic string replacement)
+- .changes/unreleased/fix-status-assignment-in-create.yaml (created: changelog entry for D-06)
+- .changes/unreleased/fix-snapshot-completed-magic-string.yaml (created: changelog entry for D-07)
+
+Key Decisions:
+- `strings.ToLower(domain.SnapshotStatusCompleted)` is evaluated at runtime each polling tick.
+  This is defensive — if the constant's capitalisation ever changes, comparisons still work.
+  No performance concern at polling intervals of seconds.
+
+Next Task: task-005
+
+================================================================================
+TASK-005: Fix mock server silent JSON errors and datasource nil guard (D-08, D-09)
+Date: 2026-05-11T15:05:00Z
+================================================================================
+
+Summary:
+D-08: Replaced the silent `_ = json.NewEncoder(w).Encode(v)` discard in `writeJSON`
+with a checked error that calls `panic` on failure. `MockServer` has no `*testing.T`
+available at call sites (it is a package-level fixture started in `TestMain`), so
+`panic` is the correct mechanism — it causes any running test to fail with a clear
+stack trace rather than silently producing a truncated/empty response body.
+D-09: Inverted the nil check in `SnapshotDataSource.Read` from `if snapshot != nil { ... }`
+to `if snapshot == nil { return }`. When `snapshot == nil`, an error diagnostic has
+already been appended by one of the three dispatch branches above; returning early
+prevents `State.Set` from being called with partially-zero `data` fields.
+
+Files Changed:
+- internal/test/mock_server.go (modified: writeJSON panics on encode error)
+- internal/datasource/snapshot.go (modified: early return when snapshot == nil)
+- .changes/unreleased/fix-write-json-silent-error.yaml (created: changelog entry for D-08)
+- .changes/unreleased/fix-snapshot-datasource-nil-guard.yaml (created: changelog entry for D-09)
+
+Key Decisions:
+- `panic` rather than `t.Fatal` because `MockServer` does not hold a `*testing.T` — it
+  is constructed once in `TestMain` and shared across tests without a per-test T.
+- The nil-guard inversion improves readability by removing a level of indentation from
+  the happy path.
+
+Next Task: All tasks complete
