@@ -382,6 +382,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 				})
 			if err != nil {
 				response.Diagnostics.AddError("Error while waiting snapshot to be completed", err.Error())
+				return
 			}
 			postInstanceRequest.SourceSnapshotId = sourceData.SnapshotId.ValueStringPointer()
 		}
@@ -420,6 +421,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Instance is not running in time", err.Error())
+		return
 	}
 
 	// CDC enrichment mode and secondaries_count must be set via PATCH after instance creation

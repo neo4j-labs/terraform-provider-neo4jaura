@@ -12,14 +12,14 @@ tasks:
       WaitUntilSnapshotIsInState failure so PostInstance is never called. D-02: add return after
       the first WaitUntilInstanceIsInState failure so the zero-value GetInstanceResponse is never
       used to populate Terraform state. Add a changelog entry for this fix.
-    status: pending
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "When WaitUntilSnapshotIsInState returns an error, Create returns immediately and PostInstance is not called"
       - "When the first WaitUntilInstanceIsInState returns an error, Create returns immediately and no state is written"
       - "All existing mock-acceptance tests pass after the change"
       - "A changelog entry is present under .changes/unreleased/ describing the fix"
-    completed_at: null
+    completed_at: 2026-05-11T11:32:00Z
 
   - id: task-002
     title: "Conditionalize PATCH calls in InstanceResource.Update (D-03)"
