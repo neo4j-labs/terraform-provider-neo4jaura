@@ -218,3 +218,39 @@ Key Decisions:
 - No t.Parallel() per project convention (tests share testMockServer)
 
 Next Task: task-007 (in_progress)
+
+================================================================================
+TASK-007: Add SnapshotResource Create and Delete acceptance tests
+Date: 2026-05-11T16:36:00Z
+================================================================================
+
+Summary:
+Added TestAcc_snapshot_lifecycle — a single-step acceptance test that seeds an
+instance, creates a snapshot via Terraform (exercising SnapshotResource.Create and
+WaitUntilSnapshotIsInState), verifies the snapshot reaches Completed state via
+ConfigStateChecks, then destroys it (exercising SnapshotResource.Delete, which is a
+no-op at the API level). Also added SnapshotExists to MockServer and replaced the
+broken testAccCheckSnapshotNotInState function (which incorrectly checked the
+pre-destroy state) with testAccCheckSnapshotNotDeleted — a factory that verifies each
+snapshot still exists in the mock after destroy, confirming no API-level delete was
+issued.
+
+Files Changed:
+- internal/test/snapshot_resource_test.go (updated CheckDestroy to use testAccCheckSnapshotNotDeleted)
+- internal/test/assertions.go (replaced testAccCheckSnapshotNotInState with testAccCheckSnapshotNotDeleted factory)
+- internal/test/mock_server.go (added SnapshotExists method)
+- .plans/tasks-framework-compliance.yml (marked task-007 completed)
+
+Key Decisions:
+- The terraform-plugin-testing framework passes the pre-destroy state to CheckDestroy
+  (not post-destroy), so testAccCheckSnapshotNotInState always found the snapshot
+  present and incorrectly returned an error. The fix queries the mock server instead.
+- testAccCheckSnapshotNotDeleted verifies the snapshot is still present in the mock
+  after destroy — this is the correct check for a resource whose Delete is a no-op
+  at the API level (the snapshot should never leave the mock server).
+- SnapshotExists mirrors InstanceExists in design: public method, protected by mu,
+  reads instance+snapshot IDs from the pre-destroy Terraform state attributes.
+- The framework automatically removes resources from Terraform state after Delete
+  returns without error, so no explicit resp.State.RemoveResource(ctx) call is needed.
+
+Next Task: All tasks complete

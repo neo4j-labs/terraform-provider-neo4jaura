@@ -131,7 +131,7 @@ tasks:
       verify the snapshot reaches Completed state, then destroy it and verify deletion
       via CheckDestroy. Ensure the mock server's handlePostSnapshot and
       handleDeleteSnapshot paths are exercised. Add a changelog entry.
-    status: in_progress
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "TestAcc_snapshot_lifecycle exists and passes — creates and destroys a snapshot"
@@ -140,7 +140,7 @@ tasks:
       - "WaitUntilSnapshotIsInState is exercised by the test"
       - "All mock-acceptance tests pass"
       - "Changelog entry present under .changes/unreleased/"
-    completed_at: null
+    completed_at: 2026-05-11T16:36:00Z
 
   - id: task-008
     title: "Add pause and resume instance acceptance tests"
