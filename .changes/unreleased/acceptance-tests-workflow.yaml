@@ -1,3 +1,0 @@
-kind: Changed
-body: 'Acceptance tests moved to a dedicated workflow (acceptance.yml); build.yml now runs unit tests only, preventing real Aura instances being created on every pull request'
-time: 2026-05-08T00:00:00Z
