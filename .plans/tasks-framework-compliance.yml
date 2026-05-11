@@ -1,0 +1,123 @@
+feature: framework-compliance
+prd: ./prd-framework-compliance.md
+created_at: 2026-05-11T00:00:00Z
+updated_at: 2026-05-11T00:00:00Z
+
+tasks:
+  - id: task-001
+    title: "Add ErrNotFound sentinel to AuraClient and handle 404 in Read (REQ-F-001, F-002, F-003)"
+    description: |
+      Introduce a sentinel ErrNotFound error in the client layer that is returned whenever the
+      Aura API responds with HTTP 404, using errors.Is-compatible wrapping. Then update
+      InstanceResource.Read and SnapshotResource.Read to check for ErrNotFound and call
+      resp.State.RemoveResource(ctx) instead of AddError, so Terraform detects drift and plans
+      recreation rather than surfacing a hard error. Add a changelog entry for this fix.
+    status: pending
+    dependencies: []
+    acceptance_criteria:
+      - "AuraClient returns a sentinel ErrNotFound (or wraps it) on HTTP 404 responses"
+      - "InstanceResource.Read calls resp.State.RemoveResource(ctx) and returns without error on 404"
+      - "SnapshotResource.Read calls resp.State.RemoveResource(ctx) and returns without error on 404"
+      - "Resource layer uses errors.Is(err, ErrNotFound) — no string parsing"
+      - "All mock-acceptance tests pass"
+      - "Changelog entry present under .changes/unreleased/"
+    completed_at: null
+
+  - id: task-002
+    title: "Add RequiresReplace to source block and root id to projects datasource (REQ-F-004, F-005)"
+    description: |
+      Add objectplanmodifier.RequiresReplace() to the source SingleNestedAttribute on
+      InstanceResource so that changing source after creation triggers resource replacement
+      rather than a no-op update. Also add a root id Computed attribute to the
+      neo4jaura_projects data source schema and set it to the constant "projects" in Read,
+      satisfying HashiCorp data source conventions. Add a changelog entry for both fixes.
+    status: pending
+    dependencies: []
+    acceptance_criteria:
+      - "Changing the source block on an existing neo4jaura_instance shows 'forces replacement' in terraform plan"
+      - "neo4jaura_projects data source schema has a root id attribute"
+      - "neo4jaura_projects Read sets id to the string \"projects\" in state"
+      - "All mock-acceptance tests pass"
+      - "Changelog entry present under .changes/unreleased/"
+    completed_at: null
+
+  - id: task-003
+    title: "Add env var fallback for credentials and fix registry address (REQ-F-006, F-010)"
+    description: |
+      Update provider.Configure to fall back to AURA_CLIENT_ID and AURA_CLIENT_SECRET
+      environment variables when client_id and client_secret are null or unknown in the HCL
+      config block, matching the existing AURA_BASE_URL pattern. Also update main.go to use
+      the production registry address registry.terraform.io/neo4j-labs/neo4jaura. Add a
+      changelog entry for both fixes.
+    status: pending
+    dependencies: []
+    acceptance_criteria:
+      - "Provider configures successfully when only AURA_CLIENT_ID and AURA_CLIENT_SECRET env vars are set and no HCL provider block attributes are given"
+      - "HCL provider block values take precedence over env vars when both are present"
+      - "main.go uses registry.terraform.io/neo4j-labs/neo4jaura as the provider address"
+      - "All mock-acceptance tests pass"
+      - "Changelog entry present under .changes/unreleased/"
+    completed_at: null
+
+  - id: task-004
+    title: "Fix Update to refresh from API and harden AddError and State.Set call sites (REQ-F-007, F-008, F-009)"
+    description: |
+      Replace the final resp.State.Set(ctx, &plan) in InstanceResource.Update with a
+      GetInstanceById call after WaitUntilInstanceIsInState, populating all fields from the
+      API response to prevent computed-field drift. Also audit every AddError call in
+      internal/resource/ and internal/datasource/ to include the resource ID in the detail
+      string, and add HasError() guards with early returns after every resp.State.Set and
+      resp.State.SetAttribute call. Add a changelog entry.
+    status: pending
+    dependencies: []
+    acceptance_criteria:
+      - "After an in-place update, computed fields in state reflect the API response values, not the plan values"
+      - "No AddError call in resource/datasource code lacks the resource ID in its detail string"
+      - "Every resp.State.Set call is followed by a HasError() guard and early return"
+      - "All mock-acceptance tests pass"
+      - "Changelog entry present under .changes/unreleased/"
+    completed_at: null
+
+  - id: task-005
+    title: "Add update test, disappears test, PreCheck, and CheckDestroy to acceptance tests (REQ-F-011 to F-014)"
+    description: |
+      Add TestAcc_instance_update covering an in-place name or memory change across two steps.
+      Add TestAcc_instance_disappears that creates the instance, deletes it out-of-band via the
+      mock server, and verifies the next apply proposes recreation rather than erroring (depends
+      on task-001 landing first). Add a testAccPreCheck helper and wire PreCheck into every
+      resource.TestCase. Add a testAccCheckInstanceDestroyed CheckDestroy function and wire it
+      into every applicable TestCase. Add a changelog entry.
+    status: pending
+    dependencies:
+      - task-001
+    acceptance_criteria:
+      - "TestAcc_instance_update exists, runs two steps, and passes with the mock server"
+      - "TestAcc_instance_disappears exists and verifies recreation is planned after out-of-band deletion"
+      - "Every resource.TestCase in the test suite has a PreCheck field calling testAccPreCheck(t)"
+      - "Every applicable resource.TestCase has a CheckDestroy field"
+      - "All mock-acceptance tests pass"
+      - "Changelog entry present under .changes/unreleased/"
+    completed_at: null
+
+  - id: task-006
+    title: "Add golangci-lint and tfproviderlint CI job to build.yml (REQ-F-015)"
+    description: |
+      Add a lint job to .github/workflows/build.yml that installs golangci-lint and
+      tfproviderlint, then runs golangci-lint run and tfproviderlint ./... failing the build
+      on any violations. Add a .golangci.yml config in the repo root enabling at minimum
+      staticcheck, errcheck, govet, and SA6005. Ensure all existing code passes the new rules
+      before enabling the gate. Add a changelog entry.
+    status: pending
+    dependencies:
+      - task-001
+      - task-002
+      - task-003
+      - task-004
+      - task-005
+    acceptance_criteria:
+      - "build.yml contains a lint job that runs on pull_request and push to main"
+      - "golangci-lint run passes on the current codebase"
+      - "tfproviderlint ./... passes on the current codebase"
+      - ".golangci.yml exists in the repo root with staticcheck, errcheck, govet, and SA6005 enabled"
+      - "Changelog entry present under .changes/unreleased/"
+    completed_at: null
