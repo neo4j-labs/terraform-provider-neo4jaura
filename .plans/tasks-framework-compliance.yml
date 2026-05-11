@@ -1,7 +1,7 @@
 feature: framework-compliance
 prd: ./prd-framework-compliance.md
 created_at: 2026-05-11T00:00:00Z
-updated_at: 2026-05-11T00:00:00Z
+updated_at: 2026-05-11T17:00:00Z
 
 tasks:
   - id: task-001
@@ -121,3 +121,79 @@ tasks:
       - ".golangci.yml exists in the repo root with staticcheck, errcheck, govet, and SA6005 enabled"
       - "Changelog entry present under .changes/unreleased/"
     completed_at: 2026-05-11T16:30:00Z
+
+  - id: task-007
+    title: "Add SnapshotResource Create and Delete acceptance tests"
+    description: |
+      SnapshotResource.Create and SnapshotResource.Delete are both at 0% coverage —
+      the existing snapshot_resource_test.go only exercises ImportState. Add a full
+      lifecycle acceptance test: seed an instance, create a snapshot via Terraform,
+      verify the snapshot reaches Completed state, then destroy it and verify deletion
+      via CheckDestroy. Ensure the mock server's handlePostSnapshot and
+      handleDeleteSnapshot paths are exercised. Add a changelog entry.
+    status: pending
+    dependencies: []
+    acceptance_criteria:
+      - "TestAcc_snapshot_lifecycle exists and passes — creates and destroys a snapshot"
+      - "SnapshotResource.Create coverage is non-zero"
+      - "SnapshotResource.Delete coverage is non-zero"
+      - "WaitUntilSnapshotIsInState is exercised by the test"
+      - "All mock-acceptance tests pass"
+      - "Changelog entry present under .changes/unreleased/"
+    completed_at: null
+
+  - id: task-008
+    title: "Add pause and resume instance acceptance tests"
+    description: |
+      pauseInstance and resumeInstance helpers, PauseInstanceById, ResumeInstanceById,
+      and CanBePaused are all at 0% coverage. Add a two-step acceptance test:
+      Step 1 creates a running instance, Step 2 updates status to paused and verifies
+      the instance reaches paused state. Add a third step that resumes it back to running.
+      The mock server's handlePauseInstance and handleResumeInstance handlers must be
+      exercised. Add a changelog entry.
+    status: pending
+    dependencies: []
+    acceptance_criteria:
+      - "TestAcc_instance_pause_resume exists and passes with the mock server"
+      - "pauseInstance / resumeInstance helper coverage is non-zero"
+      - "PauseInstanceById / ResumeInstanceById client coverage is non-zero"
+      - "All mock-acceptance tests pass"
+      - "Changelog entry present under .changes/unreleased/"
+    completed_at: null
+
+  - id: task-009
+    title: "Improve snapshot datasource branch coverage (readMostRecentSnapshot, readSnapshotById)"
+    description: |
+      readMostRecentSnapshot is at 22.9%, readSnapshotById and isInstanceRecentlyCreated
+      are at 0%. The existing snapshot datasource test only exercises the seeded-snapshot
+      (by snapshot_id) path. Add tests for the most-recent-snapshot lookup path (omit
+      snapshot_id, provide only instance_id) and verify that the datasource correctly
+      returns the most recent completed snapshot. Also add a test for the
+      isInstanceRecentlyCreated guard path. Add a changelog entry.
+    status: pending
+    dependencies: []
+    acceptance_criteria:
+      - "readMostRecentSnapshot coverage exceeds 70%"
+      - "readSnapshotById coverage is non-zero"
+      - "A test exercises the most-recent snapshot lookup path (no snapshot_id in config)"
+      - "All mock-acceptance tests pass"
+      - "Changelog entry present under .changes/unreleased/"
+    completed_at: null
+
+  - id: task-010
+    title: "Add unit tests for util/ package and aura_responses helpers"
+    description: |
+      util/errors.go (DiagnosticsError helpers) is at 0% and aura_responses.go helpers
+      (CanBePaused, CanBeResumed, TimestampAsTime, CreatedAtAsTime) are at 0%. These are
+      pure functions that don't require a running server — add unit tests directly in
+      internal/util/ and internal/client/ covering the happy path and key edge cases
+      (nil pointer, empty string, invalid timestamp format). Add a changelog entry.
+    status: pending
+    dependencies: []
+    acceptance_criteria:
+      - "util/errors.go DiagnosticsError helpers have unit test coverage"
+      - "aura_responses.go CanBePaused, CanBeResumed, TimestampAsTime, CreatedAtAsTime have unit tests"
+      - "make test passes (unit tests, no TF_ACC required)"
+      - "Overall internal/ coverage increases measurably"
+      - "Changelog entry present under .changes/unreleased/"
+    completed_at: null
