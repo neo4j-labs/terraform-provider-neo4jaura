@@ -16,87 +16,120 @@ __Neo4j Aura Terraform Provider is a Neo4j Labs Project.  Please read the Discla
 To use directly from the [Terraform Provider Registry](https://registry.terraform.io/providers/neo4j-labs/neo4jaura/latest), copy and paste this code into your Terraform configuration, adjusting the configuration options to meet your requirements.  
 
 
-```Text
+```hcl
 terraform {
   required_providers {
     neo4jaura = {
-      source = "neo4j-labs/neo4jaura"
-      version = "0.0.2-beta"
+      source  = "neo4j-labs/neo4jaura"
+      version = "0.0.3-beta"
     }
   }
 }
+
 provider "neo4jaura" {
-  # Configuration options
+  # client_id and client_secret can be set here or via the
+  # AURA_CLIENT_ID and AURA_CLIENT_SECRET environment variables.
 }
 ```
 
-Then run ```terraform init```
+Then run `terraform init`
 
 
 See [Examples](https://github.com/neo4j-labs/terraform-provider-neo4jaura/tree/main/examples) for the various possible configuration options
 
 
+## Provider configuration
+
+The provider supports two ways to supply credentials:
+
+**HCL provider block** (takes precedence):
+
+```hcl
+provider "neo4jaura" {
+  client_id     = "your-client-id"
+  client_secret = "your-client-secret"
+}
+```
+
+**Environment variables** (fallback when the provider block values are absent):
+
+```bash
+export AURA_CLIENT_ID="your-client-id"
+export AURA_CLIENT_SECRET="your-client-secret"
+```
+
+To obtain a client ID and secret, follow the guidance in the [Neo4j AuraDB documentation](https://neo4j.com/docs/aura/api/authentication/).
+
+
 ## Using from GitHub repository
 
-This is route to take if you wish to experiment with your own development of the provider or just try it out. 
+This is the route to take if you wish to experiment with your own development of the provider or just try it out. 
 
 
 ### Requirements
 
 * Go 1.25+
 * Terraform 1.14.8+
-* A Client Id and Client Secret for access to the Aura API.  To obtain these, follow the guidance in the [Neo4j AuraDB documentation](https://neo4j.com/docs/aura/api/authentication/)
+* A Client ID and Client Secret for access to the Aura API.  To obtain these, follow the guidance in the [Neo4j AuraDB documentation](https://neo4j.com/docs/aura/api/authentication/)
 
 
 ### Installation
 
-Clone the repository
+Clone the repository:
 
-```Text
+```bash
 git clone https://github.com/neo4j-labs/terraform-provider-neo4jaura.git
+cd terraform-provider-neo4jaura
 ```
 
-Build the provider
+Build and install the provider binary into your local Go bin path:
 
-```Text
-cd terraform-provider-neo4jaura/
-./build.sh
+```bash
+make install
 ```
 
-Add .terraformrc file to your $HOME folder
+Add a `~/.terraformrc` file (or extend an existing one) to tell Terraform to use the local binary instead of the registry:
 
-
-```Text
+```hcl
 provider_installation {
-  filesystem_mirror {
-    path    = "$YOUR_HOME_PATH/.terraform.d/plugins"
+  dev_overrides {
+    "registry.terraform.io/neo4j-labs/neo4jaura" = "/path/to/your/go/bin"
   }
-  direct {
-    exclude = ["terraform.local/*/*"]
-  }
+  direct {}
 }
 ```
 
+Replace `/path/to/your/go/bin` with the output of `go env GOPATH`/bin (e.g. `~/go/bin`).
+
+With `dev_overrides` in place you do not need to run `terraform init` for the provider — Terraform uses the local binary directly.
+
+
 ## Example configurations 
 
-Several example configurations are provided in the [Examples](https://github.com/neo4j-labs/terraform-provider-neo4jaura/tree/main/examples) folder of this repository. You will need to set  TF_VAR_client_id and TF_VAR_client_secret environment variables before running any of the examples. 
+Several example configurations are provided in the [Examples](https://github.com/neo4j-labs/terraform-provider-neo4jaura/tree/main/examples) folder of this repository. Set your credentials before running any of the examples:
 
-```Text
+```bash
+export AURA_CLIENT_ID="your-client-id"
+export AURA_CLIENT_SECRET="your-client-secret"
+```
+
+Or, if using the TF_VAR pattern:
+
+```bash
 export TF_VAR_client_id="$AURA_CLIENT_ID"
 export TF_VAR_client_secret="$AURA_CLIENT_SECRET"
 ```
 
-Move into the examples folder and then, to run an example
+Move into the examples folder and then, to run an example:
 
-```Text
+```bash
 ./examples/execute_example.sh <example folder name>
 ```
 
 You may be prompted to enter values or text during execution.   
 
 
-
-___The terraform files used in the examples may require editing to match your Neo4j AuraDB environment.  In particular , those that create or modify AuraDB Instances are likely to need changes.___
+___The terraform files used in the examples may require editing to match your Neo4j AuraDB environment.  In particular, those that create or modify AuraDB Instances are likely to need changes.___
 
 
 ## Contributing
@@ -115,6 +148,19 @@ If you get stuck, start by checking existing GitHub issues to see if others have
 
 Thank you for contributing to make this better!
 
+### Running tests locally
+
+```bash
+# Unit tests (no live infrastructure required)
+make test
+
+# Acceptance tests against the in-process mock server
+make mock-acceptance
+
+# Acceptance tests against the live Aura API (requires credentials)
+make acceptance   # needs AURA_CLIENT_ID / AURA_CLIENT_SECRET set
+```
+
 ### Changelog entries
 
 Every pull request should include a changelog entry so that changes are captured in the release notes. Entries live as small YAML files under `.changes/unreleased/` and are merged into `CHANGELOG.md` automatically at release time.
@@ -129,34 +175,52 @@ time: <RFC3339 timestamp, e.g. 2026-01-01T00:00:00Z>
 
 The `kind` field determines how the version number is bumped:
 
-| Kind | Version bump | When to use |
-|------|-------------|-------------|
-| `Added` | minor | New feature or capability |
-| `Changed` | major | Breaking change to existing behaviour |
-| `Deprecated` | minor | Feature marked for future removal |
-| `Removed` | major | Feature removed |
-| `Fixed` | patch | Bug fix |
-| `Security` | patch | Security fix |
+| Kind | When to use |
+|------|-------------|
+| `Added` | New feature or capability |
+| `Changed` | Breaking change to existing behaviour |
+| `Deprecated` | Feature marked for future removal |
+| `Removed` | Feature removed |
+| `Fixed` | Bug fix |
+| `Security` | Security fix |
 
 If you have [changie](https://changie.dev) installed you can run `changie new` to create the entry interactively.
 
 ### Releasing (maintainers only)
 
-Releases are created from the `main` branch using the **Prepare Release** GitHub Actions workflow. The workflow determines the next version automatically from the changelog entry kinds (patch / minor / major), updates `CHANGELOG.md`, and creates the corresponding git tag. The **Release** workflow then fires on that tag and publishes the binaries to GitHub Releases and the Terraform Registry.
+Releases are created using the **Prepare Release** GitHub Actions workflow. It batches the unreleased changelog entries, regenerates `CHANGELOG.md`, opens a PR, and pushes the version tag. The **Release** workflow fires immediately on the new tag and publishes binaries to GitHub Releases and the Terraform Registry.
 
-To cut a release:
+**Steps to cut a release:**
 
-1. Ensure all changes intended for the release have been merged to `main` and each has a changelog entry under `.changes/unreleased/`.
+1. Ensure all changes intended for the release are merged to `main` and each has a changelog entry under `.changes/unreleased/`.
+
 2. Go to **Actions → Prepare Release → Run workflow** on GitHub.
-3. The workflow will commit the updated changelog and push a version tag (e.g. `v0.2.0`).
-4. The **Release** workflow triggers automatically on the new tag and publishes the release.
+
+3. Enter the version to release (e.g. `0.0.4-beta`). The version must match the changie-supported format — do **not** include a `v` prefix.
+
+4. The workflow will:
+   - Run `changie batch <version>` to gather unreleased entries
+   - Run `changie merge` to regenerate `CHANGELOG.md`
+   - Push a `chore/release-v<version>` branch and open a PR
+   - Push a `v<version>` tag — this triggers the **Release** workflow immediately
+
+5. The **Release** workflow builds the provider binaries, creates a GitHub Release, and publishes to the Terraform Registry.
+
+6. Merge the PR opened in step 4 to bring the updated `CHANGELOG.md` into `main`.
+
+> **Note:** Because the tag is pushed by `github-actions[bot]`, GitHub's security model prevents it from automatically triggering the release workflow. If the Release workflow does not start within a minute, delete and re-push the tag from your local machine:
+> ```bash
+> git fetch --tags
+> git push origin :refs/tags/v<version>   # delete remote tag
+> git push origin v<version>              # re-push to trigger workflow
+> ```
 
 
 ## Feedback, Support and Issues
 
-All feedback is welcome and can be posted either in the Issues area of the [GitHub Reposity](https://github.com/neo4j-labs/terraform-provider-neo4jaura/issues) or by posting in [Neo4j Communities Integrations](https://community.neo4j.com/c/integrations).  Communities is also a great place for asking questions.
+All feedback is welcome and can be posted either in the Issues area of the [GitHub Repository](https://github.com/neo4j-labs/terraform-provider-neo4jaura/issues) or by posting in [Neo4j Communities Integrations](https://community.neo4j.com/c/integrations).  Communities is also a great place for asking questions.
 
-Neo4j Aura Terraform Provider is a Neo4j Labs project which means it is not officially supported by Neo4j.  Please report any issue what you may have in the [GitHub Reposity](https://github.com/neo4j-labs/terraform-provider-neo4jaura/issues)
+Neo4j Aura Terraform Provider is a Neo4j Labs project which means it is not officially supported by Neo4j.  Please report any issue you may have in the [GitHub Repository](https://github.com/neo4j-labs/terraform-provider-neo4jaura/issues).
 
 
 ## Disclaimer
@@ -167,9 +231,6 @@ They are not officially supported by Neo4j. Use them at your own risk.
 Neo4j Labs projects, while trying to apply sound engineering principles, are provided as is - with no guarantees, liabilities or warranty for function, API stability or continued maintenance. Support for Neo4j Labs projects happens by the community and maintainers as a best-effort through GitHub issues and community forums. These projects are examples that use public Neo4j APIs to show how to implement a certain capability.
 
 
-
-
-
 ## Relevant Links
 
 | Topic   | Link |
@@ -177,9 +238,7 @@ Neo4j Labs projects, while trying to apply sound engineering principles, are pro
 | Releases | [https://github.com/neo4j-labs/terraform-provider-neo4jaura/releases](https://github.com/neo4j-labs/terraform-provider-neo4jaura/releases) |
 | Source | [https://github.com/neo4j-labs/terraform-provider-neo4jaura](https://github.com/neo4j-labs/terraform-provider-neo4jaura) |
 | Issues | [https://github.com/neo4j-labs/terraform-provider-neo4jaura/issues](https://github.com/neo4j-labs/terraform-provider-neo4jaura/issues) |
-| Terraform provider registry | [https://registry.terraform.io/providers/neo4j-labs/neo4jaura/latest](https://registry.terraform.io/providers/neo4j-labs/neo4jaura/latest ) |
+| Terraform provider registry | [https://registry.terraform.io/providers/neo4j-labs/neo4jaura/latest](https://registry.terraform.io/providers/neo4j-labs/neo4jaura/latest) |
 | Terraform plugin framework | [https://developer.hashicorp.com/terraform/plugin/framework](https://developer.hashicorp.com/terraform/plugin/framework) |
 | Terraform provider scaffolding framework | [https://github.com/hashicorp/terraform-provider-scaffolding-framework](https://github.com/hashicorp/terraform-provider-scaffolding-framework) |
-| Aura API specifcation | [https://neo4j.com/docs/aura/platform/api/specification/](https://neo4j.com/docs/aura/platform/api/specification/) |
-
-
+| Aura API specification | [https://neo4j.com/docs/aura/platform/api/specification/](https://neo4j.com/docs/aura/platform/api/specification/) |
