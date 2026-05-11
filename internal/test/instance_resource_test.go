@@ -430,6 +430,94 @@ resource "neo4jaura_instance" "this" {
 	})
 }
 
+// TestAcc_instance_pause_resume verifies the three-step pause/resume lifecycle:
+//  1. Create a free-tier instance (reaches "running" state).
+//  2. Update status to "paused" → triggers PauseInstanceById + WaitUntilInstanceIsInState.
+//  3. Update status back to "running" → triggers ResumeInstanceById + WaitUntilInstanceIsInState.
+//
+// This exercises handlePauseInstance and handleResumeInstance in the mock server,
+// as well as the pauseInstance and resumeInstance helpers in InstanceResource.
+// Do NOT call t.Parallel() — this test calls testMockServer.Reset().
+func TestAcc_instance_pause_resume(t *testing.T) {
+	testMockServer.Reset()
+
+	configRunning := fmt.Sprintf(`
+%[1]s
+data "neo4jaura_projects" "this" {}
+
+resource "neo4jaura_instance" "this" {
+  name           = "PauseResumeInstance"
+  cloud_provider = "gcp"
+  region         = "europe-west1"
+  memory         = "1GB"
+  type           = "free-db"
+  project_id     = data.neo4jaura_projects.this.projects.0.id
+  status         = "running"
+}
+`, defaultProviderConfig)
+
+	configPaused := fmt.Sprintf(`
+%[1]s
+data "neo4jaura_projects" "this" {}
+
+resource "neo4jaura_instance" "this" {
+  name           = "PauseResumeInstance"
+  cloud_provider = "gcp"
+  region         = "europe-west1"
+  memory         = "1GB"
+  type           = "free-db"
+  project_id     = data.neo4jaura_projects.this.projects.0.id
+  status         = "paused"
+}
+`, defaultProviderConfig)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckInstanceDestroyed(testMockServer),
+		Steps: []resource.TestStep{
+			{
+				// Step 1: create the instance; it should reach "running" state.
+				Config: configRunning,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("instance_id"),
+						knownvalue.StringFunc(nonEmptyString),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("status"),
+						knownvalue.StringExact(domain.InstanceStatusRunning),
+					),
+				},
+			},
+			{
+				// Step 2: update status to "paused" — exercises pauseInstance + PauseInstanceById.
+				Config: configPaused,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("status"),
+						knownvalue.StringExact(domain.InstanceStatusPaused),
+					),
+				},
+			},
+			{
+				// Step 3: resume back to "running" — exercises resumeInstance + ResumeInstanceById.
+				Config: configRunning,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("status"),
+						knownvalue.StringExact(domain.InstanceStatusRunning),
+					),
+				},
+			},
+		},
+	})
+}
+
 // TestAcc_instance_disappears verifies that when an instance is deleted
 // out-of-band (without going through Terraform), the post-apply refresh
 // produces a non-empty plan (recreation proposed) rather than erroring.

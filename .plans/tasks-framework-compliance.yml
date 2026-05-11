@@ -151,7 +151,7 @@ tasks:
       the instance reaches paused state. Add a third step that resumes it back to running.
       The mock server's handlePauseInstance and handleResumeInstance handlers must be
       exercised. Add a changelog entry.
-    status: in_progress
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "TestAcc_instance_pause_resume exists and passes with the mock server"
@@ -159,7 +159,7 @@ tasks:
       - "PauseInstanceById / ResumeInstanceById client coverage is non-zero"
       - "All mock-acceptance tests pass"
       - "Changelog entry present under .changes/unreleased/"
-    completed_at: null
+    completed_at: 2026-05-11T18:30:00Z
 
   - id: task-009
     title: "Improve snapshot datasource branch coverage (readMostRecentSnapshot, readSnapshotById)"

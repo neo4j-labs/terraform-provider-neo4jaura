@@ -152,3 +152,32 @@ Key Decisions:
 - TimestampAsTime empty string and non-RFC3339 format both expect errors (consistent with time.Parse behaviour)
 
 Next Task: All tasks complete
+
+================================================================================
+TASK-008: Add pause and resume instance acceptance tests
+Date: 2026-05-11T18:30:00Z
+================================================================================
+
+Summary:
+Added TestAcc_instance_pause_resume — a three-step acceptance test covering the full
+pause/resume lifecycle: create (running), pause (paused), resume (running). Also fixed
+handleGetInstance in the mock server so it only drives the creating→running transition
+when the current status is still "creating", preserving explicitly-set statuses (paused,
+running via resume) across subsequent GET calls.
+
+Files Changed:
+- internal/test/instance_resource_test.go (added TestAcc_instance_pause_resume)
+- internal/test/mock_server.go (fixed handleGetInstance state-machine condition)
+- .changes/unreleased/pause-resume-acceptance-tests.yaml (changelog entry)
+
+Key Decisions:
+- handleGetInstance state-machine condition changed from `count >= 2` to
+  `count >= 2 && status == "creating"` so that pause/resume status changes
+  are preserved across WaitUntilInstanceIsInState polling calls
+- The test uses `status = "running"` explicitly in configRunning so both the
+  create and resume steps use the same config without relying on computed defaults
+- Three-step test structure reuses the same testMockServer shared instance;
+  no t.Parallel() per project conventions
+- CheckDestroy uses testAccCheckInstanceDestroyed (mock-based) as for all instance tests
+
+Next Task: task-007 or task-009
