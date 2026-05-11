@@ -41,7 +41,8 @@ type ProjectsDataSource struct {
 }
 
 type ProjectsModel struct {
-	Projects types.List `tfsdk:"projects"`
+	Id       types.String `tfsdk:"id"`
+	Projects types.List   `tfsdk:"projects"`
 }
 
 type ShortProjectModel struct {
@@ -74,6 +75,11 @@ func (ds *ProjectsDataSource) Schema(ctx context.Context, request datasource.Sch
 		MarkdownDescription: "Aura Projects",
 		Description:         "Aura Projects",
 		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				MarkdownDescription: "Placeholder identifier for the projects data source",
+				Description:         "Placeholder identifier for the projects data source",
+				Computed:            true,
+			},
 			"projects": schema.ListNestedAttribute{
 				MarkdownDescription: "List of all projects",
 				Description:         "List of all projects",
@@ -128,6 +134,7 @@ func (ds *ProjectsDataSource) Read(ctx context.Context, request datasource.ReadR
 	}
 
 	data.Projects = tenantsValue
+	data.Id = types.StringValue("projects")
 
 	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
 }

@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'Add objectplanmodifier.RequiresReplace() to the source block on neo4jaura_instance so changing source after creation triggers replacement; add root id attribute to neo4jaura_projects data source set to "projects"'
+time: 2026-05-11T00:00:00Z

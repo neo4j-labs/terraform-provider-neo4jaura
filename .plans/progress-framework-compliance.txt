@@ -47,3 +47,21 @@ Key Decisions:
 - Provider does not error when credentials are missing entirely; that error will surface at the first API call (consistent with how AURA_BASE_URL works)
 
 Next Task: task-004
+
+================================================================================
+TASK-002: Add RequiresReplace to source block and root id to projects datasource
+Date: 2026-05-11T16:05:00Z
+================================================================================
+Summary: Added objectplanmodifier.RequiresReplace() to the source SingleNestedAttribute
+on InstanceResource so changing source after creation triggers resource replacement.
+Added a root id Computed attribute to neo4jaura_projects data source schema, set to
+the constant "projects" in Read, satisfying HashiCorp data source conventions.
+Files Changed:
+- internal/resource/instance.go (added objectplanmodifier import + RequiresReplace on source block)
+- internal/datasource/projects.go (added Id field to ProjectsModel, root id schema attr, data.Id assignment in Read)
+- .changes/unreleased/source-requires-replace-projects-id.yaml (changelog entry)
+Key Decisions:
+- objectplanmodifier.RequiresReplace() added via PlanModifiers: []planmodifier.Object{...} on the SingleNestedAttribute
+- Root id uses the string literal "projects" (constant, not tied to any API concept) per HashiCorp data source conventions
+- Id field in ProjectsModel uses Go convention (Id not ID) with tfsdk:"id" tag
+Next Task: task-005

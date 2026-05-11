@@ -31,7 +31,7 @@ tasks:
       rather than a no-op update. Also add a root id Computed attribute to the
       neo4jaura_projects data source schema and set it to the constant "projects" in Read,
       satisfying HashiCorp data source conventions. Add a changelog entry for both fixes.
-    status: in_progress
+    status: completed
     dependencies: []
     acceptance_criteria:
       - "Changing the source block on an existing neo4jaura_instance shows 'forces replacement' in terraform plan"
@@ -39,7 +39,7 @@ tasks:
       - "neo4jaura_projects Read sets id to the string \"projects\" in state"
       - "All mock-acceptance tests pass"
       - "Changelog entry present under .changes/unreleased/"
-    completed_at: null
+    completed_at: 2026-05-11T16:05:00Z
 
   - id: task-003
     title: "Add env var fallback for credentials and fix registry address (REQ-F-006, F-010)"
