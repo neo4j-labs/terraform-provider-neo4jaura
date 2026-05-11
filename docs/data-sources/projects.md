@@ -17,6 +17,7 @@ Aura Projects
 
 ### Read-Only
 
+- `id` (String) Placeholder identifier for the projects data source
 - `projects` (Attributes List) List of all projects (see [below for nested schema](#nestedatt--projects))
 
 <a id="nestedatt--projects"></a>

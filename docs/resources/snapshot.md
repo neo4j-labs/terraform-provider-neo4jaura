@@ -3,12 +3,12 @@
 page_title: "neo4jaura_snapshot Resource - neo4jaura"
 subcategory: ""
 description: |-
-  Resource for an instance snapshot
+  Resource for an instance snapshot. Snapshots cannot be deleted via the Aura API; running terraform destroy removes the snapshot from Terraform state but the snapshot will continue to exist in Aura.
 ---
 
 # neo4jaura_snapshot (Resource)
 
-Resource for an instance snapshot
+Resource for an instance snapshot. Snapshots cannot be deleted via the Aura API; running `terraform destroy` removes the snapshot from Terraform state but the snapshot will continue to exist in Aura.
 
 
 

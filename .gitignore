@@ -4,3 +4,5 @@ build/neo4j_aura
 .envrc
 .env
 .DS_Store
+examples/00-projects-data-source/run.sh
+examples/01-create-and-delete-instance/run.sh
