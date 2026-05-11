@@ -1,3 +1,0 @@
-kind: Fixed
-body: 'InstanceResource.Update now refreshes all computed fields from the API after mutations instead of storing plan values; all AddError calls in resource and datasource code include the relevant resource ID; HasError() guards added after every resp.State.Set and resp.State.SetAttribute call'
-time: 2026-05-11T00:00:00Z

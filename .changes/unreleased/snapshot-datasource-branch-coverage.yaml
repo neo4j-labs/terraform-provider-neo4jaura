@@ -1,3 +1,0 @@
-kind: Added
-body: 'Add acceptance tests for snapshot datasource readSnapshotById and readMostRecentSnapshot branches, including isInstanceRecentlyCreated guard path'
-time: 2026-05-11T00:00:00Z

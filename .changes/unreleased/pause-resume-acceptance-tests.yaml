@@ -1,3 +1,0 @@
-kind: Added
-body: 'Add TestAcc_instance_pause_resume acceptance test covering pause and resume lifecycle; fix mock server handleGetInstance to preserve status after explicit pause/resume transitions'
-time: 2026-05-11T00:00:00Z
