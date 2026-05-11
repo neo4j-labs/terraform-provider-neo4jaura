@@ -26,7 +26,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
-// TestLive_instance_lifecycle creates a real free-tier Aura instance, verifies
+// TestLive_instance_lifecycle creates a real professional tier Aura instance, verifies
 // that it reaches running state with the expected attributes, renames it
 // in-place, and finally destroys it. This is the core end-to-end smoke test.
 //
@@ -84,7 +84,7 @@ func TestLive_instance_lifecycle(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"neo4jaura_instance.this",
 						tfjsonpath.New("type"),
-						knownvalue.StringExact("free-db"),
+						knownvalue.StringExact("professional-db"),
 					),
 				},
 			},
@@ -108,7 +108,7 @@ func TestLive_instance_lifecycle(t *testing.T) {
 	})
 }
 
-// TestLive_instance_pause_resume creates a free-tier instance, pauses it,
+// TestLive_instance_pause_resume creates a pro-tier instance, pauses it,
 // verifies the paused state and that connection_url is preserved in Terraform
 // state, then resumes it back to running.
 //
@@ -123,7 +123,7 @@ resource "neo4jaura_instance" "this" {
   cloud_provider = "gcp"
   region         = "europe-west1"
   memory         = "1GB"
-  type           = "free-db"
+  type           = "professional-db"
   project_id     = "` + projectID + `"
   status         = "running"
 }
@@ -134,7 +134,7 @@ resource "neo4jaura_instance" "this" {
   cloud_provider = "gcp"
   region         = "europe-west1"
   memory         = "1GB"
-  type           = "free-db"
+  type           = "professional-db"
   project_id     = "` + projectID + `"
   status         = "paused"
 }

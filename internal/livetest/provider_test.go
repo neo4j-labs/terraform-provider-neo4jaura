@@ -88,7 +88,7 @@ resource "neo4jaura_instance" "this" {
   cloud_provider = "gcp"
   region         = "europe-west1"
   memory         = "1GB"
-  type           = "free-db"
+  type           = "professional-db"
   project_id     = "%s"
 }
 `, liveProviderConfig, name, liveProjectID(t))
