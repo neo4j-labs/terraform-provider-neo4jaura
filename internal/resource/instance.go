@@ -797,10 +797,14 @@ func (r *InstanceResource) Delete(ctx context.Context, request resource.DeleteRe
 	}
 
 	_, err := r.auraApi.DeleteInstanceById(ctx, data.InstanceId.ValueString())
-	// todo should we wait until instance is deleted
 	if err != nil {
+		// If the instance is already gone, treat as success (idempotent delete).
+		if errors.Is(err, client.ErrNotFound) {
+			return
+		}
 		response.Diagnostics.AddError("Error while deleting an instance",
 			fmt.Sprintf("instance_id=%s: %s", data.InstanceId.ValueString(), err.Error()))
+		return
 	}
 	err = r.auraApi.WaitUntilInstanceIsDeleted(ctx, data.InstanceId.ValueString())
 	if err != nil {

@@ -92,4 +92,36 @@ Key Decisions:
 - HasError() guards after State.Set use early return (not os.Exit or panic) — this is the correct terraform-plugin-framework pattern
 - At Create time, instance_id is available from postInstanceResp.Data.Id before the WaitUntilInstanceIsInState call, so it can appear in all subsequent error messages
 
-Next Task: task-005
+Next Task: task-006
+
+================================================================================
+TASK-005: Add update test, disappears test, PreCheck, and CheckDestroy
+Date: 2026-05-11T16:45:00Z
+================================================================================
+
+Summary:
+Added testAccPreCheck (wired into every resource.TestCase), testAccCheckInstanceDestroyed
+(a factory that checks the mock server, wired into every instance TestCase), and two new
+tests: TestAcc_instance_update (two-step name change, in-place) and
+TestAcc_instance_disappears (out-of-band delete via mock, ExpectNonEmptyPlan). Also made
+Delete idempotent by treating ErrNotFound as success.
+
+Files Changed:
+- internal/test/provider_test.go (added testAccPreCheck; added terraform-plugin-testing/helper/resource import)
+- internal/test/assertions.go (added testAccCheckInstanceDestroyed factory + deleteInstanceOutOfBand helper; added terraform import)
+- internal/test/mock_server.go (added InstanceExists and DeleteInstance methods)
+- internal/test/instance_resource_test.go (wired PreCheck+CheckDestroy into all TestCases; added TestAcc_instance_update and TestAcc_instance_disappears)
+- internal/test/projects_test.go (wired PreCheck)
+- internal/test/snapshot_resource_test.go (wired PreCheck)
+- internal/test/snapshot_test.go (wired PreCheck)
+- internal/client/aura_api.go (DeleteInstanceById returns ErrNotFound on HTTP 404)
+- internal/resource/instance.go (Delete treats ErrNotFound as success; added early return after non-404 error)
+- .changes/unreleased/acceptance-test-precheck-checkdestroy-update-disappears.yaml (changelog entry)
+
+Key Decisions:
+- testAccCheckInstanceDestroyed is a factory func(*MockServer) so it can be defined in non-test assertions.go while still accessing mock state; call sites pass testMockServer
+- CheckDestroy receives state *before* destroy (by framework design), so we look up instance_id from attributes and query the mock rather than checking Terraform state emptiness
+- InstanceExists / DeleteInstance are public methods on MockServer protected by mu, safe for concurrent sub-tests
+- deleteInstanceOutOfBand reads instance_id from state attributes (not rs.Primary.ID which is always "id-attribute-not-set" for this resource)
+- TestAcc_instance_disappears uses a single step with ExpectNonEmptyPlan: true — the out-of-band delete in Check triggers a non-empty post-step refresh plan; no second step needed
+- Delete idempotency (ErrNotFound → return) is required so the disappears test's post-test cleanup doesn't fail when Terraform tries to destroy an already-gone instance

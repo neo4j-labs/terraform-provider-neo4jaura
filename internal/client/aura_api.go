@@ -105,6 +105,9 @@ func (api *AuraApi) DeleteInstanceById(ctx context.Context, id string) (GetInsta
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}
+	if status == 404 {
+		return GetInstanceResponse{}, fmt.Errorf("instance %s not found: %w", id, ErrNotFound)
+	}
 	if status != 202 {
 		return GetInstanceResponse{}, fmt.Errorf("aura error: Status: %+v. Response: %+v", status, string(payload))
 	}

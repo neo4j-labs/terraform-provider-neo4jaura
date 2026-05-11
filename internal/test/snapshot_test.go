@@ -61,6 +61,7 @@ func TestAcc_can_read_snapshot_datasource(t *testing.T) {
 	})
 
 	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{

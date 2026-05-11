@@ -87,7 +87,7 @@ tasks:
       on task-001 landing first). Add a testAccPreCheck helper and wire PreCheck into every
       resource.TestCase. Add a testAccCheckInstanceDestroyed CheckDestroy function and wire it
       into every applicable TestCase. Add a changelog entry.
-    status: pending
+    status: completed
     dependencies:
       - task-001
     acceptance_criteria:
@@ -97,7 +97,7 @@ tasks:
       - "Every applicable resource.TestCase has a CheckDestroy field"
       - "All mock-acceptance tests pass"
       - "Changelog entry present under .changes/unreleased/"
-    completed_at: null
+    completed_at: 2026-05-11T16:45:00Z
 
   - id: task-006
     title: "Add golangci-lint and tfproviderlint CI job to build.yml (REQ-F-015)"

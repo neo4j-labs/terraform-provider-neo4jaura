@@ -111,6 +111,27 @@ func (ms *MockServer) SeedInstance(instance client.GetInstanceData) {
 	}
 }
 
+// InstanceExists reports whether an instance with the given ID is currently
+// present in the mock server's state store. Used by testAccCheckInstanceDestroyed
+// to verify the instance was actually deleted.
+func (ms *MockServer) InstanceExists(id string) bool {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	_, ok := ms.instances[id]
+	return ok
+}
+
+// DeleteInstance removes an instance from the mock's state store out-of-band,
+// simulating an external deletion without going through the Terraform delete path.
+// After calling this, GET /v1/instances/{id} returns 404, which triggers
+// resp.State.RemoveResource in InstanceResource.Read and causes Terraform to
+// plan recreation on the next apply.
+func (ms *MockServer) DeleteInstance(id string) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	delete(ms.instances, id)
+}
+
 // SeedSnapshot inserts a snapshot into the mock's state store. The snapshot
 // is available immediately via GET /v1/instances/{instanceId}/snapshots/{snapshotId}.
 // The getCount is initialised to 1 so that the first GET returns the seeded

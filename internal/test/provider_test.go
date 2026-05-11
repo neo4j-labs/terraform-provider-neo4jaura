@@ -23,6 +23,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/provider"
 )
 
@@ -45,6 +46,17 @@ func TestMain(m *testing.M) {
 
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 	"neo4jaura": providerserver.NewProtocol6WithError(provider.New("test")()),
+}
+
+// testAccPreCheck is wired into every resource.TestCase's PreCheck field.
+// For mock-acceptance tests the mock server requires no real credentials, so
+// this is a lightweight check that TF_ACC is set (the helper/resource package
+// also checks this, but having an explicit PreCheck is a HashiCorp convention).
+func testAccPreCheck(t *testing.T) {
+	t.Helper()
+	if v := os.Getenv(resource.EnvTfAcc); v == "" {
+		t.Skipf("Acceptance tests skipped unless env '%s' set", resource.EnvTfAcc)
+	}
 }
 
 const defaultProviderConfig = `
