@@ -1,5 +1,7 @@
 .idea
 *.iml
+.vscode/
+.kiro/
 build/neo4j_aura
 .envrc
 .env
