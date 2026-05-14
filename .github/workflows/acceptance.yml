@@ -26,5 +26,5 @@ jobs:
       - run: make acceptance
         env:
           AURA_PROJECT_ID: ${{ vars.AURA_PROJECT_ID }}
-          TF_VAR_client_id: ${{ secrets.AURA_CLIENT_ID }}
-          TF_VAR_client_secret: ${{ secrets.AURA_CLIENT_SECRET }}
+          AURA_CLIENT_ID: ${{ secrets.AURA_CLIENT_ID }}
+          AURA_CLIENT_SECRET: ${{ secrets.AURA_CLIENT_SECRET }}

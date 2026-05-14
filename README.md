@@ -158,7 +158,7 @@ make test
 make mock-acceptance
 
 # Acceptance tests against the live Aura API (requires credentials)
-make acceptance   # needs AURA_CLIENT_ID / AURA_CLIENT_SECRET set
+make live-acceptance   # needs AURA_CLIENT_ID / AURA_CLIENT_SECRET set
 ```
 
 ### Changelog entries

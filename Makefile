@@ -18,8 +18,5 @@ test:
 mock-acceptance:
 	TF_ACC=1 go run gotest.tools/gotestsum@latest --format testname -- -cover -timeout=2m ./internal/test/...
 
-acceptance:
-	TF_ACC=1 go run gotest.tools/gotestsum@latest --format testname -- -cover -timeout=1h -parallel=10 ./...
-
 live-acceptance:
 	./live_acceptance.sh

@@ -21,7 +21,7 @@ make test
 make mock-acceptance
 
 # Acceptance tests against live Aura API (requires credentials)
-make acceptance   # needs AURA_CLIENT_ID / AURA_CLIENT_SECRET / TF_VAR_* set
+make live-acceptance   # needs AURA_CLIENT_ID / AURA_CLIENT_SECRET / TF_VAR_* set
 
 # Run a single acceptance test by name
 TF_ACC=1 go test ./internal/test/... -run TestInstanceResource_basic -v -timeout 2m
