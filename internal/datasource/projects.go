@@ -72,8 +72,8 @@ func (ds *ProjectsDataSource) Metadata(ctx context.Context, request datasource.M
 
 func (ds *ProjectsDataSource) Schema(ctx context.Context, request datasource.SchemaRequest, response *datasource.SchemaResponse) {
 	response.Schema = schema.Schema{
-		MarkdownDescription: "Aura Projects",
-		Description:         "Aura Projects",
+		MarkdownDescription: "Aura Projects.",
+		Description:         "Aura Projects.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				MarkdownDescription: "Placeholder identifier for the projects data source",
@@ -81,20 +81,20 @@ func (ds *ProjectsDataSource) Schema(ctx context.Context, request datasource.Sch
 				Computed:            true,
 			},
 			"projects": schema.ListNestedAttribute{
-				MarkdownDescription: "List of all projects",
-				Description:         "List of all projects",
+				MarkdownDescription: "The list of all available projects.",
+				Description:         "The list of all available projects.",
 				Computed:            true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"id": schema.StringAttribute{
-							MarkdownDescription: "Id of the project",
-							Description:         "Id of the project",
+							MarkdownDescription: "The unique identifier of the project.",
+							Description:         "The unique identifier of the project.",
 							Computed:            true,
 						},
 						"name": schema.StringAttribute{
+							MarkdownDescription: "The name of the project.",
+							Description:         "The name of the project.",
 							Computed:            true,
-							MarkdownDescription: "Name of the project",
-							Description:         "Name of the project",
 						},
 					},
 				},

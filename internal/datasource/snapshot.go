@@ -61,38 +61,38 @@ func (ds *SnapshotDataSource) Metadata(ctx context.Context, request datasource.M
 
 func (ds *SnapshotDataSource) Schema(ctx context.Context, request datasource.SchemaRequest, response *datasource.SchemaResponse) {
 	response.Schema = schema.Schema{
-		MarkdownDescription: "Snapshot of an instance",
-		Description:         "Snapshot of an instance",
+		MarkdownDescription: "Aura Instance Snapshot data source.",
+		Description:         "Aura Instance Snapshot data source.",
 		Attributes: map[string]schema.Attribute{
 			"instance_id": schema.StringAttribute{
-				MarkdownDescription: "Id of the instance",
-				Description:         "Id of the instance",
+				MarkdownDescription: "The unique identifier of the instance.",
+				Description:         "The unique identifier of the instance.",
 				Required:            true,
 			},
 			"snapshot_id": schema.StringAttribute{
-				MarkdownDescription: "Id of the snapshot",
-				Description:         "Id of the snapshot",
+				MarkdownDescription: "The unique identifier of the snapshot.",
+				Description:         "The unique identifier of the snapshot.",
 				Optional:            true,
 				Computed:            true,
 			},
 			"profile": schema.StringAttribute{
-				MarkdownDescription: "Profile of the snapshot. One of [AddHoc, Scheduled]",
-				Description:         "Profile of the snapshot. One of [AddHoc, Scheduled]",
+				MarkdownDescription: "The profile of the snapshot. One of: `AdHoc`, `Scheduled`.",
+				Description:         "The profile of the snapshot. One of [AdHoc, Scheduled]",
 				Computed:            true,
 			},
 			"status": schema.StringAttribute{
-				MarkdownDescription: "Status of the snapshot. One of [Completed, InProgress, Failed, Pending]",
-				Description:         "Status of the snapshot. One of [Completed, InProgress, Failed, Pending]",
+				MarkdownDescription: "The status of the snapshot. One of: `Completed`, `InProgress`, `Failed`, `Pending`.",
+				Description:         "The status of the snapshot. One of [Completed, InProgress, Failed, Pending]",
 				Computed:            true,
 			},
 			"timestamp": schema.StringAttribute{
-				MarkdownDescription: "Timestamp of the snapshot",
-				Description:         "Timestamp of the snapshot",
+				MarkdownDescription: "The timestamp when the snapshot was created.",
+				Description:         "The timestamp when the snapshot was created.",
 				Computed:            true,
 			},
 			"most_recent": schema.BoolAttribute{
-				MarkdownDescription: "Flag indicated if the most recent snapshot should be returned",
-				Description:         "Flag indicated if the most recent snapshot should be returned",
+				MarkdownDescription: "Whether the most recent snapshot should be returned.",
+				Description:         "Whether the most recent snapshot should be returned.",
 				Optional:            true,
 			},
 		},

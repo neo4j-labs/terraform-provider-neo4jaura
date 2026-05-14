@@ -3,12 +3,12 @@
 page_title: "neo4jaura_projects Data Source - neo4jaura"
 subcategory: ""
 description: |-
-  Aura Projects
+  Aura Projects.
 ---
 
 # neo4jaura_projects (Data Source)
 
-Aura Projects
+Aura Projects.
 
 ## Example Usage
 
@@ -25,13 +25,12 @@ output "projects" {
 
 ### Read-Only
 
-- `id` (String) Placeholder identifier for the projects data source
-- `projects` (Attributes List) List of all projects (see [below for nested schema](#nestedatt--projects))
+- `projects` (Attributes List) The list of all available projects. (see [below for nested schema](#nestedatt--projects))
 
 <a id="nestedatt--projects"></a>
 ### Nested Schema for `projects`
 
 Read-Only:
 
-- `id` (String) Id of the project
-- `name` (String) Name of the project
+- `id` (String) The unique identifier of the project.
+- `name` (String) The name of the project.

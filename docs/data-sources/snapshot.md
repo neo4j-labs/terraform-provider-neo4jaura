@@ -3,12 +3,12 @@
 page_title: "neo4jaura_snapshot Data Source - neo4jaura"
 subcategory: ""
 description: |-
-  Snapshot of an instance
+  Aura Instance Snapshot data source.
 ---
 
 # neo4jaura_snapshot (Data Source)
 
-Snapshot of an instance
+Aura Instance Snapshot data source.
 
 ## Example Usage
 
@@ -32,15 +32,15 @@ output "snapshot_id" {
 
 ### Required
 
-- `instance_id` (String) Id of the instance
+- `instance_id` (String) The unique identifier of the instance.
 
 ### Optional
 
-- `most_recent` (Boolean) Flag indicated if the most recent snapshot should be returned
-- `snapshot_id` (String) Id of the snapshot
+- `most_recent` (Boolean) Whether the most recent snapshot should be returned.
+- `snapshot_id` (String) The unique identifier of the snapshot.
 
 ### Read-Only
 
-- `profile` (String) Profile of the snapshot. One of [AddHoc, Scheduled]
-- `status` (String) Status of the snapshot. One of [Completed, InProgress, Failed, Pending]
-- `timestamp` (String) Timestamp of the snapshot
+- `profile` (String) The profile of the snapshot. One of: `AdHoc`, `Scheduled`.
+- `status` (String) The status of the snapshot. One of: `Completed`, `InProgress`, `Failed`, `Pending`.
+- `timestamp` (String) The timestamp when the snapshot was created.

@@ -3,12 +3,12 @@
 page_title: "neo4jaura_instance Resource - neo4jaura"
 subcategory: ""
 description: |-
-  Aura instance
+  Aura Instance
 ---
 
 # neo4jaura_instance (Resource)
 
-Aura instance
+Aura Instance
 
 ## Example Usage
 
@@ -141,42 +141,42 @@ For databases with valuable data, use the [Instance With Destroy Protection](#in
 
 ### Required
 
-- `name` (String) Name of the instance
-- `project_id` (String) Id of the project
-- `region` (String) Region of the instance
+- `name` (String) The name of the instance.
+- `project_id` (String) The unique identifier of the project.
+- `region` (String) The region where the instance is located.
 
 ### Optional
 
-- `cdc_enrichment_mode` (String) CDC enrichment mode. One of [OFF, DIFF, FULL]
-- `cloud_provider` (String) Cloud provider. One of [gcp, aws, azure]
+- `cdc_enrichment_mode` (String) CDC enrichment mode. One of: `OFF`, `DIFF`, `FULL`.
+- `cloud_provider` (String) Cloud provider. One of: `gcp`, `aws`, `azure`.
 - `graph_analytics_plugin` (Boolean) The graph analytics plugin configuration of the instance.
-- `memory` (String) Memory allocated for the instance. One of [1GB,2GB,4GB,8GB,16GB,24GB,32GB,48GB,64GB,128GB,192GB,256GB,384GB,512GB]
-- `secondaries_count` (Number) The number of secondaries in an Instance. (VDC only)
-- `source` (Attributes) Information about source for the instance (see [below for nested schema](#nestedatt--source))
-- `status` (String) Status of the instance. One of [creating, destroying, running, pausing, paused, suspending, suspended, resuming, loading, loading failed, restoring, updating, overwriting]
-- `storage` (String) Storage allocated to the instance. One of [2GB, 4GB, 8GB, 16GB, 32GB, 48GB, 64GB, 96GB, 128GB, 192GB, 256GB, 384GB, 512GB, 768GB, 1024GB, 1536GB, 2048GB]
-- `type` (String) Type of the instance. Depend on your project configuration. One of [enterprise-db, enterprise-ds, professional-db, professional-ds, free-db, business-critical]
+- `memory` (String) Memory allocated for the instance. One of: `1GB`, `2GB`, `4GB`, `8GB`, `16GB`, `24GB`, `32GB`, `48GB`, `64GB`, `128GB`, `192GB`, `256GB`, `384GB`, `512GB`.
+- `secondaries_count` (Number) The number of secondaries in the instance (VDC only).
+- `source` (Attributes) The source from which the instance is created. (see [below for nested schema](#nestedatt--source))
+- `status` (String) The status of the instance. One of: `creating`, `destroying`, `running`, `pausing`, `paused`, `suspending`, `suspended`, `resuming`, `loading`, `loading failed`, `restoring`, `updating`, `overwriting`.
+- `storage` (String) The storage allocated to the instance. One of: `2GB`, `4GB`, `8GB`, `16GB`, `32GB`, `48GB`, `64GB`, `96GB`, `128GB`, `192GB`, `256GB`, `384GB`, `512GB`, `768GB`, `1024GB`, `1536GB`, `2048GB`.
+- `type` (String) Type of the instance. Depend on your project configuration. One of: `enterprise-db`, `enterprise-ds`, `professional-db`, `professional-ds`, `free-db`, `business-critical`.
 - `vector_optimized` (Boolean) The vector optimization configuration of the instance
-- `version` (String) Version of Neo4j. One of [5]
+- `version` (String) Version of Neo4j. One of: `5`.
 
 ### Read-Only
 
-- `connection_url` (String) Bolt connection URL to the instance database
-- `created_at` (String) The timestamp when the instance was created
-- `graph_nodes` (Number) Number of nodes in the graph (free-db only)
-- `graph_relationships` (Number) Number of relationships in the graph (only for free-db)
-- `instance_id` (String) Id of the instance
-- `metrics_integration_url` (String) Metrics integration endpoint URL
-- `password` (String, Sensitive) Password of the instance database
-- `username` (String) Username of the instance database
+- `connection_url` (String) The Bolt connection URL for the instance database.
+- `created_at` (String) The timestamp when the instance was created.
+- `graph_nodes` (Number) The number of nodes in the graph (free-db only).
+- `graph_relationships` (Number) The number of relationships in the graph (free-db only).
+- `instance_id` (String) The unique identifier of the instance.
+- `metrics_integration_url` (String) The endpoint URL for metrics integration.
+- `password` (String, Sensitive) The password for the instance database.
+- `username` (String) The username for the instance database.
 
 <a id="nestedatt--source"></a>
 ### Nested Schema for `source`
 
 Required:
 
-- `instance_id` (String) Instance Id that contains the source database of the instance
+- `instance_id` (String) The unique identifier of the source instance.
 
 Optional:
 
-- `snapshot_id` (String) Snapshot Id of the instance containing the source database of the instance
+- `snapshot_id` (String) The unique identifier of the snapshot from the source instance.
