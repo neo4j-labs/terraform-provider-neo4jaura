@@ -463,7 +463,7 @@ func (ms *MockServer) handlePostSnapshot(w http.ResponseWriter, _ *http.Request,
 	}
 	ms.mu.Unlock()
 
-	writeJSON(w, http.StatusOK, client.PostSnapshotResponse{
+	writeJSON(w, http.StatusAccepted, client.PostSnapshotResponse{
 		Data: client.PostSnapshotData{SnapshotId: snapshotId},
 	})
 }
