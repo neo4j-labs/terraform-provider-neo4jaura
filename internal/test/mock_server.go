@@ -289,14 +289,17 @@ func (ms *MockServer) handlePostInstance(w http.ResponseWriter, r *http.Request)
 	ms.mu.Lock()
 	ms.instances[id] = &mockInstanceState{
 		instance: client.GetInstanceData{
-			Id:            id,
-			Name:          req.Name,
-			Status:        domain.InstanceStatusCreating,
-			TenantId:      req.TenantId,
-			CloudProvider: req.CloudProvider,
-			Region:        req.Region,
-			Type:          req.Type,
-			Memory:        req.Memory,
+			Id:                   id,
+			Name:                 req.Name,
+			Status:               domain.InstanceStatusCreating,
+			TenantId:             req.TenantId,
+			CloudProvider:        req.CloudProvider,
+			Region:               req.Region,
+			Type:                 req.Type,
+			Memory:               req.Memory,
+			Storage:              req.Storage,
+			VectorOptimized:      req.VectorOptimized,
+			GraphAnalyticsPlugin: req.GraphAnalyticsPlugin,
 		},
 		getCount: 0,
 	}
@@ -367,8 +370,8 @@ func (ms *MockServer) handleDeleteInstance(w http.ResponseWriter, _ *http.Reques
 	writeJSON(w, http.StatusAccepted, client.GetInstanceResponse{Data: snap})
 }
 
-// handlePatchInstance updates mutable fields (name, memory, cdc_enrichment_mode,
-// secondaries_count) and returns 202 with the updated GetInstanceResponse.
+// handlePatchInstance updates mutable instance fields and returns 202 with the
+// updated GetInstanceResponse.
 func (ms *MockServer) handlePatchInstance(w http.ResponseWriter, r *http.Request, id string) {
 	var req client.PatchInstanceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -389,12 +392,21 @@ func (ms *MockServer) handlePatchInstance(w http.ResponseWriter, r *http.Request
 	if req.Memory != nil {
 		state.instance.Memory = *req.Memory
 	}
+	if req.Storage != nil {
+		state.instance.Storage = req.Storage
+	}
 	if req.CdcEnrichmentMode != nil {
 		state.instance.CdcEnrichmentMode = req.CdcEnrichmentMode
 	}
 	if req.SecondariesCount != nil {
 		v := int(*req.SecondariesCount)
 		state.instance.SecondariesCount = &v
+	}
+	if req.VectorOptimized != nil {
+		state.instance.VectorOptimized = req.VectorOptimized
+	}
+	if req.GraphAnalyticsPlugin != nil {
+		state.instance.GraphAnalyticsPlugin = req.GraphAnalyticsPlugin
 	}
 	snap := state.instance
 	ms.mu.Unlock()

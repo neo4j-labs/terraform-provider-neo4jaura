@@ -43,7 +43,7 @@ import (
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/util"
 )
 
-// Ensure resource defined types fully satisfy framework interfaces.
+// Ensure resource defines types fully satisfy framework interfaces.
 var (
 	_ resource.Resource                = &InstanceResource{}
 	_ resource.ResourceWithConfigure   = &InstanceResource{}
@@ -430,7 +430,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	}
 
 	// CDC enrichment mode and secondaries_count must be set via PATCH after instance creation
-	// (POST /instances may not apply or return these; PATCH after instance is running applies them)
+	// (POST /instances may not apply or return these; PATCH after the instance is running applies them)
 	instanceType := data.Type.ValueString()
 	needsCdcPatch := !data.CdcEnrichmentMode.IsNull() && (instanceType == domain.InstanceTypeBusinessCritical || instanceType == domain.InstanceTypeEnterpriseDb || instanceType == domain.InstanceTypeEnterpriseDs)
 	needsSecondariesPatch := !data.SecondariesCount.IsNull() && (instanceType == domain.InstanceTypeBusinessCritical || instanceType == domain.InstanceTypeEnterpriseDb)
@@ -522,7 +522,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 
 	tflog.Debug(ctx, fmt.Sprintf("Instance %s is running", postInstanceResp.Data.Id))
 
-	// Pausing new instance
+	// Pausing a new instance
 	if strings.ToLower(requestedStatus.ValueString()) == domain.InstanceStatusPaused {
 		diagError := r.pauseInstance(ctx, data.InstanceId.ValueString())
 		if diagError.IsNotEmpty() {
@@ -563,7 +563,7 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 	stateData.Memory = types.StringValue(instance.Data.Memory)
 	stateData.Type = types.StringValue(instance.Data.Type)
 	stateData.CloudProvider = types.StringValue(instance.Data.CloudProvider)
-	// Aura API returns connection_url="" for paused instances; preserve the prior state value.
+
 	if instance.Data.ConnectionUrl != "" {
 		stateData.ConnectionUrl = types.StringValue(instance.Data.ConnectionUrl)
 	}
@@ -651,52 +651,78 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 		}
 	}
 
-	// Regular inplace update (name, memory, secondaries_count)
-	planNameOrMemoryChanged := !plan.Name.Equal(state.Name) || !plan.Memory.Equal(state.Memory)
+	// Regular inplace update
+	planNameChanged := !plan.Name.Equal(state.Name)
+	planMemoryChanged := !plan.Memory.Equal(state.Memory)
+	planStorageChanged := !plan.Storage.Equal(state.Storage)
+	planCdcEnrichmentModeChanged := !plan.CdcEnrichmentMode.Equal(state.CdcEnrichmentMode)
 	planSecondariesChanged := !plan.SecondariesCount.Equal(state.SecondariesCount)
-	if planNameOrMemoryChanged || planSecondariesChanged {
-		tflog.Debug(ctx, fmt.Sprintf("Updating instance details: Name: %s -> %s. Memory: %s -> %s. SecondariesCount: %v -> %v",
+	planVectorOptimizedChanged := !plan.VectorOptimized.Equal(state.VectorOptimized)
+	planGraphAnalyticsPluginChanged := !plan.GraphAnalyticsPlugin.Equal(state.GraphAnalyticsPlugin)
+	if planNameChanged ||
+		planMemoryChanged ||
+		planStorageChanged ||
+		planCdcEnrichmentModeChanged ||
+		planVectorOptimizedChanged ||
+		planGraphAnalyticsPluginChanged ||
+		planSecondariesChanged {
+
+		tflog.Debug(ctx, fmt.Sprintf("Updating instance details: Name: %s -> %s. Memory: %s -> %s. Storage: %s -> %s. CdcEnrichmentMode: %s -> %s. SecondariesCount: %v -> %v. VectorOptimized: %t -> %t. GraphAnalyticsPlugin: %t -> %t",
 			state.Name.ValueString(), plan.Name.ValueString(), state.Memory.ValueString(), plan.Memory.ValueString(),
-			state.SecondariesCount.ValueInt32(), plan.SecondariesCount.ValueInt32()))
+			state.Storage.ValueString(), plan.Storage.ValueString(), state.CdcEnrichmentMode.ValueString(), plan.CdcEnrichmentMode.ValueString(),
+			state.SecondariesCount.ValueInt32(), plan.SecondariesCount.ValueInt32(), state.VectorOptimized.ValueBool(), plan.VectorOptimized.ValueBool(),
+			state.GraphAnalyticsPlugin.ValueBool(), plan.GraphAnalyticsPlugin.ValueBool()))
 
-		nameMemoryUpdateSucceeded := false
-		if planNameOrMemoryChanged {
-			patchRequest := client.PatchInstanceRequest{
-				Name:   plan.Name.ValueStringPointer(),
-				Memory: plan.Memory.ValueStringPointer(),
-			}
-			_, err := r.auraApi.PatchInstanceById(ctx, state.InstanceId.ValueString(), patchRequest)
-			if err != nil {
-				response.Diagnostics.AddError("Error while updating the instance name/memory",
-					fmt.Sprintf("instance_id=%s: %s", state.InstanceId.ValueString(), err.Error()))
-				return
-			}
-			nameMemoryUpdateSucceeded = true
+		patchRequest := client.PatchInstanceRequest{}
+		if planNameChanged {
+			patchRequest.Name = plan.Name.ValueStringPointer()
 		}
-
+		if planMemoryChanged {
+			patchRequest.Memory = plan.Memory.ValueStringPointer()
+		}
+		if planStorageChanged {
+			patchRequest.Storage = plan.Storage.ValueStringPointer()
+		}
+		if planCdcEnrichmentModeChanged {
+			patchRequest.CdcEnrichmentMode = plan.CdcEnrichmentMode.ValueStringPointer()
+		}
+		if planVectorOptimizedChanged {
+			patchRequest.VectorOptimized = plan.VectorOptimized.ValueBoolPointer()
+		}
+		if planGraphAnalyticsPluginChanged {
+			patchRequest.GraphAnalyticsPlugin = plan.GraphAnalyticsPlugin.ValueBoolPointer()
+		}
 		if planSecondariesChanged {
-			patchRequest := client.PatchInstanceRequest{
-				SecondariesCount: plan.SecondariesCount.ValueInt32Pointer(),
-			}
-			_, err := r.auraApi.PatchInstanceById(ctx, state.InstanceId.ValueString(), patchRequest)
-			if err != nil {
-				if nameMemoryUpdateSucceeded {
-					response.Diagnostics.AddError(
-						"Error while updating secondaries_count (name/memory update succeeded)",
-						fmt.Sprintf("instance_id=%s: the name/memory update succeeded but the secondaries_count update failed: %s", state.InstanceId.ValueString(), err.Error()),
-					)
-				} else {
-					response.Diagnostics.AddError("Error while updating the instance secondaries_count",
-						fmt.Sprintf("instance_id=%s: %s", state.InstanceId.ValueString(), err.Error()))
-				}
-				return
-			}
+			patchRequest.SecondariesCount = plan.SecondariesCount.ValueInt32Pointer()
+		}
+		_, err := r.auraApi.PatchInstanceById(ctx, state.InstanceId.ValueString(), patchRequest)
+		if err != nil {
+			response.Diagnostics.AddError("Error while updating the instance details", fmt.Sprintf("instance_id=%s: %s",
+				state.InstanceId.ValueString(), err.Error()))
+			return
 		}
 
-		_, err := r.auraApi.WaitUntilInstanceIsInState(ctx, plan.InstanceId.ValueString(), func(resp client.GetInstanceResponse) bool {
-			return resp.Data.Memory == plan.Memory.ValueString() &&
-				resp.Data.Name == plan.Name.ValueString() &&
-				(strings.ToLower(resp.Data.Status) == domain.InstanceStatusRunning || strings.ToLower(resp.Data.Status) == string(domain.InstanceStatusPaused))
+		_, err = r.auraApi.WaitUntilInstanceIsInState(ctx, plan.InstanceId.ValueString(), func(resp client.GetInstanceResponse) bool {
+			status := strings.ToLower(resp.Data.Status)
+			if status != domain.InstanceStatusRunning && status != domain.InstanceStatusPaused {
+				return false
+			}
+			if resp.Data.Memory != plan.Memory.ValueString() || resp.Data.Name != plan.Name.ValueString() {
+				return false
+			}
+			if planStorageChanged && !stringPtrMatchesValue(resp.Data.Storage, plan.Storage) {
+				return false
+			}
+			if planCdcEnrichmentModeChanged && resp.Data.CdcEnrichmentMode != nil && !stringPtrMatchesValue(resp.Data.CdcEnrichmentMode, plan.CdcEnrichmentMode) {
+				return false
+			}
+			if planVectorOptimizedChanged && !boolPtrMatchesValue(resp.Data.VectorOptimized, plan.VectorOptimized) {
+				return false
+			}
+			if planGraphAnalyticsPluginChanged && !boolPtrMatchesValue(resp.Data.GraphAnalyticsPlugin, plan.GraphAnalyticsPlugin) {
+				return false
+			}
+			return true
 		})
 		if err != nil {
 			response.Diagnostics.AddError("Error while waiting for the instance details to be updated",
@@ -794,6 +820,36 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 	}
 }
 
+func stringPtrMatchesValue(actual *string, expected types.String) bool {
+	if expected.IsUnknown() {
+		return true
+	}
+	if expected.IsNull() {
+		return actual == nil
+	}
+	return actual != nil && *actual == expected.ValueString()
+}
+
+func boolPtrMatchesValue(actual *bool, expected types.Bool) bool {
+	if expected.IsUnknown() {
+		return true
+	}
+	if expected.IsNull() {
+		return actual == nil
+	}
+	return actual != nil && *actual == expected.ValueBool()
+}
+
+func intPtrMatchesValue(actual *int, expected types.Int32) bool {
+	if expected.IsUnknown() {
+		return true
+	}
+	if expected.IsNull() {
+		return actual == nil
+	}
+	return actual != nil && int32(*actual) == expected.ValueInt32()
+}
+
 func (r *InstanceResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
 	var data InstanceResourceModel
 
@@ -804,6 +860,7 @@ func (r *InstanceResource) Delete(ctx context.Context, request resource.DeleteRe
 	}
 
 	_, err := r.auraApi.DeleteInstanceById(ctx, data.InstanceId.ValueString())
+
 	if err != nil {
 		// If the instance is already gone, treat as success (idempotent delete).
 		if errors.Is(err, client.ErrNotFound) {
