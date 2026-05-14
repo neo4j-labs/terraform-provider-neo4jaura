@@ -840,16 +840,6 @@ func boolPtrMatchesValue(actual *bool, expected types.Bool) bool {
 	return actual != nil && *actual == expected.ValueBool()
 }
 
-func intPtrMatchesValue(actual *int, expected types.Int32) bool {
-	if expected.IsUnknown() {
-		return true
-	}
-	if expected.IsNull() {
-		return actual == nil
-	}
-	return actual != nil && int32(*actual) == expected.ValueInt32()
-}
-
 func (r *InstanceResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
 	var data InstanceResourceModel
 
