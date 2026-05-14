@@ -35,7 +35,7 @@ type AuraApi struct {
 }
 
 const (
-	defaultInstanceTimeout = time.Duration(900) * time.Second
+	defaultInstanceTimeout = time.Duration(1200) * time.Second
 	defaultSnapshotTimeout = time.Duration(300) * time.Second
 )
 
