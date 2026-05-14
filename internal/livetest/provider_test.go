@@ -24,7 +24,6 @@
 package livetest
 
 import (
-	"fmt"
 	"os"
 	"testing"
 
@@ -74,22 +73,4 @@ func testAccPreCheck(t *testing.T) {
 	if len(missing) > 0 {
 		t.Skipf("Live acceptance tests skipped — set %v to run them", missing)
 	}
-}
-
-// liveInstanceConfig returns a Terraform config that creates a free-tier
-// instance in the project identified by AURA_PROJECT_ID. The name includes
-// the test name to make it easy to identify leaked resources in the console.
-func liveInstanceConfig(t *testing.T, name string) string {
-	t.Helper()
-	return fmt.Sprintf(`
-%s
-resource "neo4jaura_instance" "this" {
-  name           = "%s"
-  cloud_provider = "gcp"
-  region         = "europe-west1"
-  memory         = "1GB"
-  type           = "professional-db"
-  project_id     = "%s"
-}
-`, liveProviderConfig, name, liveProjectID(t))
 }
