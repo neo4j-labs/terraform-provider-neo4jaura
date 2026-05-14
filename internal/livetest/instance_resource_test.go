@@ -33,6 +33,7 @@ import (
 // Requires: AURA_CLIENT_ID, AURA_CLIENT_SECRET, AURA_PROJECT_ID, TF_ACC=1
 // Typical runtime: 5–10 minutes (Aura instance creation takes ~3–5 min).
 func TestLive_instance_lifecycle(t *testing.T) {
+	t.Parallel()
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -115,6 +116,7 @@ func TestLive_instance_lifecycle(t *testing.T) {
 // Requires: AURA_CLIENT_ID, AURA_CLIENT_SECRET, AURA_PROJECT_ID, TF_ACC=1
 // Typical runtime: 10–15 minutes.
 func TestLive_instance_pause_resume(t *testing.T) {
+	t.Parallel()
 	projectID := liveProjectID(t)
 
 	configRunning := liveProviderConfig + `

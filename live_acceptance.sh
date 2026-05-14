@@ -62,4 +62,5 @@ TF_ACC=1 go test ./internal/livetest/... \
   -v \
   -timeout "$TIMEOUT" \
   -run "$RUN_FILTER" \
+  -parallel=10 \
   "$@"
