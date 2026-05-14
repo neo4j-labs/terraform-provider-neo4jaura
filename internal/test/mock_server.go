@@ -275,7 +275,7 @@ func (ms *MockServer) handleGetTenants(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// handlePostInstance creates a new instance in "creating" state and returns 202
+// handlePostInstance creates a new instance in "creating" state and returns 200
 // with a PostInstanceResponse. A unique ID is generated from the current time.
 func (ms *MockServer) handlePostInstance(w http.ResponseWriter, r *http.Request) {
 	var req client.PostInstanceRequest
@@ -315,7 +315,7 @@ func (ms *MockServer) handlePostInstance(w http.ResponseWriter, r *http.Request)
 			Type:          req.Type,
 		},
 	}
-	writeJSON(w, http.StatusAccepted, resp)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // handleGetInstance returns the instance state, driving a state machine:
@@ -352,7 +352,7 @@ func (ms *MockServer) handleGetInstance(w http.ResponseWriter, _ *http.Request, 
 	writeJSON(w, http.StatusOK, client.GetInstanceResponse{Data: snap})
 }
 
-// handleDeleteInstance removes the instance from state and returns 202.
+// handleDeleteInstance removes the instance from state and returns 200.
 // Subsequent GETs for the same ID will return 404 (handled by the not-found
 // branch in handleGetInstance), satisfying WaitUntilInstanceIsDeleted.
 func (ms *MockServer) handleDeleteInstance(w http.ResponseWriter, _ *http.Request, id string) {
@@ -367,7 +367,7 @@ func (ms *MockServer) handleDeleteInstance(w http.ResponseWriter, _ *http.Reques
 	delete(ms.instances, id)
 	ms.mu.Unlock()
 
-	writeJSON(w, http.StatusAccepted, client.GetInstanceResponse{Data: snap})
+	writeJSON(w, http.StatusOK, client.GetInstanceResponse{Data: snap})
 }
 
 // handlePatchInstance updates mutable instance fields and returns 202 with the
@@ -414,7 +414,7 @@ func (ms *MockServer) handlePatchInstance(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusAccepted, client.GetInstanceResponse{Data: snap})
 }
 
-// handlePauseInstance transitions the instance status to "paused" and returns 202.
+// handlePauseInstance transitions the instance status to "paused" and returns 200.
 func (ms *MockServer) handlePauseInstance(w http.ResponseWriter, _ *http.Request, id string) {
 	ms.mu.Lock()
 	state, ok := ms.instances[id]
@@ -427,10 +427,10 @@ func (ms *MockServer) handlePauseInstance(w http.ResponseWriter, _ *http.Request
 	snap := state.instance
 	ms.mu.Unlock()
 
-	writeJSON(w, http.StatusAccepted, client.GetInstanceResponse{Data: snap})
+	writeJSON(w, http.StatusOK, client.GetInstanceResponse{Data: snap})
 }
 
-// handleResumeInstance transitions the instance status back to "running" and returns 202.
+// handleResumeInstance transitions the instance status back to "running" and returns 200.
 func (ms *MockServer) handleResumeInstance(w http.ResponseWriter, _ *http.Request, id string) {
 	ms.mu.Lock()
 	state, ok := ms.instances[id]
@@ -443,7 +443,7 @@ func (ms *MockServer) handleResumeInstance(w http.ResponseWriter, _ *http.Reques
 	snap := state.instance
 	ms.mu.Unlock()
 
-	writeJSON(w, http.StatusAccepted, client.GetInstanceResponse{Data: snap})
+	writeJSON(w, http.StatusOK, client.GetInstanceResponse{Data: snap})
 }
 
 func (ms *MockServer) handlePostSnapshot(w http.ResponseWriter, _ *http.Request, instanceId string) {
@@ -463,7 +463,7 @@ func (ms *MockServer) handlePostSnapshot(w http.ResponseWriter, _ *http.Request,
 	}
 	ms.mu.Unlock()
 
-	writeJSON(w, http.StatusAccepted, client.PostSnapshotResponse{
+	writeJSON(w, http.StatusOK, client.PostSnapshotResponse{
 		Data: client.PostSnapshotData{SnapshotId: snapshotId},
 	})
 }

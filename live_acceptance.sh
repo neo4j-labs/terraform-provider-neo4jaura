@@ -58,9 +58,11 @@ echo "WARNING: These tests create and destroy real Aura instances."
 echo "         Costs may be incurred. Ctrl-C to abort."
 echo ""
 
-TF_ACC=1 go test ./internal/livetest/... \
+TF_ACC=1 go run gotest.tools/gotestsum@latest \
+  --format testname -- \
   -v \
   -timeout "$TIMEOUT" \
   -run "$RUN_FILTER" \
   -parallel=10 \
-  "$@"
+  "$@" \
+  ./internal/livetest/...

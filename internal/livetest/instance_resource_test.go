@@ -40,50 +40,50 @@ func TestLive_instance_lifecycle(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// Step 1: create the instance.
-				Config: liveInstanceConfig(t, "tf-live-test-instance"),
+				Config: liveInstanceConfig(t, "update_test", "tf-live-test-instance"),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
+						"neo4jaura_instance.update_test",
 						tfjsonpath.New("instance_id"),
 						knownvalue.NotNull(),
 					),
 					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
+						"neo4jaura_instance.update_test",
 						tfjsonpath.New("name"),
 						knownvalue.StringExact("tf-live-test-instance"),
 					),
 					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
+						"neo4jaura_instance.update_test",
 						tfjsonpath.New("status"),
 						knownvalue.StringExact("running"),
 					),
 					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
+						"neo4jaura_instance.update_test",
 						tfjsonpath.New("connection_url"),
 						knownvalue.NotNull(),
 					),
 					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
+						"neo4jaura_instance.update_test",
 						tfjsonpath.New("username"),
 						knownvalue.NotNull(),
 					),
 					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
+						"neo4jaura_instance.update_test",
 						tfjsonpath.New("cloud_provider"),
 						knownvalue.StringExact("gcp"),
 					),
 					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
+						"neo4jaura_instance.update_test",
 						tfjsonpath.New("region"),
 						knownvalue.StringExact("europe-west1"),
 					),
 					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
+						"neo4jaura_instance.update_test",
 						tfjsonpath.New("memory"),
 						knownvalue.StringExact("1GB"),
 					),
 					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
+						"neo4jaura_instance.update_test",
 						tfjsonpath.New("type"),
 						knownvalue.StringExact("professional-db"),
 					),
@@ -91,15 +91,15 @@ func TestLive_instance_lifecycle(t *testing.T) {
 			},
 			{
 				// Step 2: rename in-place — verifies Update path without replacement.
-				Config: liveInstanceConfig(t, "tf-live-test-instance-renamed"),
+				Config: liveInstanceConfig(t, "update_test", "tf-live-test-instance-renamed"),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
+						"neo4jaura_instance.update_test",
 						tfjsonpath.New("name"),
 						knownvalue.StringExact("tf-live-test-instance-renamed"),
 					),
 					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
+						"neo4jaura_instance.update_test",
 						tfjsonpath.New("status"),
 						knownvalue.StringExact("running"),
 					),
@@ -120,7 +120,7 @@ func TestLive_instance_pause_resume(t *testing.T) {
 	projectID := liveProjectID(t)
 
 	configRunning := liveProviderConfig + `
-resource "neo4jaura_instance" "this" {
+resource "neo4jaura_instance" "pause_resume" {
   name           = "tf-live-pause-resume"
   cloud_provider = "gcp"
   region         = "europe-west1"
@@ -131,7 +131,7 @@ resource "neo4jaura_instance" "this" {
 }
 `
 	configPaused := liveProviderConfig + `
-resource "neo4jaura_instance" "this" {
+resource "neo4jaura_instance" "pause_resume" {
   name           = "tf-live-pause-resume"
   cloud_provider = "gcp"
   region         = "europe-west1"
@@ -150,12 +150,12 @@ resource "neo4jaura_instance" "this" {
 				Config: configRunning,
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
+						"neo4jaura_instance.pause_resume",
 						tfjsonpath.New("status"),
 						knownvalue.StringExact("running"),
 					),
 					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
+						"neo4jaura_instance.pause_resume",
 						tfjsonpath.New("connection_url"),
 						knownvalue.NotNull(),
 					),
@@ -167,12 +167,12 @@ resource "neo4jaura_instance" "this" {
 				Config: configPaused,
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
+						"neo4jaura_instance.pause_resume",
 						tfjsonpath.New("status"),
 						knownvalue.StringExact("paused"),
 					),
 					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
+						"neo4jaura_instance.pause_resume",
 						tfjsonpath.New("connection_url"),
 						knownvalue.NotNull(),
 					),
@@ -183,7 +183,7 @@ resource "neo4jaura_instance" "this" {
 				Config: configRunning,
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
+						"neo4jaura_instance.pause_resume",
 						tfjsonpath.New("status"),
 						knownvalue.StringExact("running"),
 					),

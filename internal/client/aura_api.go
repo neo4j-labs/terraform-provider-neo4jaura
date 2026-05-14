@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -55,17 +56,39 @@ func NewAuraApi(client *AuraClient, instanceTimeoutInSecs *int64, snapshotTimeou
 	}
 }
 
+func validateResponseStatus(method string, status int, payload []byte) error {
+	if isSuccessfulResponseStatus(method, status) {
+		return nil
+	}
+	return fmt.Errorf("aura error: Status: %+v. Response: %+v", status, string(payload))
+}
+
+func unmarshalAuraResponse[T any](method string, status int, payload []byte) (T, error) {
+	if err := validateResponseStatus(method, status, payload); err != nil {
+		var resp T
+		return resp, err
+	}
+	return util.Unmarshal[T](payload)
+}
+
+func isSuccessfulResponseStatus(method string, status int) bool {
+	switch method {
+	case http.MethodGet:
+		return status == http.StatusOK
+
+	default:
+
+		return status == http.StatusOK || status == http.StatusAccepted
+	}
+}
+
 func (api *AuraApi) GetTenants(ctx context.Context) (GetProjectsResponse, error) {
 	payload, status, err := api.auraClient.Get(ctx, "tenants")
 	if err != nil {
 		return GetProjectsResponse{}, err
 	}
 
-	if status != 200 {
-		return GetProjectsResponse{}, fmt.Errorf("aura error: Status: %+v. Response: %+v", status, string(payload))
-	}
-
-	return util.Unmarshal[GetProjectsResponse](payload)
+	return unmarshalAuraResponse[GetProjectsResponse](http.MethodGet, status, payload)
 }
 
 func (api *AuraApi) PostInstance(ctx context.Context, request PostInstanceRequest) (PostInstanceResponse, error) {
@@ -79,11 +102,7 @@ func (api *AuraApi) PostInstance(ctx context.Context, request PostInstanceReques
 		return PostInstanceResponse{}, err
 	}
 
-	if status != 202 {
-		return PostInstanceResponse{}, fmt.Errorf("aura error: Status: %+v. Response: %+v", status, string(body))
-	}
-
-	return util.Unmarshal[PostInstanceResponse](body)
+	return unmarshalAuraResponse[PostInstanceResponse](http.MethodPost, status, body)
 }
 
 func (api *AuraApi) GetInstanceById(ctx context.Context, id string) (GetInstanceResponse, error) {
@@ -94,10 +113,7 @@ func (api *AuraApi) GetInstanceById(ctx context.Context, id string) (GetInstance
 	if status == 404 {
 		return GetInstanceResponse{}, fmt.Errorf("instance %s: %w", id, ErrNotFound)
 	}
-	if status != 200 {
-		return GetInstanceResponse{}, fmt.Errorf("aura error: Status: %+v. Response: %+v", status, string(payload))
-	}
-	return util.Unmarshal[GetInstanceResponse](payload)
+	return unmarshalAuraResponse[GetInstanceResponse](http.MethodGet, status, payload)
 }
 
 func (api *AuraApi) DeleteInstanceById(ctx context.Context, id string) (GetInstanceResponse, error) {
@@ -108,10 +124,7 @@ func (api *AuraApi) DeleteInstanceById(ctx context.Context, id string) (GetInsta
 	if status == 404 {
 		return GetInstanceResponse{}, fmt.Errorf("instance %s not found: %w", id, ErrNotFound)
 	}
-	if status != 202 {
-		return GetInstanceResponse{}, fmt.Errorf("aura error: Status: %+v. Response: %+v", status, string(payload))
-	}
-	return util.Unmarshal[GetInstanceResponse](payload)
+	return unmarshalAuraResponse[GetInstanceResponse](http.MethodDelete, status, payload)
 }
 
 func (api *AuraApi) PatchInstanceById(ctx context.Context, id string, request PatchInstanceRequest) (GetInstanceResponse, error) {
@@ -124,10 +137,7 @@ func (api *AuraApi) PatchInstanceById(ctx context.Context, id string, request Pa
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}
-	if status != 202 {
-		return GetInstanceResponse{}, fmt.Errorf("aura error: Status: %+v. Response: %+v", status, string(body))
-	}
-	return util.Unmarshal[GetInstanceResponse](body)
+	return unmarshalAuraResponse[GetInstanceResponse](http.MethodPatch, status, body)
 }
 
 func (api *AuraApi) PauseInstanceById(ctx context.Context, id string) (GetInstanceResponse, error) {
@@ -135,10 +145,7 @@ func (api *AuraApi) PauseInstanceById(ctx context.Context, id string) (GetInstan
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}
-	if status != 202 {
-		return GetInstanceResponse{}, fmt.Errorf("aura error: Status: %+v. Response: %+v", status, string(body))
-	}
-	return util.Unmarshal[GetInstanceResponse](body)
+	return unmarshalAuraResponse[GetInstanceResponse](http.MethodPost, status, body)
 }
 
 func (api *AuraApi) ResumeInstanceById(ctx context.Context, id string) (GetInstanceResponse, error) {
@@ -146,10 +153,7 @@ func (api *AuraApi) ResumeInstanceById(ctx context.Context, id string) (GetInsta
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}
-	if status != 202 {
-		return GetInstanceResponse{}, fmt.Errorf("aura error: Status: %+v. Response: %+v", status, string(body))
-	}
-	return util.Unmarshal[GetInstanceResponse](body)
+	return unmarshalAuraResponse[GetInstanceResponse](http.MethodPost, status, body)
 }
 
 func (api *AuraApi) GetSnapshotsByInstanceId(ctx context.Context, instanceId string) (GetSnapshotsResponse, error) {
@@ -157,10 +161,7 @@ func (api *AuraApi) GetSnapshotsByInstanceId(ctx context.Context, instanceId str
 	if err != nil {
 		return GetSnapshotsResponse{}, err
 	}
-	if status != 200 {
-		return GetSnapshotsResponse{}, fmt.Errorf("aura error: Status: %+v. Response: %+v", status, string(body))
-	}
-	return util.Unmarshal[GetSnapshotsResponse](body)
+	return unmarshalAuraResponse[GetSnapshotsResponse](http.MethodGet, status, body)
 }
 
 func (api *AuraApi) GetSnapshotById(ctx context.Context, instanceId string, snapshotId string) (GetSnapshotResponse, error) {
@@ -171,10 +172,7 @@ func (api *AuraApi) GetSnapshotById(ctx context.Context, instanceId string, snap
 	if status == 404 {
 		return GetSnapshotResponse{}, fmt.Errorf("snapshot %s (instance %s): %w", snapshotId, instanceId, ErrNotFound)
 	}
-	if status != 200 {
-		return GetSnapshotResponse{}, fmt.Errorf("aura error: Status: %+v. Response: %+v", status, string(body))
-	}
-	return util.Unmarshal[GetSnapshotResponse](body)
+	return unmarshalAuraResponse[GetSnapshotResponse](http.MethodGet, status, body)
 }
 
 func (api *AuraApi) PostSnapshot(ctx context.Context, instanceId string) (PostSnapshotResponse, error) {
@@ -182,10 +180,7 @@ func (api *AuraApi) PostSnapshot(ctx context.Context, instanceId string) (PostSn
 	if err != nil {
 		return PostSnapshotResponse{}, err
 	}
-	if status != 202 {
-		return PostSnapshotResponse{}, fmt.Errorf("aura error: Status: %+v. Response: %+v", status, string(body))
-	}
-	return util.Unmarshal[PostSnapshotResponse](body)
+	return unmarshalAuraResponse[PostSnapshotResponse](http.MethodPost, status, body)
 }
 
 func (api *AuraApi) WaitUntilSnapshotIsInState(

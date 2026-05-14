@@ -4,20 +4,18 @@
 
 ### BUILD COMMANDS
 ```
-go build ./...
+make build
 ```
 
 ### LINT / VET COMMANDS
 ```
-go vet ./...
+make vet
 ```
 
 ### TEST COMMANDS
 ```
-TF_ACC=1 go test ./internal/test/... -timeout 120s -v
+make test acceptance
 ```
-
-Run acceptance tests only when a mock server is in place (task-005+). Until then, use build + vet as the feedback loop.
 
 ## Architecture
 

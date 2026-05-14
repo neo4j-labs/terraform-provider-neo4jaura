@@ -6,19 +6,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Build
-go build ./...
+make build
 
 # Format
 make fmt          # gofmt -s -w -e .
 
 # Vet / lint
-go vet ./...
+make vet
 
 # Unit tests (no live infra; TF_ACC unset)
 make test
 
 # Acceptance tests against the in-process mock server
-make mock-acceptance
+make acceptance
 
 # Acceptance tests against live Aura API (requires credentials)
 make live-acceptance   # needs AURA_CLIENT_ID / AURA_CLIENT_SECRET / TF_VAR_* set

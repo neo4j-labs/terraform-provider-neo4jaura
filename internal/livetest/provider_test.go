@@ -79,11 +79,11 @@ func testAccPreCheck(t *testing.T) {
 // liveInstanceConfig returns a Terraform config that creates a free-tier
 // instance in the project identified by AURA_PROJECT_ID. The name includes
 // the test name to make it easy to identify leaked resources in the console.
-func liveInstanceConfig(t *testing.T, name string) string {
+func liveInstanceConfig(t *testing.T, resource_name, instance_name string) string {
 	t.Helper()
 	return fmt.Sprintf(`
 %s
-resource "neo4jaura_instance" "this" {
+resource "neo4jaura_instance" "%s" {
   name           = "%s"
   cloud_provider = "gcp"
   region         = "europe-west1"
@@ -91,5 +91,5 @@ resource "neo4jaura_instance" "this" {
   type           = "professional-db"
   project_id     = "%s"
 }
-`, liveProviderConfig, name, liveProjectID(t))
+`, liveProviderConfig, resource_name, instance_name, liveProjectID(t))
 }
