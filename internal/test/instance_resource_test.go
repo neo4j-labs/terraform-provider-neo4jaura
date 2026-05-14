@@ -57,6 +57,40 @@ resource "neo4jaura_instance" "this" {
 }
 `, defaultProviderConfig)
 
+var professionalTierMutableFieldsInitialConfig = fmt.Sprintf(`
+%[1]s
+data "neo4jaura_projects" "this" {}
+
+resource "neo4jaura_instance" "this" {
+  name                   = "MyTestProfessionalInstance"
+  cloud_provider         = "gcp"
+  region                 = "europe-west1"
+  memory                 = "4GB"
+  storage                = "8GB"
+  type                   = "professional-db"
+  project_id             = data.neo4jaura_projects.this.projects.0.id
+  vector_optimized       = false
+  graph_analytics_plugin = false
+}
+`, defaultProviderConfig)
+
+var professionalTierMutableFieldsUpdatedConfig = fmt.Sprintf(`
+%[1]s
+data "neo4jaura_projects" "this" {}
+
+resource "neo4jaura_instance" "this" {
+  name                   = "MyTestProfessionalInstance"
+  cloud_provider         = "gcp"
+  region                 = "europe-west1"
+  memory                 = "4GB"
+  storage                = "16GB"
+  type                   = "professional-db"
+  project_id             = data.neo4jaura_projects.this.projects.0.id
+  vector_optimized       = true
+  graph_analytics_plugin = true
+}
+`, defaultProviderConfig)
+
 var businessCriticalTierInstanceConfig = fmt.Sprintf(`
 %[1]s
 data "neo4jaura_projects" "this" {}
@@ -219,6 +253,66 @@ func TestAcc_secondaries_count_no_drift(t *testing.T) {
 						knownvalue.Int32Exact(1),
 					),
 				},
+			},
+		},
+	})
+}
+
+func TestAcc_can_update_instance_mutable_patch_fields(t *testing.T) {
+	testMockServer.Reset()
+
+	updatedStateChecks := []statecheck.StateCheck{
+		statecheck.ExpectKnownValue(
+			"neo4jaura_instance.this",
+			tfjsonpath.New("storage"),
+			knownvalue.StringExact(domain.InstanceStorage16GB),
+		),
+		statecheck.ExpectKnownValue(
+			"neo4jaura_instance.this",
+			tfjsonpath.New("vector_optimized"),
+			knownvalue.Bool(true),
+		),
+		statecheck.ExpectKnownValue(
+			"neo4jaura_instance.this",
+			tfjsonpath.New("graph_analytics_plugin"),
+			knownvalue.Bool(true),
+		),
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: professionalTierMutableFieldsInitialConfig,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("storage"),
+						knownvalue.StringExact(domain.InstanceStorage8GB),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("vector_optimized"),
+						knownvalue.Bool(false),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("graph_analytics_plugin"),
+						knownvalue.Bool(false),
+					),
+				},
+			},
+			{
+				Config:            professionalTierMutableFieldsUpdatedConfig,
+				ConfigStateChecks: updatedStateChecks,
+			},
+			{
+				RefreshState: true,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("neo4jaura_instance.this", "storage", domain.InstanceStorage16GB),
+					resource.TestCheckResourceAttr("neo4jaura_instance.this", "vector_optimized", "true"),
+					resource.TestCheckResourceAttr("neo4jaura_instance.this", "graph_analytics_plugin", "true"),
+				),
 			},
 		},
 	})
