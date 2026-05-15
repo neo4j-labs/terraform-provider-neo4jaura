@@ -124,33 +124,33 @@ func (r *InstanceResource) Configure(_ context.Context, request resource.Configu
 
 func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, response *resource.SchemaResponse) {
 	response.Schema = schema.Schema{
-		MarkdownDescription: "Aura instance",
-		Description:         "Aura instance",
+		MarkdownDescription: "Aura Instance",
+		Description:         "Aura Instance",
 		Attributes: map[string]schema.Attribute{
 			"instance_id": schema.StringAttribute{
-				MarkdownDescription: "Id of the instance",
-				Description:         "Id of the instance",
+				MarkdownDescription: "The unique identifier of the instance.",
+				Description:         "The unique identifier of the instance.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"name": schema.StringAttribute{
-				MarkdownDescription: "Name of the instance",
-				Description:         "Name of the instance",
+				MarkdownDescription: "The name of the instance.",
+				Description:         "The name of the instance.",
 				Required:            true,
 			},
 			"region": schema.StringAttribute{
-				MarkdownDescription: "Region of the instance",
-				Description:         "Region of the instance",
+				MarkdownDescription: "The region where the instance is located.",
+				Description:         "The region where the instance is located.",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"memory": schema.StringAttribute{
-				MarkdownDescription: fmt.Sprintf("Memory allocated for the instance. One of [%s]", strings.Join(supportedMemory, ",")),
-				Description:         fmt.Sprintf("Memory allocated for the instance. One of [%s]", strings.Join(supportedMemory, ",")),
+				MarkdownDescription: fmt.Sprintf("Memory allocated for the instance. One of: `%s`.", strings.Join(supportedMemory, "`, `")),
+				Description:         fmt.Sprintf("Memory allocated for the instance. One of [%s]", strings.Join(supportedMemory, ", ")),
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString("1GB"),
@@ -162,7 +162,7 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				},
 			},
 			"type": schema.StringAttribute{
-				MarkdownDescription: fmt.Sprintf("Type of the instance. Depend on your project configuration. One of [%s]", strings.Join(supportedTypes, ", ")),
+				MarkdownDescription: fmt.Sprintf("Type of the instance. Depend on your project configuration. One of: `%s`.", strings.Join(supportedTypes, "`, `")),
 				Description:         fmt.Sprintf("Type of the instance. Depend on your project configuration. One of [%s]", strings.Join(supportedTypes, ", ")),
 				Optional:            true,
 				Computed:            true,
@@ -175,7 +175,7 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				},
 			},
 			"cloud_provider": schema.StringAttribute{
-				MarkdownDescription: fmt.Sprintf("Cloud provider. One of [%s]", strings.Join(supportedCloudProviders, ", ")),
+				MarkdownDescription: fmt.Sprintf("Cloud provider. One of: `%s`.", strings.Join(supportedCloudProviders, "`, `")),
 				Description:         fmt.Sprintf("Cloud provider. One of [%s]", strings.Join(supportedCloudProviders, ", ")),
 				Optional:            true,
 				Computed:            true,
@@ -188,32 +188,32 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				},
 			},
 			"project_id": schema.StringAttribute{
-				MarkdownDescription: "Id of the project",
-				Description:         "Id of the project",
+				MarkdownDescription: "The unique identifier of the project.",
+				Description:         "The unique identifier of the project.",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"connection_url": schema.StringAttribute{
-				MarkdownDescription: "Bolt connection URL to the instance database",
-				Description:         "Bolt connection URL to the instance database",
+				MarkdownDescription: "The Bolt connection URL for the instance database.",
+				Description:         "The Bolt connection URL for the instance database.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"username": schema.StringAttribute{
-				MarkdownDescription: "Username of the instance database",
-				Description:         "Username of the instance database",
+				MarkdownDescription: "The username for the instance database.",
+				Description:         "The username for the instance database.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"password": schema.StringAttribute{
-				MarkdownDescription: "Password of the instance database",
-				Description:         "Password of the instance database",
+				MarkdownDescription: "The password for the instance database.",
+				Description:         "The password for the instance database.",
 				Computed:            true,
 				Sensitive:           true,
 				PlanModifiers: []planmodifier.String{
@@ -221,7 +221,7 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				},
 			},
 			"version": schema.StringAttribute{
-				MarkdownDescription: fmt.Sprintf("Version of Neo4j. One of [%s]", strings.Join(supportedVersions, ", ")),
+				MarkdownDescription: fmt.Sprintf("Version of Neo4j. One of: `%s`.", strings.Join(supportedVersions, "`, `")),
 				Description:         fmt.Sprintf("Version of Neo4j. One of [%s]", strings.Join(supportedVersions, ", ")),
 				Optional:            true,
 				Computed:            true,
@@ -234,8 +234,8 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				},
 			},
 			"storage": schema.StringAttribute{
-				MarkdownDescription: fmt.Sprintf("Storage allocated to the instance. One of [%s]", strings.Join(supportedStorage, ", ")),
-				Description:         fmt.Sprintf("Storage allocated to the instance. One of [%s]", strings.Join(supportedStorage, ", ")),
+				MarkdownDescription: fmt.Sprintf("The storage allocated to the instance. One of: `%s`.", strings.Join(supportedStorage, "`, `")),
+				Description:         fmt.Sprintf("The storage allocated to the instance. One of [%s]", strings.Join(supportedStorage, ", ")),
 				Computed:            true,
 				Optional:            true,
 				PlanModifiers: []planmodifier.String{
@@ -246,8 +246,8 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				},
 			},
 			"status": schema.StringAttribute{
-				MarkdownDescription: fmt.Sprintf("Status of the instance. One of [%s]", strings.Join(supportedStatuses, ", ")),
-				Description:         fmt.Sprintf("Status of the instance. One of [%s]", strings.Join(supportedStatuses, ", ")),
+				MarkdownDescription: fmt.Sprintf("The status of the instance. One of: `%s`.", strings.Join(supportedStatuses, "`, `")),
+				Description:         fmt.Sprintf("The status of the instance. One of [%s]", strings.Join(supportedStatuses, ", ")),
 				Computed:            true,
 				Optional:            true,
 				PlanModifiers: []planmodifier.String{
@@ -258,47 +258,47 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				},
 			},
 			"created_at": schema.StringAttribute{
-				MarkdownDescription: "The timestamp when the instance was created",
-				Description:         "The timestamp when the instance was created",
+				MarkdownDescription: "The timestamp when the instance was created.",
+				Description:         "The timestamp when the instance was created.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"metrics_integration_url": schema.StringAttribute{
-				MarkdownDescription: "Metrics integration endpoint URL",
-				Description:         "Metrics integration endpoint URL",
+				MarkdownDescription: "The endpoint URL for metrics integration.",
+				Description:         "The endpoint URL for metrics integration.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"graph_nodes": schema.Int64Attribute{
-				MarkdownDescription: "Number of nodes in the graph (free-db only)",
-				Description:         "Number of nodes in the graph (free-db only)",
+				MarkdownDescription: "The number of nodes in the graph (free-db only).",
+				Description:         "The number of nodes in the graph (free-db only).",
 				Computed:            true,
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.UseStateForUnknown(),
 				},
 			},
 			"graph_relationships": schema.Int64Attribute{
-				MarkdownDescription: "Number of relationships in the graph (only for free-db)",
-				Description:         "Number of relationships in the graph (only for free-db)",
+				MarkdownDescription: "The number of relationships in the graph (free-db only).",
+				Description:         "The number of relationships in the graph (free-db only).",
 				Computed:            true,
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.UseStateForUnknown(),
 				},
 			},
 			"secondaries_count": schema.Int32Attribute{
-				MarkdownDescription: "The number of secondaries in an Instance. (VDC only)",
-				Description:         "The number of secondaries in an Instance. (VDC only)",
+				MarkdownDescription: "The number of secondaries in the instance (VDC only).",
+				Description:         "The number of secondaries in the instance (VDC only).",
 				Optional:            true,
 				PlanModifiers: []planmodifier.Int32{
 					int32planmodifier.UseStateForUnknown(),
 				},
 			},
 			"cdc_enrichment_mode": schema.StringAttribute{
-				MarkdownDescription: fmt.Sprintf("CDC enrichment mode. One of [%s]", strings.Join(supportedCdcEnrichmentModes, ", ")),
+				MarkdownDescription: fmt.Sprintf("CDC enrichment mode. One of: `%s`.", strings.Join(supportedCdcEnrichmentModes, "`, `")),
 				Description:         fmt.Sprintf("CDC enrichment mode. One of [%s]", strings.Join(supportedCdcEnrichmentModes, ", ")),
 				Optional:            true,
 				Validators: []validator.String{
@@ -324,21 +324,21 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				},
 			},
 			"source": schema.SingleNestedAttribute{
-				MarkdownDescription: "Information about source for the instance",
-				Description:         "Information about source for the instance",
+				MarkdownDescription: "The source from which the instance is created.",
+				Description:         "The source from which the instance is created.",
 				Optional:            true,
 				PlanModifiers: []planmodifier.Object{
 					objectplanmodifier.RequiresReplace(),
 				},
 				Attributes: map[string]schema.Attribute{
 					"instance_id": schema.StringAttribute{
-						MarkdownDescription: "Instance Id that contains the source database of the instance",
-						Description:         "Instance Id that contains the source database of the instance",
+						MarkdownDescription: "The unique identifier of the source instance.",
+						Description:         "The unique identifier of the source instance.",
 						Required:            true,
 					},
 					"snapshot_id": schema.StringAttribute{
-						MarkdownDescription: "Snapshot Id of the instance containing the source database of the instance",
-						Description:         "Snapshot Id of the instance containing the source database of the instance",
+						MarkdownDescription: "The unique identifier of the snapshot from the source instance.",
+						Description:         "The unique identifier of the snapshot from the source instance.",
 						Optional:            true,
 					},
 				},

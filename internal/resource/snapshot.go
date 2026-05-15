@@ -88,44 +88,44 @@ func (r *SnapshotResource) Metadata(_ context.Context, request resource.Metadata
 
 func (r *SnapshotResource) Schema(_ context.Context, _ resource.SchemaRequest, response *resource.SchemaResponse) {
 	response.Schema = schema.Schema{
-		MarkdownDescription: "Resource for an instance snapshot. Snapshots cannot be deleted via the Aura API; running `terraform destroy` removes the snapshot from Terraform state but the snapshot will continue to exist in Aura.",
-		Description:         "Resource for an instance snapshot. Snapshots cannot be deleted via the Aura API; running terraform destroy removes the snapshot from Terraform state but the snapshot will continue to exist in Aura.",
+		MarkdownDescription: "Aura Instance Snapshot. Snapshots cannot be deleted via the Aura API; running `terraform destroy` removes the snapshot from Terraform state but the snapshot will continue to exist in Aura.",
+		Description:         "Aura Instance Snapshot. Snapshots cannot be deleted via the Aura API; running terraform destroy removes the snapshot from Terraform state but the snapshot will continue to exist in Aura.",
 		Attributes: map[string]schema.Attribute{
 			"instance_id": schema.StringAttribute{
-				MarkdownDescription: "Id of the instance",
-				Description:         "Id of the instance",
+				MarkdownDescription: "The unique identifier of the instance.",
+				Description:         "The unique identifier of the instance.",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"snapshot_id": schema.StringAttribute{
-				MarkdownDescription: "Id of the snapshot",
-				Description:         "Id of the snapshot",
+				MarkdownDescription: "The unique identifier of the snapshot.",
+				Description:         "The unique identifier of the snapshot.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"profile": schema.StringAttribute{
-				MarkdownDescription: fmt.Sprintf("Profile of the snapshot. One of [%s]", strings.Join(supportedSnapshotProfiles, ", ")),
-				Description:         fmt.Sprintf("Profile of the snapshot. One of [%s]", strings.Join(supportedSnapshotProfiles, ", ")),
+				MarkdownDescription: fmt.Sprintf("The profile of the snapshot. One of: `%s`.", strings.Join(supportedSnapshotProfiles, "`, `")),
+				Description:         fmt.Sprintf("The profile of the snapshot. One of [%s]", strings.Join(supportedSnapshotProfiles, ", ")),
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"status": schema.StringAttribute{
-				MarkdownDescription: fmt.Sprintf("Status of the snapshot. One of [%s]", strings.Join(supportedSnapshotStatuses, ", ")),
-				Description:         fmt.Sprintf("Status of the snapshot. One of [%s]", strings.Join(supportedSnapshotStatuses, ", ")),
+				MarkdownDescription: fmt.Sprintf("The status of the snapshot. One of: `%s`.", strings.Join(supportedSnapshotStatuses, "`, `")),
+				Description:         fmt.Sprintf("The status of the snapshot. One of [%s]", strings.Join(supportedSnapshotStatuses, ", ")),
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"timestamp": schema.StringAttribute{
-				MarkdownDescription: "Timestamp of the snapshot",
-				Description:         "Timestamp of the snapshot",
+				MarkdownDescription: "The timestamp when the snapshot was created.",
+				Description:         "The timestamp when the snapshot was created.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),

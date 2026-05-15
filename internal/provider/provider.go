@@ -49,6 +49,8 @@ func (n *Neo4jAuraProvider) Metadata(ctx context.Context, request provider.Metad
 
 func (n *Neo4jAuraProvider) Schema(ctx context.Context, request provider.SchemaRequest, response *provider.SchemaResponse) {
 	response.Schema = schema.Schema{
+		MarkdownDescription: "Neo4j Aura Terraform Provider.",
+		Description:         "Neo4j Aura Terraform Provider.",
 		Attributes: map[string]schema.Attribute{
 			"client_id": schema.StringAttribute{
 				Description:         "Aura Client ID. Can also be set via the AURA_CLIENT_ID environment variable.",
@@ -63,13 +65,13 @@ func (n *Neo4jAuraProvider) Schema(ctx context.Context, request provider.SchemaR
 				Sensitive:           true,
 			},
 			"instance_timeout": schema.Int64Attribute{
-				Description:         "Timeout for instance operations (seconds). Defaults to 900 seconds",
-				MarkdownDescription: "Timeout for instance operations (seconds). Defaults to 900 seconds",
+				Description:         "Timeout for instance operations (seconds). Defaults to 1200 seconds.",
+				MarkdownDescription: "Timeout for instance operations (seconds). Defaults to `1200` seconds.",
 				Optional:            true,
 			},
 			"snapshot_timeout": schema.Int64Attribute{
-				Description:         "Timeout for snapshot operations (seconds). Defaults to 300 seconds",
-				MarkdownDescription: "Timeout for snapshot operations (seconds). Defaults to 300 seconds",
+				Description:         "Timeout for snapshot operations (seconds). Defaults to 300 seconds.",
+				MarkdownDescription: "Timeout for snapshot operations (seconds). Defaults to `300` seconds.",
 				Optional:            true,
 			},
 		},
