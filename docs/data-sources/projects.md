@@ -25,6 +25,7 @@ output "projects" {
 
 ### Read-Only
 
+- `id` (String) Placeholder identifier for the projects data source
 - `projects` (Attributes List) The list of all available projects. (see [below for nested schema](#nestedatt--projects))
 
 <a id="nestedatt--projects"></a>
