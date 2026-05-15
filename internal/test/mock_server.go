@@ -319,8 +319,8 @@ func (ms *MockServer) handlePostInstance(w http.ResponseWriter, r *http.Request)
 }
 
 // handleGetInstance returns the instance state, driving a state machine:
-//   - getCount == 1 (first real GET after creation): status="creating", no graph metrics
-//   - getCount >= 2 and status is still "creating": status="running", graph_nodes=10, graph_relationships=5
+//   - getCount == 1 (first real GET after creation): status="creating"
+//   - getCount >= 2 and status is still "creating": status="running"
 //   - getCount >= 2 and status has been explicitly set (e.g. via pause/resume): status is preserved
 func (ms *MockServer) handleGetInstance(w http.ResponseWriter, _ *http.Request, id string) {
 	ms.mu.Lock()
@@ -337,14 +337,8 @@ func (ms *MockServer) handleGetInstance(w http.ResponseWriter, _ *http.Request, 
 		// Drive the initial creating → running transition only.
 		// If the status has been explicitly changed by pause/resume, preserve it.
 		state.instance.Status = domain.InstanceStatusRunning
-		nodes := int64(10)
-		rels := int64(5)
-		state.instance.GraphNodes = &nodes
-		state.instance.GraphRelationships = &rels
 	} else if count < 2 {
 		state.instance.Status = domain.InstanceStatusCreating
-		state.instance.GraphNodes = nil
-		state.instance.GraphRelationships = nil
 	}
 	snap := state.instance
 	ms.mu.Unlock()
