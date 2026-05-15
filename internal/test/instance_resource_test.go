@@ -142,16 +142,6 @@ func TestAcc_can_create_instance_resource(t *testing.T) {
 						tfjsonpath.New("name"),
 						knownvalue.StringExact("MyTestFreeInstance"),
 					),
-					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
-						tfjsonpath.New("graph_nodes"),
-						knownvalue.Int64Exact(10),
-					),
-					statecheck.ExpectKnownValue(
-						"neo4jaura_instance.this",
-						tfjsonpath.New("graph_relationships"),
-						knownvalue.Int64Exact(5),
-					),
 				},
 			},
 		},
@@ -340,19 +330,8 @@ func TestAcc_can_import_instance_resource(t *testing.T) {
 				Type:          domain.InstanceTypeFreeDb,
 				TenantId:      "test-project-id-001",
 			},
-			config: freeTierInstanceConfig,
-			extraStateChecks: []statecheck.StateCheck{
-				statecheck.ExpectKnownValue(
-					"neo4jaura_instance.this",
-					tfjsonpath.New("graph_nodes"),
-					knownvalue.Int64Exact(10),
-				),
-				statecheck.ExpectKnownValue(
-					"neo4jaura_instance.this",
-					tfjsonpath.New("graph_relationships"),
-					knownvalue.Int64Exact(5),
-				),
-			},
+			config:           freeTierInstanceConfig,
+			extraStateChecks: []statecheck.StateCheck{},
 		},
 
 		{

@@ -163,8 +163,6 @@ For databases with valuable data, use the [Instance With Destroy Protection](#in
 
 - `connection_url` (String) The Bolt connection URL for the instance database.
 - `created_at` (String) The timestamp when the instance was created.
-- `graph_nodes` (Number) The number of nodes in the graph (free-db only).
-- `graph_relationships` (Number) The number of relationships in the graph (free-db only).
 - `instance_id` (String) The unique identifier of the instance.
 - `metrics_integration_url` (String) The endpoint URL for metrics integration.
 - `password` (String, Sensitive) The password for the instance database.

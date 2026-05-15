@@ -29,7 +29,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
@@ -74,8 +73,6 @@ type InstanceResourceModel struct {
 	Status                types.String `tfsdk:"status"`
 	CreatedAt             types.String `tfsdk:"created_at"`
 	MetricsIntegrationUrl types.String `tfsdk:"metrics_integration_url"`
-	GraphNodes            types.Int64  `tfsdk:"graph_nodes"`
-	GraphRelationships    types.Int64  `tfsdk:"graph_relationships"`
 	SecondariesCount      types.Int32  `tfsdk:"secondaries_count"`
 	CdcEnrichmentMode     types.String `tfsdk:"cdc_enrichment_mode"`
 	VectorOptimized       types.Bool   `tfsdk:"vector_optimized"`
@@ -273,22 +270,6 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"graph_nodes": schema.Int64Attribute{
-				MarkdownDescription: "The number of nodes in the graph (free-db only).",
-				Description:         "The number of nodes in the graph (free-db only).",
-				Computed:            true,
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.UseStateForUnknown(),
-				},
-			},
-			"graph_relationships": schema.Int64Attribute{
-				MarkdownDescription: "The number of relationships in the graph (free-db only).",
-				Description:         "The number of relationships in the graph (free-db only).",
-				Computed:            true,
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.UseStateForUnknown(),
-				},
-			},
 			"secondaries_count": schema.Int32Attribute{
 				MarkdownDescription: "The number of secondaries in the instance (VDC only).",
 				Description:         "The number of secondaries in the instance (VDC only).",
@@ -478,16 +459,6 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	} else {
 		data.MetricsIntegrationUrl = types.StringNull()
 	}
-	if instance.Data.GraphNodes != nil {
-		data.GraphNodes = types.Int64Value(*instance.Data.GraphNodes)
-	} else {
-		data.GraphNodes = types.Int64Null()
-	}
-	if instance.Data.GraphRelationships != nil {
-		data.GraphRelationships = types.Int64Value(*instance.Data.GraphRelationships)
-	} else {
-		data.GraphRelationships = types.Int64Null()
-	}
 	if instance.Data.SecondariesCount != nil {
 		data.SecondariesCount = types.Int32Value(int32(*instance.Data.SecondariesCount))
 	} else if !data.SecondariesCount.IsNull() {
@@ -582,16 +553,6 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 		stateData.MetricsIntegrationUrl = types.StringValue(*instance.Data.MetricsIntegrationUrl)
 	} else {
 		stateData.MetricsIntegrationUrl = types.StringNull()
-	}
-	if instance.Data.GraphNodes != nil {
-		stateData.GraphNodes = types.Int64Value(*instance.Data.GraphNodes)
-	} else {
-		stateData.GraphNodes = types.Int64Null()
-	}
-	if instance.Data.GraphRelationships != nil {
-		stateData.GraphRelationships = types.Int64Value(*instance.Data.GraphRelationships)
-	} else {
-		stateData.GraphRelationships = types.Int64Null()
 	}
 	if instance.Data.SecondariesCount != nil {
 		stateData.SecondariesCount = types.Int32Value(int32(*instance.Data.SecondariesCount))
@@ -778,16 +739,6 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 		plan.MetricsIntegrationUrl = types.StringValue(*updatedInstance.Data.MetricsIntegrationUrl)
 	} else {
 		plan.MetricsIntegrationUrl = types.StringNull()
-	}
-	if updatedInstance.Data.GraphNodes != nil {
-		plan.GraphNodes = types.Int64Value(*updatedInstance.Data.GraphNodes)
-	} else {
-		plan.GraphNodes = types.Int64Null()
-	}
-	if updatedInstance.Data.GraphRelationships != nil {
-		plan.GraphRelationships = types.Int64Value(*updatedInstance.Data.GraphRelationships)
-	} else {
-		plan.GraphRelationships = types.Int64Null()
 	}
 	if updatedInstance.Data.SecondariesCount != nil {
 		plan.SecondariesCount = types.Int32Value(int32(*updatedInstance.Data.SecondariesCount))
