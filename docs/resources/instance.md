@@ -112,7 +112,7 @@ resource "neo4jaura_instance" "restored" {
 }
 ```
 
-It's also possible to create instance from a particular snapshot
+It's also possible to create an instance from a particular snapshot
 
 ```terraform
 resource "neo4jaura_instance" "restored" {
