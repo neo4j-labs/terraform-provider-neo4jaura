@@ -97,12 +97,10 @@ func (n *Neo4jAuraProvider) Configure(ctx context.Context, request provider.Conf
 		clientSecret = os.Getenv("AURA_CLIENT_SECRET")
 	}
 
-	auraClient := client.NewAuraClient(
-		clientId,
-		clientSecret,
-		n.version,
-		os.Getenv("AURA_BASE_URL"),
-	)
+	baseURL := os.Getenv("AURA_BASE_URL")
+	auraClient := client.NewAuraClient(clientId, clientSecret, n.version, baseURL, "v1")
+	v2beta1Client := client.NewAuraClient(clientId, clientSecret, n.version, baseURL, "v2beta1")
+
 	var instanceTimeoutSec *int64
 	if !data.InstanceTimeout.IsUnknown() && !data.InstanceTimeout.IsNull() {
 		instanceTimeoutSec = data.InstanceTimeout.ValueInt64Pointer()
@@ -111,20 +109,21 @@ func (n *Neo4jAuraProvider) Configure(ctx context.Context, request provider.Conf
 	if !data.SnapshotTimeout.IsUnknown() && !data.SnapshotTimeout.IsNull() {
 		snapshotTimeoutSec = data.SnapshotTimeout.ValueInt64Pointer()
 	}
-	auraApi := client.NewAuraApi(auraClient, instanceTimeoutSec, snapshotTimeoutSec)
+	auraApi := client.NewAuraApi(auraClient, v2beta1Client, instanceTimeoutSec, snapshotTimeoutSec)
 
 	response.DataSourceData = auraApi
 	response.ResourceData = auraApi
 }
 
-func (n *Neo4jAuraProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+func (n *Neo4jAuraProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		auradatasource.NewProjectDataSource,
 		auradatasource.NewSnapshotDataSource,
+		auradatasource.NewOrganizationsDataSource,
 	}
 }
 
-func (n *Neo4jAuraProvider) Resources(ctx context.Context) []func() resource.Resource {
+func (n *Neo4jAuraProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		auraresource.NewInstanceResource,
 		auraresource.NewSnapshotResource,

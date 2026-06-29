@@ -48,9 +48,10 @@ type AuraClient struct {
 	httpClient *retryablehttp.Client
 	userAgent  string
 	baseURL    string
+	apiVersion string
 }
 
-func NewAuraClient(clientId, clientSecret string, version string, baseURL string) *AuraClient {
+func NewAuraClient(clientId, clientSecret string, providerVersion string, baseURL string, apiVersion string) *AuraClient {
 	if baseURL == "" {
 		baseURL = defaultAuraBasePath
 	}
@@ -62,7 +63,7 @@ func NewAuraClient(clientId, clientSecret string, version string, baseURL string
 	httpClient.CheckRetry = retryablehttp.DefaultRetryPolicy
 	httpClient.Backoff = retryablehttp.DefaultBackoff
 
-	userAgent := fmt.Sprintf("AuraTerraform/v%s", version)
+	userAgent := fmt.Sprintf("AuraTerraform/v%s", providerVersion)
 	return &AuraClient{
 		auth: &AuraAuth{
 			clientId:     clientId,
@@ -75,6 +76,7 @@ func NewAuraClient(clientId, clientSecret string, version string, baseURL string
 		httpClient: httpClient,
 		userAgent:  userAgent,
 		baseURL:    baseURL,
+		apiVersion: apiVersion,
 	}
 }
 
@@ -100,7 +102,7 @@ func (c *AuraClient) doOperation(ctx context.Context, method string, path string
 		return []byte{}, 0, err
 	}
 
-	absoluteUrl := fmt.Sprintf("%s/v1/%s", c.baseURL, path)
+	absoluteUrl := fmt.Sprintf("%s/%s/%s", c.baseURL, c.apiVersion, path)
 
 	req, err := retryablehttp.NewRequestWithContext(ctx, method, absoluteUrl, payload)
 	if err != nil {

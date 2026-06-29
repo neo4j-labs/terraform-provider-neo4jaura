@@ -79,6 +79,7 @@ func NewMockServer() *MockServer {
 
 	// All other endpoints go through the auth middleware.
 	mux.HandleFunc("/v1/", ms.withAuth(ms.routeV1))
+	mux.HandleFunc("/v2beta1/", ms.withAuth(ms.routeV2Beta1))
 
 	ms.server = httptest.NewServer(mux)
 	return ms
@@ -505,6 +506,33 @@ func (ms *MockServer) handleGetSnapshot(w http.ResponseWriter, _ *http.Request, 
 	ms.mu.Unlock()
 
 	writeJSON(w, http.StatusOK, client.GetSnapshotResponse{Data: snap})
+}
+
+// ---------------------------------------------------------------------------
+// V2Beta1 router
+// ---------------------------------------------------------------------------
+
+func (ms *MockServer) routeV2Beta1(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2beta1/")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+
+	switch {
+	// GET /v2beta1/organizations
+	case len(parts) == 1 && parts[0] == "organizations" && r.Method == http.MethodGet:
+		ms.handleGetOrganizations(w, r)
+
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+func (ms *MockServer) handleGetOrganizations(w http.ResponseWriter, _ *http.Request) {
+	resp := client.GetOrganizationsResponse{
+		Data: []client.OrganizationData{
+			{Id: "test-org-id-001", Name: "Test Organization"},
+		},
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // ---------------------------------------------------------------------------

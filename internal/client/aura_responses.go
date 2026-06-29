@@ -123,3 +123,12 @@ type PostSnapshotResponse struct {
 type PostSnapshotData struct {
 	SnapshotId string `json:"snapshot_id"`
 }
+
+type GetOrganizationsResponse struct {
+	Data []OrganizationData `json:"data"`
+}
+
+type OrganizationData struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+}

@@ -29,7 +29,8 @@ import (
 )
 
 type AuraApi struct {
-	auraClient      *AuraClient
+	v1auraClient    *AuraClient
+	v2beta1Client   *AuraClient
 	instanceTimeout time.Duration
 	snapshotTimeout time.Duration
 }
@@ -39,7 +40,7 @@ const (
 	defaultSnapshotTimeout = time.Duration(300) * time.Second
 )
 
-func NewAuraApi(client *AuraClient, instanceTimeoutInSecs *int64, snapshotTimeoutInSecs *int64) *AuraApi {
+func NewAuraApi(client *AuraClient, v2beta1Client *AuraClient, instanceTimeoutInSecs *int64, snapshotTimeoutInSecs *int64) *AuraApi {
 	instanceTimeout := defaultInstanceTimeout
 	if instanceTimeoutInSecs != nil {
 		instanceTimeout = time.Duration(*instanceTimeoutInSecs) * time.Second
@@ -50,7 +51,8 @@ func NewAuraApi(client *AuraClient, instanceTimeoutInSecs *int64, snapshotTimeou
 		snapshotTimeout = time.Duration(*snapshotTimeoutInSecs) * time.Second
 	}
 	return &AuraApi{
-		auraClient:      client,
+		v1auraClient:    client,
+		v2beta1Client:   v2beta1Client,
 		instanceTimeout: instanceTimeout,
 		snapshotTimeout: snapshotTimeout,
 	}
@@ -83,7 +85,7 @@ func isSuccessfulResponseStatus(method string, status int) bool {
 }
 
 func (api *AuraApi) GetTenants(ctx context.Context) (GetProjectsResponse, error) {
-	payload, status, err := api.auraClient.Get(ctx, "tenants")
+	payload, status, err := api.v1auraClient.Get(ctx, "tenants")
 	if err != nil {
 		return GetProjectsResponse{}, err
 	}
@@ -97,7 +99,7 @@ func (api *AuraApi) PostInstance(ctx context.Context, request PostInstanceReques
 		return PostInstanceResponse{}, err
 	}
 
-	body, status, err := api.auraClient.Post(ctx, "instances", payload)
+	body, status, err := api.v1auraClient.Post(ctx, "instances", payload)
 	if err != nil {
 		return PostInstanceResponse{}, err
 	}
@@ -106,7 +108,7 @@ func (api *AuraApi) PostInstance(ctx context.Context, request PostInstanceReques
 }
 
 func (api *AuraApi) GetInstanceById(ctx context.Context, id string) (GetInstanceResponse, error) {
-	payload, status, err := api.auraClient.Get(ctx, "instances/"+id)
+	payload, status, err := api.v1auraClient.Get(ctx, "instances/"+id)
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}
@@ -117,7 +119,7 @@ func (api *AuraApi) GetInstanceById(ctx context.Context, id string) (GetInstance
 }
 
 func (api *AuraApi) DeleteInstanceById(ctx context.Context, id string) (GetInstanceResponse, error) {
-	payload, status, err := api.auraClient.Delete(ctx, "instances/"+id)
+	payload, status, err := api.v1auraClient.Delete(ctx, "instances/"+id)
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}
@@ -133,7 +135,7 @@ func (api *AuraApi) PatchInstanceById(ctx context.Context, id string, request Pa
 		return GetInstanceResponse{}, err
 	}
 
-	body, status, err := api.auraClient.Patch(ctx, "instances/"+id, payload)
+	body, status, err := api.v1auraClient.Patch(ctx, "instances/"+id, payload)
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}
@@ -141,7 +143,7 @@ func (api *AuraApi) PatchInstanceById(ctx context.Context, id string, request Pa
 }
 
 func (api *AuraApi) PauseInstanceById(ctx context.Context, id string) (GetInstanceResponse, error) {
-	body, status, err := api.auraClient.Post(ctx, fmt.Sprintf("instances/%s/pause", id), []byte("{}"))
+	body, status, err := api.v1auraClient.Post(ctx, fmt.Sprintf("instances/%s/pause", id), []byte("{}"))
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}
@@ -149,7 +151,7 @@ func (api *AuraApi) PauseInstanceById(ctx context.Context, id string) (GetInstan
 }
 
 func (api *AuraApi) ResumeInstanceById(ctx context.Context, id string) (GetInstanceResponse, error) {
-	body, status, err := api.auraClient.Post(ctx, fmt.Sprintf("instances/%s/resume", id), []byte("{}"))
+	body, status, err := api.v1auraClient.Post(ctx, fmt.Sprintf("instances/%s/resume", id), []byte("{}"))
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}
@@ -157,7 +159,7 @@ func (api *AuraApi) ResumeInstanceById(ctx context.Context, id string) (GetInsta
 }
 
 func (api *AuraApi) GetSnapshotsByInstanceId(ctx context.Context, instanceId string) (GetSnapshotsResponse, error) {
-	body, status, err := api.auraClient.Get(ctx, fmt.Sprintf("instances/%s/snapshots", instanceId))
+	body, status, err := api.v1auraClient.Get(ctx, fmt.Sprintf("instances/%s/snapshots", instanceId))
 	if err != nil {
 		return GetSnapshotsResponse{}, err
 	}
@@ -165,7 +167,7 @@ func (api *AuraApi) GetSnapshotsByInstanceId(ctx context.Context, instanceId str
 }
 
 func (api *AuraApi) GetSnapshotById(ctx context.Context, instanceId string, snapshotId string) (GetSnapshotResponse, error) {
-	body, status, err := api.auraClient.Get(ctx, fmt.Sprintf("instances/%s/snapshots/%s", instanceId, snapshotId))
+	body, status, err := api.v1auraClient.Get(ctx, fmt.Sprintf("instances/%s/snapshots/%s", instanceId, snapshotId))
 	if err != nil {
 		return GetSnapshotResponse{}, err
 	}
@@ -176,7 +178,7 @@ func (api *AuraApi) GetSnapshotById(ctx context.Context, instanceId string, snap
 }
 
 func (api *AuraApi) PostSnapshot(ctx context.Context, instanceId string) (PostSnapshotResponse, error) {
-	body, status, err := api.auraClient.Post(ctx, fmt.Sprintf("instances/%s/snapshots", instanceId), nil)
+	body, status, err := api.v1auraClient.Post(ctx, fmt.Sprintf("instances/%s/snapshots", instanceId), nil)
 	if err != nil {
 		return PostSnapshotResponse{}, err
 	}
@@ -246,11 +248,19 @@ func (api *AuraApi) WaitUntilInstanceIsInState(
 	)
 }
 
+func (api *AuraApi) GetOrganizations(ctx context.Context) (GetOrganizationsResponse, error) {
+	payload, status, err := api.v2beta1Client.Get(ctx, "organizations")
+	if err != nil {
+		return GetOrganizationsResponse{}, err
+	}
+	return unmarshalAuraResponse[GetOrganizationsResponse](http.MethodGet, status, payload)
+}
+
 func (api *AuraApi) WaitUntilInstanceIsDeleted(ctx context.Context, id string) (err error) {
 	_, err = util.WaitUntil(
 		ctx,
 		func() (status int, err error) {
-			_, status, err = api.auraClient.Get(ctx, "instances/"+id)
+			_, status, err = api.v1auraClient.Get(ctx, "instances/"+id)
 			tflog.Trace(ctx, fmt.Sprintf("Received response status %+d and error %+v", status, err))
 			return
 		},
