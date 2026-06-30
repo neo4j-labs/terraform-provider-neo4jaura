@@ -248,6 +248,14 @@ func (api *AuraApi) WaitUntilInstanceIsInState(
 	)
 }
 
+func (api *AuraApi) GetProjectsByOrganizationId(ctx context.Context, organizationId string) (GetProjectsResponse, error) {
+	payload, status, err := api.v2beta1Client.Get(ctx, fmt.Sprintf("organizations/%s/projects", organizationId))
+	if err != nil {
+		return GetProjectsResponse{}, err
+	}
+	return unmarshalAuraResponse[GetProjectsResponse](http.MethodGet, status, payload)
+}
+
 func (api *AuraApi) GetOrganizations(ctx context.Context) (GetOrganizationsResponse, error) {
 	payload, status, err := api.v2beta1Client.Get(ctx, "organizations")
 	if err != nil {

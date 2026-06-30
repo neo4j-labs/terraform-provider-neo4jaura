@@ -30,6 +30,37 @@ const testAccProjectsDataSourceConfig = defaultProviderConfig + `
 data "neo4jaura_projects" "this" {}
 `
 
+const testAccProjectsByOrgDataSourceConfig = defaultProviderConfig + `
+data "neo4jaura_projects" "this" {
+  organization_id = "test-org-id-001"
+}
+`
+
+func TestAcc_can_read_projects_by_organization_datasource(t *testing.T) {
+	testMockServer.Reset()
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccProjectsByOrgDataSourceConfig,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"data.neo4jaura_projects.this",
+						tfjsonpath.New("projects").AtSliceIndex(0).AtMapKey("id"),
+						knownvalue.StringExact("test-org-project-id-001"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.neo4jaura_projects.this",
+						tfjsonpath.New("projects").AtSliceIndex(1).AtMapKey("id"),
+						knownvalue.StringExact("test-org-project-id-002"),
+					),
+				},
+			},
+		},
+	})
+}
+
 func TestAcc_can_read_projects_datasource(t *testing.T) {
 	testMockServer.Reset()
 	resource.Test(t, resource.TestCase{

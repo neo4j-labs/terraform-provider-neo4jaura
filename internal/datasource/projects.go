@@ -41,8 +41,9 @@ type ProjectsDataSource struct {
 }
 
 type ProjectsModel struct {
-	Id       types.String `tfsdk:"id"`
-	Projects types.List   `tfsdk:"projects"`
+	Id             types.String `tfsdk:"id"`
+	OrganizationId types.String `tfsdk:"organization_id"`
+	Projects       types.List   `tfsdk:"projects"`
 }
 
 type ShortProjectModel struct {
@@ -80,6 +81,11 @@ func (ds *ProjectsDataSource) Schema(ctx context.Context, request datasource.Sch
 				Description:         "Placeholder identifier for the projects data source",
 				Computed:            true,
 			},
+			"organization_id": schema.StringAttribute{
+				MarkdownDescription: "When set, fetches only projects belonging to this organization.",
+				Description:         "When set, fetches only projects belonging to this organization.",
+				Optional:            true,
+			},
 			"projects": schema.ListNestedAttribute{
 				MarkdownDescription: "The list of all available projects.",
 				Description:         "The list of all available projects.",
@@ -112,7 +118,13 @@ func (ds *ProjectsDataSource) Read(ctx context.Context, request datasource.ReadR
 		return
 	}
 
-	tenantsResponse, err := ds.auraApi.GetTenants(ctx)
+	var tenantsResponse client.GetProjectsResponse
+	var err error
+	if !data.OrganizationId.IsNull() && !data.OrganizationId.IsUnknown() && data.OrganizationId.ValueString() != "" {
+		tenantsResponse, err = ds.auraApi.GetProjectsByOrganizationId(ctx, data.OrganizationId.ValueString())
+	} else {
+		tenantsResponse, err = ds.auraApi.GetTenants(ctx)
+	}
 	if err != nil {
 		response.Diagnostics.AddError("Error while reading projects", err.Error())
 		return

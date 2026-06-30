@@ -521,9 +521,23 @@ func (ms *MockServer) routeV2Beta1(w http.ResponseWriter, r *http.Request) {
 	case len(parts) == 1 && parts[0] == "organizations" && r.Method == http.MethodGet:
 		ms.handleGetOrganizations(w, r)
 
+	// GET /v2beta1/organizations/{id}/projects
+	case len(parts) == 3 && parts[0] == "organizations" && parts[2] == "projects" && r.Method == http.MethodGet:
+		ms.handleGetProjectsByOrganization(w, r, parts[1])
+
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (ms *MockServer) handleGetProjectsByOrganization(w http.ResponseWriter, _ *http.Request, _ string) {
+	resp := client.GetProjectsResponse{
+		Data: []client.ProjectResponseData{
+			{Id: "test-org-project-id-001", Name: "Org Project One"},
+			{Id: "test-org-project-id-002", Name: "Org Project Two"},
+		},
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (ms *MockServer) handleGetOrganizations(w http.ResponseWriter, _ *http.Request) {
