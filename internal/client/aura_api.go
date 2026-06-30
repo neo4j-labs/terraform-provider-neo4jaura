@@ -248,6 +248,25 @@ func (api *AuraApi) WaitUntilInstanceIsInState(
 	)
 }
 
+func (api *AuraApi) GetOrganizationUsers(ctx context.Context, organizationId string) (GetOrganizationUsersResponse, error) {
+	payload, status, err := api.v2beta1Client.Get(ctx, fmt.Sprintf("organizations/%s/users", organizationId))
+	if err != nil {
+		return GetOrganizationUsersResponse{}, err
+	}
+	return unmarshalAuraResponse[GetOrganizationUsersResponse](http.MethodGet, status, payload)
+}
+
+func (api *AuraApi) GetOrganizationUserDetails(ctx context.Context, organizationId, userId string) (GetOrganizationUserDetailsResponse, error) {
+	payload, status, err := api.v2beta1Client.Get(ctx, fmt.Sprintf("organizations/%s/users/%s", organizationId, userId))
+	if err != nil {
+		return GetOrganizationUserDetailsResponse{}, err
+	}
+	if status == 404 {
+		return GetOrganizationUserDetailsResponse{}, fmt.Errorf("user %s in organization %s: %w", userId, organizationId, ErrNotFound)
+	}
+	return unmarshalAuraResponse[GetOrganizationUserDetailsResponse](http.MethodGet, status, payload)
+}
+
 func (api *AuraApi) GetProjectsByOrganizationId(ctx context.Context, organizationId string) (GetProjectsResponse, error) {
 	payload, status, err := api.v2beta1Client.Get(ctx, fmt.Sprintf("organizations/%s/projects", organizationId))
 	if err != nil {

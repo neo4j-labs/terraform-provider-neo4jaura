@@ -525,9 +525,85 @@ func (ms *MockServer) routeV2Beta1(w http.ResponseWriter, r *http.Request) {
 	case len(parts) == 3 && parts[0] == "organizations" && parts[2] == "projects" && r.Method == http.MethodGet:
 		ms.handleGetProjectsByOrganization(w, r, parts[1])
 
+	// GET /v2beta1/organizations/{id}/users
+	case len(parts) == 3 && parts[0] == "organizations" && parts[2] == "users" && r.Method == http.MethodGet:
+		ms.handleGetOrgUsers(w, r)
+
+	// GET /v2beta1/organizations/{orgId}/users/{userId}
+	case len(parts) == 4 && parts[0] == "organizations" && parts[2] == "users" && r.Method == http.MethodGet:
+		ms.handleGetOrgUser(w, r, parts[3])
+
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (ms *MockServer) handleGetOrgUsers(w http.ResponseWriter, _ *http.Request) {
+	lastActivity := "2024-06-01T12:00:00Z"
+	resp := client.GetOrganizationUsersResponse{
+		Data: []client.OrganizationUserData{
+			{
+				UserId:                     "user-001",
+				Email:                      "alice@example.com",
+				ExemptFromAutomaticRemoval: false,
+				LastActivityAt:             &lastActivity,
+				MfaEnrollmentStatus:        "enrolled",
+				MfaEnrolledMethods:         []client.MfaMethodData{{Id: "totp", EnrolledAt: "2024-01-01T00:00:00Z"}},
+				OrganizationRoles:          []string{"admin"},
+			},
+			{
+				UserId:                     "user-002",
+				Email:                      "bob@example.com",
+				ExemptFromAutomaticRemoval: true,
+				LastActivityAt:             nil,
+				MfaEnrollmentStatus:        "not_enrolled",
+				MfaEnrolledMethods:         []client.MfaMethodData{},
+				OrganizationRoles:          []string{"member"},
+			},
+		},
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (ms *MockServer) handleGetOrgUser(w http.ResponseWriter, _ *http.Request, userId string) {
+	lastActivity := "2024-06-01T12:00:00Z"
+	details := map[string]client.OrganizationUserDetailsData{
+		"user-001": {
+			OrganizationUserData: client.OrganizationUserData{
+				UserId:                     "user-001",
+				Email:                      "alice@example.com",
+				ExemptFromAutomaticRemoval: false,
+				LastActivityAt:             &lastActivity,
+				MfaEnrollmentStatus:        "enrolled",
+				MfaEnrolledMethods:         []client.MfaMethodData{{Id: "totp", EnrolledAt: "2024-01-01T00:00:00Z"}},
+				OrganizationRoles:          []string{"admin"},
+			},
+			Projects: []client.UserProjectData{
+				{Id: "proj-001", Name: "Alpha", ProjectRoles: []string{"owner"}},
+				{Id: "proj-002", Name: "Beta", ProjectRoles: []string{"viewer"}},
+			},
+		},
+		"user-002": {
+			OrganizationUserData: client.OrganizationUserData{
+				UserId:                     "user-002",
+				Email:                      "bob@example.com",
+				ExemptFromAutomaticRemoval: true,
+				LastActivityAt:             nil,
+				MfaEnrollmentStatus:        "not_enrolled",
+				MfaEnrolledMethods:         []client.MfaMethodData{},
+				OrganizationRoles:          []string{"member"},
+			},
+			Projects: []client.UserProjectData{
+				{Id: "proj-002", Name: "Beta", ProjectRoles: []string{"owner"}},
+			},
+		},
+	}
+	d, ok := details[userId]
+	if !ok {
+		http.NotFound(w, nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, client.GetOrganizationUserDetailsResponse{Data: d})
 }
 
 func (ms *MockServer) handleGetProjectsByOrganization(w http.ResponseWriter, _ *http.Request, _ string) {

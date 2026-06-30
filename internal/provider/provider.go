@@ -120,6 +120,7 @@ func (n *Neo4jAuraProvider) DataSources(_ context.Context) []func() datasource.D
 		auradatasource.NewProjectDataSource,
 		auradatasource.NewSnapshotDataSource,
 		auradatasource.NewOrganizationsDataSource,
+		auradatasource.NewUsersDataSource,
 	}
 }
 
