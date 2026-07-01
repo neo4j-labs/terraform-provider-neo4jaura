@@ -124,6 +124,16 @@ type PostSnapshotData struct {
 	SnapshotId string `json:"snapshot_id"`
 }
 
+type GetProjectUsersResponse struct {
+	Data []ProjectUserData `json:"data"`
+}
+
+type ProjectUserData struct {
+	UserId       string   `json:"user_id"`
+	Email        string   `json:"email"`
+	ProjectRoles []string `json:"project_roles"`
+}
+
 type GetOrganizationUsersResponse struct {
 	Data []OrganizationUserData `json:"data"`
 }

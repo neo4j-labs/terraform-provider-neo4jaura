@@ -533,9 +533,31 @@ func (ms *MockServer) routeV2Beta1(w http.ResponseWriter, r *http.Request) {
 	case len(parts) == 4 && parts[0] == "organizations" && parts[2] == "users" && r.Method == http.MethodGet:
 		ms.handleGetOrgUser(w, r, parts[3])
 
+	// GET /v2beta1/organizations/{orgId}/projects/{projectId}/users
+	case len(parts) == 5 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "users" && r.Method == http.MethodGet:
+		ms.handleGetProjectUsers(w, r, parts[3])
+
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (ms *MockServer) handleGetProjectUsers(w http.ResponseWriter, _ *http.Request, projectId string) {
+	// proj-001: only alice; proj-002: alice and bob
+	usersByProject := map[string][]client.ProjectUserData{
+		"proj-001": {
+			{UserId: "user-001", Email: "alice@example.com", ProjectRoles: []string{"owner"}},
+		},
+		"proj-002": {
+			{UserId: "user-001", Email: "alice@example.com", ProjectRoles: []string{"viewer"}},
+			{UserId: "user-002", Email: "bob@example.com", ProjectRoles: []string{"owner"}},
+		},
+	}
+	data, ok := usersByProject[projectId]
+	if !ok {
+		data = []client.ProjectUserData{}
+	}
+	writeJSON(w, http.StatusOK, client.GetProjectUsersResponse{Data: data})
 }
 
 func (ms *MockServer) handleGetOrgUsers(w http.ResponseWriter, _ *http.Request) {
@@ -611,6 +633,8 @@ func (ms *MockServer) handleGetProjectsByOrganization(w http.ResponseWriter, _ *
 		Data: []client.ProjectResponseData{
 			{Id: "test-org-project-id-001", Name: "Org Project One"},
 			{Id: "test-org-project-id-002", Name: "Org Project Two"},
+			{Id: "proj-001", Name: "Alpha"},
+			{Id: "proj-002", Name: "Beta"},
 		},
 	}
 	writeJSON(w, http.StatusOK, resp)

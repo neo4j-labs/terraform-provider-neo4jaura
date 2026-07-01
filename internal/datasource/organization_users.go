@@ -41,10 +41,11 @@ type OrganizationUsersDataSource struct {
 }
 
 type OrganizationUsersModel struct {
-	Id             types.String            `tfsdk:"id"`
-	OrganizationId types.String            `tfsdk:"organization_id"`
-	ProjectId      types.String            `tfsdk:"project_id"`
-	Users          []OrganizationUserModel `tfsdk:"users"`
+	Id              types.String            `tfsdk:"id"`
+	OrganizationId  types.String            `tfsdk:"organization_id"`
+	ProjectId       types.String            `tfsdk:"project_id"`
+	IncludeProjects types.Bool              `tfsdk:"include_projects"`
+	Users           []OrganizationUserModel `tfsdk:"users"`
 }
 
 type OrganizationUserModel struct {
@@ -112,6 +113,11 @@ func (ds *OrganizationUsersDataSource) Schema(_ context.Context, _ datasource.Sc
 				Optional:            true,
 				MarkdownDescription: "When set, only users belonging to this project are returned.",
 				Description:         "When set, only users belonging to this project are returned.",
+			},
+			"include_projects": schema.BoolAttribute{
+				Optional:            true,
+				MarkdownDescription: "When true, fetches project membership. Defaults to `true`.",
+				Description:         "When true, fetches project membership. Defaults to true.",
 			},
 			"users": schema.ListNestedAttribute{
 				Computed:            true,
@@ -217,6 +223,8 @@ func (ds *OrganizationUsersDataSource) Read(ctx context.Context, request datasou
 	}
 
 	orgId := data.OrganizationId.ValueString()
+	projectId := data.ProjectId.ValueString()                                            // "" when null
+	includeProjects := data.IncludeProjects.IsNull() || data.IncludeProjects.ValueBool() // true by default
 
 	usersResp, err := ds.auraApi.GetOrganizationUsers(ctx, orgId)
 	if err != nil {
@@ -224,31 +232,82 @@ func (ds *OrganizationUsersDataSource) Read(ctx context.Context, request datasou
 		return
 	}
 
-	projectId := ""
-	if !data.ProjectId.IsNull() && !data.ProjectId.IsUnknown() {
-		projectId = data.ProjectId.ValueString()
-	}
-
-	users := make([]OrganizationUserModel, 0)
-	for _, u := range usersResp.Data {
-		detailsResp, err := ds.auraApi.GetOrganizationUserDetails(ctx, orgId, u.UserId)
+	// When project_id is set, fetch project members in one call.
+	// Roles per user come from this response; no per-user detail call is needed for the filtered path.
+	var projectMemberIDs map[string]struct{}
+	var projectMemberRoles map[string][]string // userId → project roles
+	var projectName string
+	if projectId != "" {
+		projectUsersResp, err := ds.auraApi.GetProjectUsers(ctx, orgId, projectId)
 		if err != nil {
-			response.Diagnostics.AddError("Error reading user details", fmt.Sprintf("user %s: %s", u.UserId, err.Error()))
+			response.Diagnostics.AddError("Error reading project users", err.Error())
 			return
 		}
+		projectMemberIDs = make(map[string]struct{}, len(projectUsersResp.Data))
+		projectMemberRoles = make(map[string][]string, len(projectUsersResp.Data))
+		for _, pu := range projectUsersResp.Data {
+			projectMemberIDs[pu.UserId] = struct{}{}
+			projectMemberRoles[pu.UserId] = pu.ProjectRoles
+		}
 
-		projects := detailsResp.Data.Projects
-		if projectId != "" {
-			belongsToProject := false
-			for _, p := range projects {
+		// Fetch the project name once so we can build the project model without per-user calls.
+		if includeProjects {
+			projectsResp, err := ds.auraApi.GetProjectsByOrganizationId(ctx, orgId)
+			if err != nil {
+				response.Diagnostics.AddError("Error reading organization projects", err.Error())
+				return
+			}
+			for _, p := range projectsResp.Data {
 				if p.Id == projectId {
-					belongsToProject = true
+					projectName = p.Name
 					break
 				}
 			}
-			if !belongsToProject {
+		}
+	}
+
+	users := make([]OrganizationUserModel, 0, len(usersResp.Data))
+	for _, u := range usersResp.Data {
+		if projectMemberIDs != nil {
+			if _, ok := projectMemberIDs[u.UserId]; !ok {
 				continue
 			}
+		}
+
+		var projectModels []UserProjectModel
+		switch {
+		case includeProjects && projectId != "":
+			// Roles already fetched from the project users call; name from the projects list.
+			roles := make([]types.String, len(projectMemberRoles[u.UserId]))
+			for j, r := range projectMemberRoles[u.UserId] {
+				roles[j] = types.StringValue(r)
+			}
+			projectModels = []UserProjectModel{{
+				Id:           types.StringValue(projectId),
+				Name:         types.StringValue(projectName),
+				ProjectRoles: roles,
+			}}
+		case includeProjects:
+			// No project filter — fetch full project list via per-user detail call.
+			detailsResp, err := ds.auraApi.GetOrganizationUserDetails(ctx, orgId, u.UserId)
+			if err != nil {
+				response.Diagnostics.AddError("Error reading user details", fmt.Sprintf("user %s: %s", u.UserId, err.Error()))
+				return
+			}
+			projectModels = make([]UserProjectModel, len(detailsResp.Data.Projects))
+			for i, p := range detailsResp.Data.Projects {
+				roles := make([]types.String, len(p.ProjectRoles))
+				for j, r := range p.ProjectRoles {
+					roles[j] = types.StringValue(r)
+				}
+				projectModels[i] = UserProjectModel{
+					Id:           types.StringValue(p.Id),
+					Name:         types.StringValue(p.Name),
+					ProjectRoles: roles,
+				}
+			}
+		default:
+			projectModels = []UserProjectModel{}
 		}
 
 		lastActivityAt := types.StringNull()
@@ -267,19 +326,6 @@ func (ds *OrganizationUsersDataSource) Read(ctx context.Context, request datasou
 		orgRoles := make([]types.String, len(u.OrganizationRoles))
 		for i, r := range u.OrganizationRoles {
 			orgRoles[i] = types.StringValue(r)
-		}
-
-		projectModels := make([]UserProjectModel, len(projects))
-		for i, p := range projects {
-			roles := make([]types.String, len(p.ProjectRoles))
-			for j, r := range p.ProjectRoles {
-				roles[j] = types.StringValue(r)
-			}
-			projectModels[i] = UserProjectModel{
-				Id:           types.StringValue(p.Id),
-				Name:         types.StringValue(p.Name),
-				ProjectRoles: roles,
-			}
 		}
 
 		users = append(users, OrganizationUserModel{

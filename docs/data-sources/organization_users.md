@@ -21,6 +21,7 @@ Aura Organization Users.
 
 ### Optional
 
+- `include_projects` (Boolean) When true, fetches project membership for each user via individual API calls. Defaults to true.
 - `project_id` (String) When set, only users belonging to this project are returned.
 
 ### Read-Only

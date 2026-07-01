@@ -248,6 +248,14 @@ func (api *AuraApi) WaitUntilInstanceIsInState(
 	)
 }
 
+func (api *AuraApi) GetProjectUsers(ctx context.Context, organizationId, projectId string) (GetProjectUsersResponse, error) {
+	payload, status, err := api.v2beta1Client.Get(ctx, fmt.Sprintf("organizations/%s/projects/%s/users", organizationId, projectId))
+	if err != nil {
+		return GetProjectUsersResponse{}, err
+	}
+	return unmarshalAuraResponse[GetProjectUsersResponse](http.MethodGet, status, payload)
+}
+
 func (api *AuraApi) GetOrganizationUsers(ctx context.Context, organizationId string) (GetOrganizationUsersResponse, error) {
 	payload, status, err := api.v2beta1Client.Get(ctx, fmt.Sprintf("organizations/%s/users", organizationId))
 	if err != nil {
