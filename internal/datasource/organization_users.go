@@ -20,11 +20,13 @@ package datasource
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/client"
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/domain"
 )
 
 var (
@@ -106,13 +108,13 @@ func (ds *OrganizationUsersDataSource) Schema(_ context.Context, _ datasource.Sc
 			},
 			"organization_id": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "The ID of the organization to fetch users from.",
-				Description:         "The ID of the organization to fetch users from.",
+				MarkdownDescription: "The ID of the organization the users are members of.",
+				Description:         "The ID of the organization the users are members of.",
 			},
 			"project_id": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "When set, only users belonging to this project are returned.",
-				Description:         "When set, only users belonging to this project are returned.",
+				MarkdownDescription: "When set, only users with membership in this project are returned.",
+				Description:         "When set, only users with membership in this project are returned.",
 			},
 			"include_projects": schema.BoolAttribute{
 				Optional:            true,
@@ -152,8 +154,8 @@ func (ds *OrganizationUsersDataSource) Schema(_ context.Context, _ datasource.Sc
 							Attributes: map[string]schema.Attribute{
 								"status": schema.StringAttribute{
 									Computed:            true,
-									MarkdownDescription: "The MFA enrollment status.",
-									Description:         "The MFA enrollment status.",
+									MarkdownDescription: fmt.Sprintf("The MFA enrollment status. Possible values: `%s`.", strings.Join(domain.MfaEnrollmentStatuses, "`, `")),
+									Description:         fmt.Sprintf("The MFA enrollment status. Possible values: %s.", strings.Join(domain.MfaEnrollmentStatuses, ", ")),
 								},
 								"methods": schema.ListNestedAttribute{
 									Computed:            true,
@@ -179,8 +181,8 @@ func (ds *OrganizationUsersDataSource) Schema(_ context.Context, _ datasource.Sc
 						"organization_roles": schema.ListAttribute{
 							Computed:            true,
 							ElementType:         types.StringType,
-							MarkdownDescription: "The user's roles within the organization.",
-							Description:         "The user's roles within the organization.",
+							MarkdownDescription: fmt.Sprintf("The user's roles within the organization. Possible values: `%s`.", strings.Join(domain.OrganizationRoles, "`, `")),
+							Description:         fmt.Sprintf("The user's roles within the organization. Possible values: %s.", strings.Join(domain.OrganizationRoles, ", ")),
 						},
 						"projects": schema.ListNestedAttribute{
 							Computed:            true,
@@ -201,8 +203,8 @@ func (ds *OrganizationUsersDataSource) Schema(_ context.Context, _ datasource.Sc
 									"project_roles": schema.ListAttribute{
 										Computed:            true,
 										ElementType:         types.StringType,
-										MarkdownDescription: "The user's roles within the project.",
-										Description:         "The user's roles within the project.",
+										MarkdownDescription: fmt.Sprintf("The user's roles within the project. Possible values: `%s`.", strings.Join(domain.ProjectRoles, "`, `")),
+										Description:         fmt.Sprintf("The user's roles within the project. Possible values: %s.", strings.Join(domain.ProjectRoles, ", ")),
 									},
 								},
 							},

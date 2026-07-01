@@ -17,12 +17,12 @@ Aura Organization Users.
 
 ### Required
 
-- `organization_id` (String) The ID of the organization to fetch users from.
+- `organization_id` (String) The ID of the organization the users are members of.
 
 ### Optional
 
-- `include_projects` (Boolean) When true, fetches project membership for each user via individual API calls. Defaults to true.
-- `project_id` (String) When set, only users belonging to this project are returned.
+- `include_projects` (Boolean) When true, fetches project membership. Defaults to `true`.
+- `project_id` (String) When set, only users with membership in this project are returned.
 
 ### Read-Only
 
@@ -39,7 +39,7 @@ Read-Only:
 - `id` (String) The unique identifier of the user.
 - `last_activity_at` (String) The timestamp of the user's last activity.
 - `mfa_enrollment` (Attributes) The MFA enrollment details of the user. (see [below for nested schema](#nestedatt--users--mfa_enrollment))
-- `organization_roles` (List of String) The user's roles within the organization.
+- `organization_roles` (List of String) The user's roles within the organization. Possible values: `organization-owner`, `organization-admin`, `organization-member`.
 - `projects` (Attributes List) The projects the user has access to within the organization. (see [below for nested schema](#nestedatt--users--projects))
 
 <a id="nestedatt--users--mfa_enrollment"></a>
@@ -48,7 +48,7 @@ Read-Only:
 Read-Only:
 
 - `methods` (Attributes List) The MFA methods the user has enrolled in. (see [below for nested schema](#nestedatt--users--mfa_enrollment--methods))
-- `status` (String) The MFA enrollment status.
+- `status` (String) The MFA enrollment status. Possible values: `enrolled`, `not_enrolled`, `external_auth_provider`, `non_applicable`.
 
 <a id="nestedatt--users--mfa_enrollment--methods"></a>
 ### Nested Schema for `users.mfa_enrollment.methods`
@@ -67,4 +67,4 @@ Read-Only:
 
 - `id` (String) The unique identifier of the project.
 - `name` (String) The name of the project.
-- `project_roles` (List of String) The user's roles within the project.
+- `project_roles` (List of String) The user's roles within the project. Possible values: `project-admin`, `project-member`, `project-viewer`, `project-metrics-integration-reader`.
