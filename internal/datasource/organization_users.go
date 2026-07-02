@@ -34,7 +34,7 @@ var (
 	_ datasource.DataSourceWithConfigure = &OrganizationUsersDataSource{}
 )
 
-func NewUsersDataSource() datasource.DataSource {
+func NewOrganizationUsersDataSource() datasource.DataSource {
 	return &OrganizationUsersDataSource{}
 }
 

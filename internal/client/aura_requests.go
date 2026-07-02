@@ -43,3 +43,12 @@ type PatchInstanceRequest struct {
 	VectorOptimized      *bool   `json:"vector_optimized,omitempty"`
 	GraphAnalyticsPlugin *bool   `json:"graph_analytics_plugin,omitempty"`
 }
+
+type PostProjectUserRequest struct {
+	ProjectRoles []string `json:"project_roles"`
+	UserId       string   `json:"user_id"`
+}
+
+type PatchProjectUserRequest struct {
+	ProjectRoles []string `json:"project_roles"`
+}
