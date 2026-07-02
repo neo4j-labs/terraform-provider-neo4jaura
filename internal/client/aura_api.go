@@ -291,6 +291,47 @@ func (api *AuraApi) GetOrganizations(ctx context.Context) (GetOrganizationsRespo
 	return unmarshalAuraResponse[GetOrganizationsResponse](http.MethodGet, status, payload)
 }
 
+func (api *AuraApi) PostProjectUser(ctx context.Context, orgId, projectId string, req PostProjectUserRequest) error {
+	payload, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+	path := fmt.Sprintf("organizations/%s/projects/%s/users/%s", orgId, projectId, req.UserId)
+	body, status, err := api.v2beta1Client.Post(ctx, path, payload)
+	if err != nil {
+		return err
+	}
+	if status == http.StatusCreated || status == http.StatusOK {
+		return nil
+	}
+	return fmt.Errorf("aura error: Status: %d. Response: %s", status, string(body))
+}
+
+func (api *AuraApi) PatchProjectUser(ctx context.Context, orgId, projectId, userId string, req PatchProjectUserRequest) (PatchProjectUserResponse, error) {
+	payload, err := json.Marshal(req)
+	if err != nil {
+		return PatchProjectUserResponse{}, err
+	}
+	path := fmt.Sprintf("organizations/%s/projects/%s/users/%s", orgId, projectId, userId)
+	body, status, err := api.v2beta1Client.Patch(ctx, path, payload)
+	if err != nil {
+		return PatchProjectUserResponse{}, err
+	}
+	return unmarshalAuraResponse[PatchProjectUserResponse](http.MethodPatch, status, body)
+}
+
+func (api *AuraApi) DeleteProjectUser(ctx context.Context, orgId, projectId, userId string) error {
+	path := fmt.Sprintf("organizations/%s/projects/%s/users/%s", orgId, projectId, userId)
+	body, status, err := api.v2beta1Client.Delete(ctx, path)
+	if err != nil {
+		return err
+	}
+	if status == http.StatusNoContent || status == http.StatusOK || status == http.StatusAccepted {
+		return nil
+	}
+	return fmt.Errorf("aura error: Status: %d. Response: %s", status, string(body))
+}
+
 func (api *AuraApi) WaitUntilInstanceIsDeleted(ctx context.Context, id string) (err error) {
 	_, err = util.WaitUntil(
 		ctx,

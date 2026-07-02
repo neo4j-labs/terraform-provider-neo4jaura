@@ -176,3 +176,7 @@ type OrganizationData struct {
 	Id   string `json:"id"`
 	Name string `json:"name"`
 }
+
+type PatchProjectUserResponse struct {
+	Data ProjectUserData `json:"data"`
+}
