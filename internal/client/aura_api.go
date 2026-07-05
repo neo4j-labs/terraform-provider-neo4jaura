@@ -296,7 +296,7 @@ func (api *AuraApi) PostProjectUser(ctx context.Context, orgId, projectId string
 	if err != nil {
 		return err
 	}
-	path := fmt.Sprintf("organizations/%s/projects/%s/users/%s", orgId, projectId, req.UserId)
+	path := fmt.Sprintf("organizations/%s/projects/%s/users", orgId, projectId)
 	body, status, err := api.v2beta1Client.Post(ctx, path, payload)
 	if err != nil {
 		return err

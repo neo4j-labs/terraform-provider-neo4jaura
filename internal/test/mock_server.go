@@ -556,9 +556,9 @@ func (ms *MockServer) routeV2Beta1(w http.ResponseWriter, r *http.Request) {
 	case len(parts) == 5 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "users" && r.Method == http.MethodGet:
 		ms.handleGetProjectUsers(w, r, parts[1], parts[3])
 
-	// POST /v2beta1/organizations/{orgId}/projects/{projectId}/users/{userId}
-	case len(parts) == 6 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "users" && r.Method == http.MethodPost:
-		ms.handlePostProjectUser(w, r, parts[1], parts[3], parts[5])
+	// POST /v2beta1/organizations/{orgId}/projects/{projectId}/users
+	case len(parts) == 5 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "users" && r.Method == http.MethodPost:
+		ms.handlePostProjectUser(w, r, parts[1], parts[3])
 
 	// PATCH /v2beta1/organizations/{orgId}/projects/{projectId}/users/{userId}
 	case len(parts) == 6 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "users" && r.Method == http.MethodPatch:
@@ -611,14 +611,18 @@ func (ms *MockServer) handleGetProjectUsers(w http.ResponseWriter, _ *http.Reque
 	writeJSON(w, http.StatusOK, client.GetProjectUsersResponse{Data: data})
 }
 
-func (ms *MockServer) handlePostProjectUser(w http.ResponseWriter, r *http.Request, orgId, projectId, userId string) {
+func (ms *MockServer) handlePostProjectUser(w http.ResponseWriter, r *http.Request, orgId, projectId string) {
 	var req client.PostProjectUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+	if req.UserId == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
 
-	key := projectUserKey(orgId, projectId, userId)
+	key := projectUserKey(orgId, projectId, req.UserId)
 	ms.mu.Lock()
 	ms.projectUsers[key] = req.ProjectRoles
 	ms.mu.Unlock()
