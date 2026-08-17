@@ -63,16 +63,23 @@ type MockServer struct {
 	snapshotListEmptyUntil map[string]int
 	// projectUsers is keyed by "<orgId>/<projectId>/<userId>" and stores project roles.
 	projectUsers map[string][]string
+	// organizationUsers stores dynamically seeded or PATCH-updated org user data,
+	// keyed by "<orgId>/<userId>". Takes precedence over static user data.
+	organizationUsers map[string]client.OrganizationUserData
+	// deletedOrganizationUsers tracks users deleted via DELETE; subsequent GETs return 404.
+	deletedOrganizationUsers map[string]bool
 }
 
 // NewMockServer creates a new MockServer, registers all handlers, and starts
 // the underlying httptest.Server. Call Close() when finished.
 func NewMockServer() *MockServer {
 	ms := &MockServer{
-		instances:              make(map[string]*mockInstanceState),
-		snapshots:              make(map[string]*mockSnapshotState),
-		snapshotListEmptyUntil: make(map[string]int),
-		projectUsers:           make(map[string][]string),
+		instances:                make(map[string]*mockInstanceState),
+		snapshots:                make(map[string]*mockSnapshotState),
+		snapshotListEmptyUntil:   make(map[string]int),
+		projectUsers:             make(map[string][]string),
+		organizationUsers:        make(map[string]client.OrganizationUserData),
+		deletedOrganizationUsers: make(map[string]bool),
 	}
 
 	mux := http.NewServeMux()
@@ -107,6 +114,8 @@ func (ms *MockServer) Reset() {
 	ms.snapshots = make(map[string]*mockSnapshotState)
 	ms.snapshotListEmptyUntil = make(map[string]int)
 	ms.projectUsers = make(map[string][]string)
+	ms.organizationUsers = make(map[string]client.OrganizationUserData)
+	ms.deletedOrganizationUsers = make(map[string]bool)
 }
 
 // HoldSnapshotList makes the next n calls to GET /v1/instances/{instanceId}/snapshots
@@ -179,6 +188,34 @@ func (ms *MockServer) ProjectUserExists(orgId, projectId, userId string) bool {
 	defer ms.mu.Unlock()
 	_, ok := ms.projectUsers[projectUserKey(orgId, projectId, userId)]
 	return ok
+}
+
+// SeedOrganizationUser inserts an org user into the mock's dynamic state store,
+// making it available via GET /v2beta1/organizations/{orgId}/users/{userId}.
+// It also clears any prior deletion marker for the same user.
+func (ms *MockServer) SeedOrganizationUser(orgId string, user client.OrganizationUserData) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	key := orgUserKey(orgId, user.UserId)
+	ms.organizationUsers[key] = user
+	delete(ms.deletedOrganizationUsers, key)
+}
+
+// OrganizationUserExists reports whether an org user with the given IDs is present
+// in the mock (not deleted). Returns false for users that were never seeded or were
+// deleted via DELETE.
+func (ms *MockServer) OrganizationUserExists(orgId, userId string) bool {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	key := orgUserKey(orgId, userId)
+	if ms.deletedOrganizationUsers[key] {
+		return false
+	}
+	if _, ok := ms.organizationUsers[key]; ok {
+		return true
+	}
+	// Fall back to static users.
+	return userId == "user-001" || userId == "user-002"
 }
 
 // SeedSnapshot inserts a snapshot into the mock's state store. The snapshot
@@ -568,6 +605,14 @@ func (ms *MockServer) routeV2Beta1(w http.ResponseWriter, r *http.Request) {
 	case len(parts) == 6 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "users" && r.Method == http.MethodDelete:
 		ms.handleDeleteProjectUser(w, r, parts[1], parts[3], parts[5])
 
+	// PATCH /v2beta1/organizations/{orgId}/users/{userId}
+	case len(parts) == 4 && parts[0] == "organizations" && parts[2] == "users" && r.Method == http.MethodPatch:
+		ms.handlePatchOrgUser(w, r, parts[1], parts[3])
+
+	// DELETE /v2beta1/organizations/{orgId}/users/{userId}
+	case len(parts) == 4 && parts[0] == "organizations" && parts[2] == "users" && r.Method == http.MethodDelete:
+		ms.handleDeleteOrgUser(w, r, parts[1], parts[3])
+
 	default:
 		http.NotFound(w, r)
 	}
@@ -709,7 +754,7 @@ func (ms *MockServer) handleGetOrgUser(w http.ResponseWriter, _ *http.Request, o
 			LastActivityAt:             &lastActivity,
 			MfaEnrollmentStatus:        "enrolled",
 			MfaEnrolledMethods:         []client.MfaMethodData{{Id: "totp", EnrolledAt: "2024-01-01T00:00:00Z"}},
-			OrganizationRoles:          []string{"admin"},
+			OrganizationRoles:          []string{"organization-admin"},
 		},
 		"user-002": {
 			UserId:                     "user-002",
@@ -718,7 +763,7 @@ func (ms *MockServer) handleGetOrgUser(w http.ResponseWriter, _ *http.Request, o
 			LastActivityAt:             nil,
 			MfaEnrollmentStatus:        "not_enrolled",
 			MfaEnrolledMethods:         []client.MfaMethodData{},
-			OrganizationRoles:          []string{"member"},
+			OrganizationRoles:          []string{"organization-member"},
 		},
 	}
 	staticProjects := map[string][]client.UserProjectData{
@@ -731,10 +776,27 @@ func (ms *MockServer) handleGetOrgUser(w http.ResponseWriter, _ *http.Request, o
 		},
 	}
 
-	userData, ok := staticUsers[userId]
-	if !ok {
+	key := orgUserKey(orgId, userId)
+
+	ms.mu.Lock()
+
+	if ms.deletedOrganizationUsers[key] {
+		ms.mu.Unlock()
 		http.NotFound(w, nil)
 		return
+	}
+
+	var userData client.OrganizationUserData
+	if dynamic, ok := ms.organizationUsers[key]; ok {
+		userData = dynamic
+	} else {
+		static, ok := staticUsers[userId]
+		if !ok {
+			ms.mu.Unlock()
+			http.NotFound(w, nil)
+			return
+		}
+		userData = static
 	}
 
 	projects := make([]client.UserProjectData, len(staticProjects[userId]))
@@ -746,9 +808,8 @@ func (ms *MockServer) handleGetOrgUser(w http.ResponseWriter, _ *http.Request, o
 	}
 
 	// Append dynamic project memberships from projectUsers store (not already in static list).
-	ms.mu.Lock()
-	for key, roles := range ms.projectUsers {
-		parts := strings.SplitN(key, "/", 3)
+	for pkey, roles := range ms.projectUsers {
+		parts := strings.SplitN(pkey, "/", 3)
 		if len(parts) == 3 && parts[0] == orgId && parts[2] == userId {
 			projectId := parts[1]
 			if _, exists := staticProjectIds[projectId]; !exists {
@@ -759,6 +820,7 @@ func (ms *MockServer) handleGetOrgUser(w http.ResponseWriter, _ *http.Request, o
 			}
 		}
 	}
+
 	ms.mu.Unlock()
 
 	writeJSON(w, http.StatusOK, client.GetOrganizationUserDetailsResponse{
@@ -767,6 +829,70 @@ func (ms *MockServer) handleGetOrgUser(w http.ResponseWriter, _ *http.Request, o
 			Projects:             projects,
 		},
 	})
+}
+
+func (ms *MockServer) handlePatchOrgUser(w http.ResponseWriter, r *http.Request, orgId, userId string) {
+	var req client.PatchOrganizationUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	key := orgUserKey(orgId, userId)
+	lastActivity := "2024-06-01T12:00:00Z"
+
+	staticUsers := map[string]client.OrganizationUserData{
+		"user-001": {
+			UserId: "user-001", Email: "alice@example.com",
+			ExemptFromAutomaticRemoval: false, LastActivityAt: &lastActivity,
+			MfaEnrollmentStatus: "enrolled",
+			MfaEnrolledMethods:  []client.MfaMethodData{{Id: "totp", EnrolledAt: "2024-01-01T00:00:00Z"}},
+		},
+		"user-002": {
+			UserId: "user-002", Email: "bob@example.com",
+			ExemptFromAutomaticRemoval: true,
+			MfaEnrollmentStatus:        "not_enrolled",
+			MfaEnrolledMethods:         []client.MfaMethodData{},
+		},
+	}
+
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	if ms.deletedOrganizationUsers[key] {
+		http.NotFound(w, nil)
+		return
+	}
+
+	var userData client.OrganizationUserData
+	if dynamic, ok := ms.organizationUsers[key]; ok {
+		userData = dynamic
+	} else if static, ok := staticUsers[userId]; ok {
+		userData = static
+	} else {
+		http.NotFound(w, nil)
+		return
+	}
+
+	userData.OrganizationRoles = req.OrganizationRoles
+	ms.organizationUsers[key] = userData
+
+	writeJSON(w, http.StatusOK, client.PatchOrganizationUserResponse{Data: userData})
+}
+
+func (ms *MockServer) handleDeleteOrgUser(w http.ResponseWriter, _ *http.Request, orgId, userId string) {
+	key := orgUserKey(orgId, userId)
+
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	if ms.deletedOrganizationUsers[key] {
+		http.NotFound(w, nil)
+		return
+	}
+
+	ms.deletedOrganizationUsers[key] = true
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (ms *MockServer) handleGetProjectsByOrganization(w http.ResponseWriter, _ *http.Request, _ string) {
@@ -800,6 +926,10 @@ func snapshotKey(instanceId, snapshotId string) string {
 
 func projectUserKey(orgId, projectId, userId string) string {
 	return orgId + "/" + projectId + "/" + userId
+}
+
+func orgUserKey(orgId, userId string) string {
+	return orgId + "/" + userId
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

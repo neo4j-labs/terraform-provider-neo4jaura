@@ -52,3 +52,7 @@ type PostProjectUserRequest struct {
 type PatchProjectUserRequest struct {
 	ProjectRoles []string `json:"project_roles"`
 }
+
+type PatchOrganizationUserRequest struct {
+	OrganizationRoles []string `json:"organization_roles"`
+}

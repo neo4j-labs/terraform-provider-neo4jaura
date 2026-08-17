@@ -129,6 +129,7 @@ func (n *Neo4jAuraProvider) Resources(_ context.Context) []func() resource.Resou
 		auraresource.NewInstanceResource,
 		auraresource.NewSnapshotResource,
 		auraresource.NewProjectUserResource,
+		auraresource.NewOrganizationUserResource,
 	}
 }
 

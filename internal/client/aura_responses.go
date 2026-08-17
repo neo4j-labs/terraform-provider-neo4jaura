@@ -180,3 +180,7 @@ type OrganizationData struct {
 type PatchProjectUserResponse struct {
 	Data ProjectUserData `json:"data"`
 }
+
+type PatchOrganizationUserResponse struct {
+	Data OrganizationUserData `json:"data"`
+}

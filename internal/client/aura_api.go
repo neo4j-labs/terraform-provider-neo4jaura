@@ -332,6 +332,31 @@ func (api *AuraApi) DeleteProjectUser(ctx context.Context, orgId, projectId, use
 	return fmt.Errorf("aura error: Status: %d. Response: %s", status, string(body))
 }
 
+func (api *AuraApi) PatchOrganizationUser(ctx context.Context, orgId, userId string, req PatchOrganizationUserRequest) (PatchOrganizationUserResponse, error) {
+	payload, err := json.Marshal(req)
+	if err != nil {
+		return PatchOrganizationUserResponse{}, err
+	}
+	path := fmt.Sprintf("organizations/%s/users/%s", orgId, userId)
+	body, status, err := api.v2beta1Client.Patch(ctx, path, payload)
+	if err != nil {
+		return PatchOrganizationUserResponse{}, err
+	}
+	return unmarshalAuraResponse[PatchOrganizationUserResponse](http.MethodPatch, status, body)
+}
+
+func (api *AuraApi) DeleteOrganizationUser(ctx context.Context, orgId, userId string) error {
+	path := fmt.Sprintf("organizations/%s/users/%s", orgId, userId)
+	body, status, err := api.v2beta1Client.Delete(ctx, path)
+	if err != nil {
+		return err
+	}
+	if status == http.StatusNoContent || status == http.StatusOK || status == http.StatusAccepted {
+		return nil
+	}
+	return fmt.Errorf("aura error: Status: %d. Response: %s", status, string(body))
+}
+
 func (api *AuraApi) WaitUntilInstanceIsDeleted(ctx context.Context, id string) (err error) {
 	_, err = util.WaitUntil(
 		ctx,
