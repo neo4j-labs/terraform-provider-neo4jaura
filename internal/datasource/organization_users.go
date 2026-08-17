@@ -20,6 +20,7 @@ package datasource
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -343,6 +344,10 @@ func (ds *OrganizationUsersDataSource) Read(ctx context.Context, request datasou
 			Projects:          projectModels,
 		})
 	}
+
+	sort.Slice(users, func(i, j int) bool {
+		return users[i].Id.ValueString() < users[j].Id.ValueString()
+	})
 
 	data.Users = users
 	data.Id = types.StringValue(orgId)

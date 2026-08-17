@@ -20,6 +20,7 @@ package datasource
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -124,6 +125,10 @@ func (ds *OrganizationsDataSource) Read(ctx context.Context, request datasource.
 			Name: types.StringValue(o.Name),
 		}
 	}
+
+	sort.Slice(orgs, func(i, j int) bool {
+		return orgs[i].Id.ValueString() < orgs[j].Id.ValueString()
+	})
 
 	orgsValue, diags := types.ListValueFrom(ctx, data.Organizations.ElementType(ctx), orgs)
 	response.Diagnostics.Append(diags...)
