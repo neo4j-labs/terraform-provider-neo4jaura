@@ -583,7 +583,7 @@ func (ms *MockServer) routeV2Beta1(w http.ResponseWriter, r *http.Request) {
 
 	// GET /v2beta1/organizations/{id}/users
 	case len(parts) == 3 && parts[0] == "organizations" && parts[2] == "users" && r.Method == http.MethodGet:
-		ms.handleGetOrgUsers(w, r)
+		ms.handleGetOrgUsers(w, r, parts[1])
 
 	// GET /v2beta1/organizations/{orgId}/users/{userId}
 	case len(parts) == 4 && parts[0] == "organizations" && parts[2] == "users" && r.Method == http.MethodGet:
@@ -716,31 +716,60 @@ func (ms *MockServer) handleDeleteProjectUser(w http.ResponseWriter, _ *http.Req
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (ms *MockServer) handleGetOrgUsers(w http.ResponseWriter, _ *http.Request) {
+func (ms *MockServer) handleGetOrgUsers(w http.ResponseWriter, _ *http.Request, orgId string) {
 	lastActivity := "2024-06-01T12:00:00Z"
-	resp := client.GetOrganizationUsersResponse{
-		Data: []client.OrganizationUserData{
-			{
-				UserId:                     "user-001",
-				Email:                      "alice@example.com",
-				ExemptFromAutomaticRemoval: false,
-				LastActivityAt:             &lastActivity,
-				MfaEnrollmentStatus:        "enrolled",
-				MfaEnrolledMethods:         []client.MfaMethodData{{Id: "totp", EnrolledAt: "2024-01-01T00:00:00Z"}},
-				OrganizationRoles:          []string{"admin"},
-			},
-			{
-				UserId:                     "user-002",
-				Email:                      "bob@example.com",
-				ExemptFromAutomaticRemoval: true,
-				LastActivityAt:             nil,
-				MfaEnrollmentStatus:        "not_enrolled",
-				MfaEnrolledMethods:         []client.MfaMethodData{},
-				OrganizationRoles:          []string{"member"},
-			},
+	staticUsers := []client.OrganizationUserData{
+		{
+			UserId:                     "user-001",
+			Email:                      "alice@example.com",
+			ExemptFromAutomaticRemoval: false,
+			LastActivityAt:             &lastActivity,
+			MfaEnrollmentStatus:        "enrolled",
+			MfaEnrolledMethods:         []client.MfaMethodData{{Id: "totp", EnrolledAt: "2024-01-01T00:00:00Z"}},
+			OrganizationRoles:          []string{"admin"},
+		},
+		{
+			UserId:                     "user-002",
+			Email:                      "bob@example.com",
+			ExemptFromAutomaticRemoval: true,
+			LastActivityAt:             nil,
+			MfaEnrollmentStatus:        "not_enrolled",
+			MfaEnrolledMethods:         []client.MfaMethodData{},
+			OrganizationRoles:          []string{"member"},
 		},
 	}
-	writeJSON(w, http.StatusOK, resp)
+
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	byId := make(map[string]client.OrganizationUserData, len(staticUsers))
+	order := make([]string, 0, len(staticUsers))
+	for _, u := range staticUsers {
+		byId[u.UserId] = u
+		order = append(order, u.UserId)
+	}
+
+	// Overlay/append dynamic users seeded (or patched) for this specific org.
+	for key, dynamic := range ms.organizationUsers {
+		parts := strings.SplitN(key, "/", 2)
+		if len(parts) != 2 || parts[0] != orgId {
+			continue
+		}
+		if _, exists := byId[dynamic.UserId]; !exists {
+			order = append(order, dynamic.UserId)
+		}
+		byId[dynamic.UserId] = dynamic
+	}
+
+	data := make([]client.OrganizationUserData, 0, len(order))
+	for _, id := range order {
+		if ms.deletedOrganizationUsers[orgUserKey(orgId, id)] {
+			continue
+		}
+		data = append(data, byId[id])
+	}
+
+	writeJSON(w, http.StatusOK, client.GetOrganizationUsersResponse{Data: data})
 }
 
 func (ms *MockServer) handleGetOrgUser(w http.ResponseWriter, _ *http.Request, orgId, userId string) {

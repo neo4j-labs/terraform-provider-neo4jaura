@@ -19,6 +19,7 @@ package test
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -265,9 +266,10 @@ resource "neo4jaura_organization_user" "this" {
 	})
 }
 
-// TestAcc_organization_user_owner_role_protected verifies that a user with the
-// organization-owner role is NOT deleted via the API even when deregister_on_delete=true.
-func TestAcc_organization_user_owner_role_protected(t *testing.T) {
+// TestAcc_organization_user_last_owner_protected verifies that deleting the last
+// remaining organization-owner is rejected with an error, even when
+// deregister_on_delete=true, and that the user is left untouched in the org.
+func TestAcc_organization_user_last_owner_protected(t *testing.T) {
 	const ownerUserId = "user-owner-test"
 
 	testMockServer.Reset()
@@ -289,13 +291,95 @@ resource "neo4jaura_organization_user" "this" {
 }
 `, defaultProviderConfig, ownerUserId, orgUserOrgId)
 
+	// Once deregister_on_delete flips to false, destroy becomes a Terraform-state-only
+	// no-op, letting the implicit end-of-test destroy succeed cleanly.
+	ownerConfigNoDeregister := fmt.Sprintf(`%s
+resource "neo4jaura_organization_user" "this" {
+  id                   = "%s"
+  organization_id      = "%s"
+  organization_roles   = ["organization-owner"]
+  deregister_on_delete = false
+}
+`, defaultProviderConfig, ownerUserId, orgUserOrgId)
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		// User should still exist after destroy because owner role blocks deletion.
+		// User should still exist because it is the org's last remaining owner.
 		CheckDestroy: func(_ *terraform.State) error {
 			if !testMockServer.OrganizationUserExists(orgUserOrgId, ownerUserId) {
-				return fmt.Errorf("org user %s should still exist (owner role protected) but was deleted", ownerUserId)
+				return fmt.Errorf("org user %s should still exist (last owner protected) but was deleted", ownerUserId)
+			}
+			return nil
+		},
+		Steps: []resource.TestStep{
+			{
+				Config: ownerConfig,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_organization_user.this",
+						tfjsonpath.New("organization_roles").AtSliceIndex(0),
+						knownvalue.StringExact("organization-owner"),
+					),
+				},
+			},
+			{
+				// Attempting to destroy the last remaining owner must fail with a clear error.
+				Config:      ownerConfig,
+				Destroy:     true,
+				ExpectError: regexp.MustCompile(`last remaining`),
+			},
+			{
+				// Heal the resource so the implicit final destroy at the end of the test succeeds.
+				Config: ownerConfigNoDeregister,
+			},
+		},
+	})
+}
+
+// TestAcc_organization_user_owner_deletable_when_not_last verifies that an
+// organization-owner CAN be deleted as long as another owner remains in the org.
+func TestAcc_organization_user_owner_deletable_when_not_last(t *testing.T) {
+	const (
+		ownerUserId   = "user-owner-test"
+		coOwnerUserId = "user-co-owner-test"
+	)
+
+	testMockServer.Reset()
+	testMockServer.SeedOrganizationUser(orgUserOrgId, client.OrganizationUserData{
+		UserId:              ownerUserId,
+		Email:               "owner@example.com",
+		MfaEnrollmentStatus: "enrolled",
+		MfaEnrolledMethods:  []client.MfaMethodData{{Id: "totp", EnrolledAt: "2024-01-01T00:00:00Z"}},
+		OrganizationRoles:   []string{"organization-owner"},
+	})
+	// A second owner exists in the org, unmanaged by this resource.
+	testMockServer.SeedOrganizationUser(orgUserOrgId, client.OrganizationUserData{
+		UserId:              coOwnerUserId,
+		Email:               "co-owner@example.com",
+		MfaEnrollmentStatus: "not_enrolled",
+		MfaEnrolledMethods:  []client.MfaMethodData{},
+		OrganizationRoles:   []string{"organization-owner"},
+	})
+
+	ownerConfig := fmt.Sprintf(`%s
+resource "neo4jaura_organization_user" "this" {
+  id                   = "%s"
+  organization_id      = "%s"
+  organization_roles   = ["organization-owner"]
+  deregister_on_delete = true
+}
+`, defaultProviderConfig, ownerUserId, orgUserOrgId)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: func(_ *terraform.State) error {
+			if testMockServer.OrganizationUserExists(orgUserOrgId, ownerUserId) {
+				return fmt.Errorf("org user %s should have been deleted (not the last owner)", ownerUserId)
+			}
+			if !testMockServer.OrganizationUserExists(orgUserOrgId, coOwnerUserId) {
+				return fmt.Errorf("co-owner %s should not have been touched", coOwnerUserId)
 			}
 			return nil
 		},

@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
@@ -129,11 +130,16 @@ func (r *OrganizationUserResource) Schema(_ context.Context, _ resource.SchemaRe
 				},
 			},
 			"deregister_on_delete": schema.BoolAttribute{
-				Optional:            true,
-				Computed:            true,
-				Default:             booldefault.StaticBool(false),
-				MarkdownDescription: "When `true`, the user is removed from the organization on resource deletion. When `false` (default), only the Terraform state is removed.",
-				Description:         "When true, the user is removed from the organization on resource deletion. When false (default), only the Terraform state is removed.",
+				Optional: true,
+				Computed: true,
+				Default:  booldefault.StaticBool(false),
+				MarkdownDescription: "When `true`, the user is removed from the organization on resource deletion. When `false` (default), only the Terraform state is removed.\n\n" +
+					"-> **Note:** As a safety guardrail, this provider refuses to delete a user holding the " +
+					"`organization-owner` role if they are the organization's last remaining owner, even when " +
+					"this is set to `true`. Promote another user to `organization-owner` first, or remove " +
+					"the last owner manually via the Aura API or Console.",
+				Description: "When true, the user is removed from the organization on resource deletion. When false (default), only the Terraform state is removed. " +
+					"As a safety guardrail, this provider refuses to delete a user holding the organization-owner role if they are the organization's last remaining owner, even when this is set to true.",
 			},
 			"email": schema.StringAttribute{
 				Computed:            true,
@@ -304,18 +310,43 @@ func (r *OrganizationUserResource) Delete(ctx context.Context, request resource.
 		return
 	}
 
+	orgId := data.OrganizationId.ValueString()
+	userId := data.Id.ValueString()
+
+	isOwner := false
 	for _, role := range data.OrganizationRoles {
 		if role.ValueString() == domain.OrganizationRoleOwner {
-			tflog.Warn(ctx, fmt.Sprintf(
-				"user %s has the %q role and will not be removed from organization %s — remove the role first, then destroy",
-				data.Id.ValueString(), domain.OrganizationRoleOwner, data.OrganizationId.ValueString(),
-			))
-			return
+			isOwner = true
+			break
 		}
 	}
 
-	orgId := data.OrganizationId.ValueString()
-	userId := data.Id.ValueString()
+	if isOwner {
+		usersResp, err := r.auraApi.GetOrganizationUsers(ctx, orgId)
+		if err != nil {
+			response.Diagnostics.AddError("Error checking organization owners", err.Error())
+			return
+		}
+
+		ownerCount := 0
+		for _, u := range usersResp.Data {
+			if slices.Contains(u.OrganizationRoles, domain.OrganizationRoleOwner) {
+				ownerCount++
+			}
+		}
+
+		if ownerCount <= 1 {
+			response.Diagnostics.AddError(
+				"Cannot delete the last remaining organization owner",
+				fmt.Sprintf(
+					"user %s is the last remaining %q of organization %s. For security reasons, this provider will not delete the last owner of an organization. "+
+						"If you are certain you want to proceed, promote another user to %q first, or remove this user manually via the Aura API or Console.",
+					userId, domain.OrganizationRoleOwner, orgId, domain.OrganizationRoleOwner,
+				),
+			)
+			return
+		}
+	}
 
 	if err := r.auraApi.DeleteOrganizationUser(ctx, orgId, userId); err != nil {
 		response.Diagnostics.AddError("Error removing user from organization", err.Error())
