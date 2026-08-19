@@ -47,12 +47,12 @@ func TestAcc_can_read_projects_by_organization_datasource(t *testing.T) {
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"data.neo4jaura_projects.this",
-						tfjsonpath.New("projects").AtSliceIndex(0).AtMapKey("id"),
+						tfjsonpath.New("projects").AtSliceIndex(2).AtMapKey("id"),
 						knownvalue.StringExact("test-org-project-id-001"),
 					),
 					statecheck.ExpectKnownValue(
 						"data.neo4jaura_projects.this",
-						tfjsonpath.New("projects").AtSliceIndex(1).AtMapKey("id"),
+						tfjsonpath.New("projects").AtSliceIndex(3).AtMapKey("id"),
 						knownvalue.StringExact("test-org-project-id-002"),
 					),
 				},
