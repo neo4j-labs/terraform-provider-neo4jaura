@@ -989,7 +989,7 @@ func (ms *MockServer) handlePostOrganizationInvite(w http.ResponseWriter, r *htt
 
 	projectInvites := make([]client.ProjectInviteData, len(req.ProjectInvites))
 	for i, pi := range req.ProjectInvites {
-		projectInvites[i] = client.ProjectInviteData{ProjectId: pi.ProjectId, ProjectRoles: pi.ProjectRoles}
+		projectInvites[i] = client.ProjectInviteData(pi)
 	}
 
 	invite := client.OrganizationInviteData{
