@@ -26,7 +26,7 @@ resource "neo4jaura_organization_invite" "this" {
   project_invites = [
     {
       project_id    = var.project_id
-      project_roles = ["namespace-member"]
+      project_roles = ["project-member"]
     }
   ]
 }
@@ -73,7 +73,7 @@ output "accepted_user_id" {
 Required:
 
 - `project_id` (String) The ID of the project to grant roles in.
-- `project_roles` (Set of String) The project roles to grant. Possible values: `namespace-admin`, `namespace-member`, `namespace-metrics-integration-reader`, `namespace-viewer`.
+- `project_roles` (Set of String) The project roles to grant. Possible values: `project-admin`, `project-member`, `project-metrics-integration-reader`, `project-viewer`.
 
 ## Import
 

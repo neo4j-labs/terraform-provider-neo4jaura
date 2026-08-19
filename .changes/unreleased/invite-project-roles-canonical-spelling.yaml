@@ -1,0 +1,3 @@
+kind: Changed
+body: 'neo4jaura_organization_invite project_invites.project_roles now uses the canonical project-* role spelling (matching neo4jaura_project_user) instead of namespace-*; the provider converts to/from namespace-* when calling the Aura API'
+time: 2026-08-19T00:00:00Z

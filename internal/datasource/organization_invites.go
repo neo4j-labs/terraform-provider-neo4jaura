@@ -137,8 +137,8 @@ func (ds *OrganizationInvitesDataSource) Schema(_ context.Context, _ datasource.
 									"project_roles": schema.ListAttribute{
 										Computed:            true,
 										ElementType:         types.StringType,
-										MarkdownDescription: fmt.Sprintf("The project roles granted. Possible values: `%s`.", strings.Join(domain.InviteProjectRoles, "`, `")),
-										Description:         fmt.Sprintf("The project roles granted. Possible values: %s.", strings.Join(domain.InviteProjectRoles, ", ")),
+										MarkdownDescription: fmt.Sprintf("The project roles granted. Possible values: `%s`.", strings.Join(domain.ProjectRoles, "`, `")),
+										Description:         fmt.Sprintf("The project roles granted. Possible values: %s.", strings.Join(domain.ProjectRoles, ", ")),
 									},
 								},
 							},

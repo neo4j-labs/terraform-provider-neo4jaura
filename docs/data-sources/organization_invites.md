@@ -72,4 +72,4 @@ Read-Only:
 Read-Only:
 
 - `project_id` (String) The ID of the project.
-- `project_roles` (List of String) The project roles granted. Possible values: `namespace-admin`, `namespace-member`, `namespace-metrics-integration-reader`, `namespace-viewer`.
+- `project_roles` (List of String) The project roles granted. Possible values: `project-admin`, `project-member`, `project-metrics-integration-reader`, `project-viewer`.

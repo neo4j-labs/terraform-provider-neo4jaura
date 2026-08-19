@@ -159,10 +159,10 @@ func (r *OrganizationInviteResource) Schema(_ context.Context, _ resource.Schema
 						"project_roles": schema.SetAttribute{
 							Required:            true,
 							ElementType:         types.StringType,
-							MarkdownDescription: fmt.Sprintf("The project roles to grant. Possible values: `%s`.", strings.Join(domain.InviteProjectRoles, "`, `")),
-							Description:         fmt.Sprintf("The project roles to grant. Possible values: %s.", strings.Join(domain.InviteProjectRoles, ", ")),
+							MarkdownDescription: fmt.Sprintf("The project roles to grant. Possible values: `%s`.", strings.Join(domain.ProjectRoles, "`, `")),
+							Description:         fmt.Sprintf("The project roles to grant. Possible values: %s.", strings.Join(domain.ProjectRoles, ", ")),
 							Validators: []validator.Set{
-								setvalidator.ValueStringsAre(stringvalidator.OneOf(domain.InviteProjectRoles...)),
+								setvalidator.ValueStringsAre(stringvalidator.OneOf(domain.ProjectRoles...)),
 							},
 						},
 					},

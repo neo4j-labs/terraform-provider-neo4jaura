@@ -36,7 +36,7 @@ resource "neo4jaura_organization_invite" "this" {
   project_invites = [
     {
       project_id    = var.project_id
-      project_roles = ["namespace-member"]
+      project_roles = ["project-member"]
     }
   ]
 }

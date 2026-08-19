@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/domain"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/util"
 )
 
@@ -357,7 +358,37 @@ func (api *AuraApi) DeleteOrganizationUser(ctx context.Context, orgId, userId st
 	return fmt.Errorf("aura error: Status: %d. Response: %s", status, string(body))
 }
 
+// projectInviteRolesToWire converts the "project-" prefixed roles used everywhere in the
+// provider to the "namespace-" prefixed spelling the invite endpoints expect on the wire.
+func projectInviteRolesToWire(invites []ProjectInviteRequest) []ProjectInviteRequest {
+	converted := make([]ProjectInviteRequest, len(invites))
+	for i, invite := range invites {
+		roles := make([]string, len(invite.ProjectRoles))
+		for j, role := range invite.ProjectRoles {
+			roles[j] = domain.ProjectRoleToInviteRole(role)
+		}
+		converted[i] = ProjectInviteRequest{ProjectId: invite.ProjectId, ProjectRoles: roles}
+	}
+	return converted
+}
+
+// projectInviteRolesFromWire converts the "namespace-" prefixed roles returned by the invite
+// endpoints back to the "project-" prefixed spelling used everywhere else in the provider.
+func projectInviteRolesFromWire(invites []ProjectInviteData) []ProjectInviteData {
+	converted := make([]ProjectInviteData, len(invites))
+	for i, invite := range invites {
+		roles := make([]string, len(invite.ProjectRoles))
+		for j, role := range invite.ProjectRoles {
+			roles[j] = domain.InviteRoleToProjectRole(role)
+		}
+		converted[i] = ProjectInviteData{ProjectId: invite.ProjectId, ProjectRoles: roles}
+	}
+	return converted
+}
+
 func (api *AuraApi) PostOrganizationInvite(ctx context.Context, orgId string, req PostOrganizationInviteRequest) (PostOrganizationInviteResponse, error) {
+	req.ProjectInvites = projectInviteRolesToWire(req.ProjectInvites)
+
 	payload, err := json.Marshal(req)
 	if err != nil {
 		return PostOrganizationInviteResponse{}, err
@@ -370,7 +401,12 @@ func (api *AuraApi) PostOrganizationInvite(ctx context.Context, orgId string, re
 	if status != http.StatusCreated && status != http.StatusOK {
 		return PostOrganizationInviteResponse{}, fmt.Errorf("aura error: Status: %d. Response: %s", status, string(body))
 	}
-	return util.Unmarshal[PostOrganizationInviteResponse](body)
+	resp, err := util.Unmarshal[PostOrganizationInviteResponse](body)
+	if err != nil {
+		return PostOrganizationInviteResponse{}, err
+	}
+	resp.Data.ProjectInvites = projectInviteRolesFromWire(resp.Data.ProjectInvites)
+	return resp, nil
 }
 
 func (api *AuraApi) GetOrganizationInvites(ctx context.Context, orgId string) (GetOrganizationInvitesResponse, error) {
@@ -378,7 +414,14 @@ func (api *AuraApi) GetOrganizationInvites(ctx context.Context, orgId string) (G
 	if err != nil {
 		return GetOrganizationInvitesResponse{}, err
 	}
-	return unmarshalAuraResponse[GetOrganizationInvitesResponse](http.MethodGet, status, payload)
+	resp, err := unmarshalAuraResponse[GetOrganizationInvitesResponse](http.MethodGet, status, payload)
+	if err != nil {
+		return GetOrganizationInvitesResponse{}, err
+	}
+	for i := range resp.Data {
+		resp.Data[i].ProjectInvites = projectInviteRolesFromWire(resp.Data[i].ProjectInvites)
+	}
+	return resp, nil
 }
 
 func (api *AuraApi) DeleteOrganizationInvite(ctx context.Context, orgId, inviteId string) error {

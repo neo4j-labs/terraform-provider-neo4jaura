@@ -17,6 +17,8 @@
 
 package domain
 
+import "strings"
+
 const (
 	MfaEnrollmentStatusEnrolled             string = "enrolled"
 	MfaEnrollmentStatusNotEnrolled          string = "not_enrolled"
@@ -57,22 +59,33 @@ var ProjectRoles = []string{
 	ProjectRoleViewer,
 }
 
-// InviteProjectRoles are the project-role enum values accepted by the
-// organization-invite endpoints. These represent the same permission levels
-// as ProjectRoles but are spelled with a "namespace-" prefix instead of
-// "project-" — the two enums are not interchangeable.
+// The organization-invite endpoints spell project roles with a "namespace-"
+// prefix instead of "project-", even though they represent the same
+// permission levels as ProjectRoles. The provider only exposes the
+// "project-" spelling to users (for consistency with ProjectRoles elsewhere)
+// and converts to/from "namespace-" at the API boundary.
 const (
-	InviteProjectRoleAdmin                    string = "namespace-admin"
-	InviteProjectRoleMember                   string = "namespace-member"
-	InviteProjectRoleMetricsIntegrationReader string = "namespace-metrics-integration-reader"
-	InviteProjectRoleViewer                   string = "namespace-viewer"
+	projectRolePrefix = "project-"
+	inviteRolePrefix  = "namespace-"
 )
 
-var InviteProjectRoles = []string{
-	InviteProjectRoleAdmin,
-	InviteProjectRoleMember,
-	InviteProjectRoleMetricsIntegrationReader,
-	InviteProjectRoleViewer,
+// ProjectRoleToInviteRole converts a "project-"-prefixed role to the
+// "namespace-"-prefixed spelling the invite endpoints expect on the wire.
+func ProjectRoleToInviteRole(role string) string {
+	if suffix, ok := strings.CutPrefix(role, projectRolePrefix); ok {
+		return inviteRolePrefix + suffix
+	}
+	return role
+}
+
+// InviteRoleToProjectRole converts a "namespace-"-prefixed role, as returned
+// by the invite endpoints, back to the "project-" spelling used everywhere
+// else in the provider.
+func InviteRoleToProjectRole(role string) string {
+	if suffix, ok := strings.CutPrefix(role, inviteRolePrefix); ok {
+		return projectRolePrefix + suffix
+	}
+	return role
 }
 
 const (

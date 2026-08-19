@@ -39,7 +39,7 @@ resource "neo4jaura_organization_invite" "this" {
   project_invites = [
     {
       project_id    = "89fcc404-a509-488e-a3a4-53d3e80b99b7"
-      project_roles = ["namespace-member"]
+      project_roles = ["project-member"]
     }
   ]
 }
@@ -132,7 +132,7 @@ resource "neo4jaura_organization_invite" "this" {
   project_invites = [
     {
       project_id    = "89fcc404-a509-488e-a3a4-53d3e80b99b7"
-      project_roles = ["namespace-member"]
+      project_roles = ["project-member"]
     }
   ]
 }
@@ -158,7 +158,7 @@ resource "neo4jaura_organization_invite" "this" {
 					statecheck.ExpectKnownValue(
 						"neo4jaura_organization_invite.this",
 						tfjsonpath.New("project_invites").AtSliceIndex(0).AtMapKey("project_roles").AtSliceIndex(0),
-						knownvalue.StringExact("namespace-member"),
+						knownvalue.StringExact("project-member"),
 					),
 				},
 			},
@@ -193,7 +193,7 @@ resource "neo4jaura_organization_invite" "this" {
   project_invites = [
     {
       project_id    = "89fcc404-a509-488e-a3a4-53d3e80b99b7"
-      project_roles = ["namespace-member"]
+      project_roles = ["project-member"]
     }
   ]
 }
@@ -262,7 +262,7 @@ resource "neo4jaura_organization_invite" "this" {
   project_invites = [
     {
       project_id    = "89fcc404-a509-488e-a3a4-53d3e80b99b7"
-      project_roles = ["namespace-member"]
+      project_roles = ["project-member"]
     }
   ]
 }
@@ -314,7 +314,7 @@ resource "neo4jaura_organization_invite" "this" {
   project_invites = [
     {
       project_id    = "89fcc404-a509-488e-a3a4-53d3e80b99b7"
-      project_roles = ["namespace-member"]
+      project_roles = ["project-member"]
     }
   ]
 }
@@ -376,7 +376,7 @@ resource "neo4jaura_organization_invite" "this" {
   project_invites = [
     {
       project_id    = "89fcc404-a509-488e-a3a4-53d3e80b99b7"
-      project_roles = ["namespace-member"]
+      project_roles = ["project-member"]
     }
   ]
 }
@@ -440,7 +440,7 @@ resource "neo4jaura_organization_invite" "this" {
   project_invites = [
     {
       project_id    = "89fcc404-a509-488e-a3a4-53d3e80b99b7"
-      project_roles = ["namespace-member"]
+      project_roles = ["project-member"]
     }
   ]
 }
