@@ -1,3 +1,0 @@
-kind: Added
-body: 'neo4jaura_organization_user now refuses to delete a user with the organization-owner role when they are the last remaining owner, returning an error instead of silently removing them'
-time: 2026-08-17T00:00:00Z

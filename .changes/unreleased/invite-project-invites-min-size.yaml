@@ -1,3 +1,0 @@
-kind: Added
-body: 'neo4jaura_organization_invite now validates that project_invites has at least one entry at plan time, matching the Aura API requirement that every invite grant access to at least one project'
-time: 2026-08-19T00:00:00Z

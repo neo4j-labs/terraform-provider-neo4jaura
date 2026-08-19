@@ -1,3 +1,0 @@
-kind: Changed
-body: 'organization_roles (on neo4jaura_organization_invite and neo4jaura_organization_user) and project_invites.project_roles (on neo4jaura_organization_invite) are now Sets instead of Lists, so role order no longer affects plans'
-time: 2026-08-19T00:00:00Z
