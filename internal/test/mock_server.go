@@ -68,6 +68,8 @@ type MockServer struct {
 	organizationUsers map[string]client.OrganizationUserData
 	// deletedOrganizationUsers tracks users deleted via DELETE; subsequent GETs return 404.
 	deletedOrganizationUsers map[string]bool
+	// invites is keyed by "<orgId>/<inviteId>" and stores organization invites.
+	invites map[string]client.OrganizationInviteData
 }
 
 // NewMockServer creates a new MockServer, registers all handlers, and starts
@@ -80,6 +82,7 @@ func NewMockServer() *MockServer {
 		projectUsers:             make(map[string][]string),
 		organizationUsers:        make(map[string]client.OrganizationUserData),
 		deletedOrganizationUsers: make(map[string]bool),
+		invites:                  make(map[string]client.OrganizationInviteData),
 	}
 
 	mux := http.NewServeMux()
@@ -116,6 +119,7 @@ func (ms *MockServer) Reset() {
 	ms.projectUsers = make(map[string][]string)
 	ms.organizationUsers = make(map[string]client.OrganizationUserData)
 	ms.deletedOrganizationUsers = make(map[string]bool)
+	ms.invites = make(map[string]client.OrganizationInviteData)
 }
 
 // HoldSnapshotList makes the next n calls to GET /v1/instances/{instanceId}/snapshots
@@ -216,6 +220,42 @@ func (ms *MockServer) OrganizationUserExists(orgId, userId string) bool {
 	}
 	// Fall back to static users.
 	return userId == "user-001" || userId == "user-002"
+}
+
+// SeedOrganizationInvite inserts an invite into the mock's state store, making
+// it available via GET /v2beta1/organizations/{orgId}/invites.
+func (ms *MockServer) SeedOrganizationInvite(orgId string, invite client.OrganizationInviteData) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	invite.OrganizationId = orgId
+	ms.invites[inviteKey(orgId, invite.Id)] = invite
+}
+
+// OrganizationInviteStatus returns the current status of an invite and whether
+// it exists in the mock's state store. Used to verify Delete behavior (e.g.
+// that an active invite is revoked rather than removed outright).
+func (ms *MockServer) OrganizationInviteStatus(orgId, inviteId string) (string, bool) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	invite, ok := ms.invites[inviteKey(orgId, inviteId)]
+	if !ok {
+		return "", false
+	}
+	return invite.Status, true
+}
+
+// OrganizationInvites returns all invites currently stored for the given org.
+func (ms *MockServer) OrganizationInvites(orgId string) []client.OrganizationInviteData {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	var data []client.OrganizationInviteData
+	for key, invite := range ms.invites {
+		if strings.HasPrefix(key, orgId+"/") {
+			data = append(data, invite)
+		}
+	}
+	return data
 }
 
 // SeedSnapshot inserts a snapshot into the mock's state store. The snapshot
@@ -613,6 +653,18 @@ func (ms *MockServer) routeV2Beta1(w http.ResponseWriter, r *http.Request) {
 	case len(parts) == 4 && parts[0] == "organizations" && parts[2] == "users" && r.Method == http.MethodDelete:
 		ms.handleDeleteOrgUser(w, r, parts[1], parts[3])
 
+	// GET /v2beta1/organizations/{orgId}/invites
+	case len(parts) == 3 && parts[0] == "organizations" && parts[2] == "invites" && r.Method == http.MethodGet:
+		ms.handleGetOrganizationInvites(w, r, parts[1])
+
+	// POST /v2beta1/organizations/{orgId}/invites
+	case len(parts) == 3 && parts[0] == "organizations" && parts[2] == "invites" && r.Method == http.MethodPost:
+		ms.handlePostOrganizationInvite(w, r, parts[1])
+
+	// DELETE /v2beta1/organizations/{orgId}/invites/{inviteId}
+	case len(parts) == 4 && parts[0] == "organizations" && parts[2] == "invites" && r.Method == http.MethodDelete:
+		ms.handleDeleteOrganizationInvite(w, r, parts[1], parts[3])
+
 	default:
 		http.NotFound(w, r)
 	}
@@ -924,6 +976,78 @@ func (ms *MockServer) handleDeleteOrgUser(w http.ResponseWriter, _ *http.Request
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (ms *MockServer) handlePostOrganizationInvite(w http.ResponseWriter, r *http.Request, orgId string) {
+	var req client.PostOrganizationInviteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if req.Email == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	projectInvites := make([]client.ProjectInviteData, len(req.ProjectInvites))
+	for i, pi := range req.ProjectInvites {
+		projectInvites[i] = client.ProjectInviteData{ProjectId: pi.ProjectId, ProjectRoles: pi.ProjectRoles}
+	}
+
+	invite := client.OrganizationInviteData{
+		Id:                fmt.Sprintf("invite-%d", time.Now().UnixNano()),
+		Email:             req.Email,
+		OrganizationId:    orgId,
+		InvitedBy:         "mock-inviter-id",
+		ExpiresAt:         "2099-01-01T00:00:00Z",
+		Status:            domain.InviteStatusActive,
+		OrganizationRoles: req.OrganizationRoles,
+		ProjectInvites:    projectInvites,
+	}
+
+	ms.mu.Lock()
+	ms.invites[inviteKey(orgId, invite.Id)] = invite
+	ms.mu.Unlock()
+
+	writeJSON(w, http.StatusCreated, client.PostOrganizationInviteResponse{Data: invite})
+}
+
+func (ms *MockServer) handleGetOrganizationInvites(w http.ResponseWriter, _ *http.Request, orgId string) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	var data []client.OrganizationInviteData
+	for key, invite := range ms.invites {
+		parts := strings.SplitN(key, "/", 2)
+		if len(parts) == 2 && parts[0] == orgId {
+			data = append(data, invite)
+		}
+	}
+	if data == nil {
+		data = []client.OrganizationInviteData{}
+	}
+	writeJSON(w, http.StatusOK, client.GetOrganizationInvitesResponse{Data: data})
+}
+
+func (ms *MockServer) handleDeleteOrganizationInvite(w http.ResponseWriter, _ *http.Request, orgId, inviteId string) {
+	key := inviteKey(orgId, inviteId)
+
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	invite, ok := ms.invites[key]
+	if !ok {
+		http.NotFound(w, nil)
+		return
+	}
+	if invite.Status != domain.InviteStatusActive {
+		http.Error(w, "invite cannot be deleted", http.StatusBadRequest)
+		return
+	}
+	invite.Status = domain.InviteStatusRevoked
+	ms.invites[key] = invite
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (ms *MockServer) handleGetProjectsByOrganization(w http.ResponseWriter, _ *http.Request, _ string) {
 	resp := client.GetProjectsResponse{
 		Data: []client.ProjectResponseData{
@@ -959,6 +1083,10 @@ func projectUserKey(orgId, projectId, userId string) string {
 
 func orgUserKey(orgId, userId string) string {
 	return orgId + "/" + userId
+}
+
+func inviteKey(orgId, inviteId string) string {
+	return orgId + "/" + inviteId
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

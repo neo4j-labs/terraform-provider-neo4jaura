@@ -56,3 +56,14 @@ type PatchProjectUserRequest struct {
 type PatchOrganizationUserRequest struct {
 	OrganizationRoles []string `json:"organization_roles"`
 }
+
+type ProjectInviteRequest struct {
+	ProjectId    string   `json:"project_id"`
+	ProjectRoles []string `json:"project_roles"`
+}
+
+type PostOrganizationInviteRequest struct {
+	Email             string                 `json:"email"`
+	OrganizationRoles []string               `json:"roles"`
+	ProjectInvites    []ProjectInviteRequest `json:"project_invites,omitempty"`
+}

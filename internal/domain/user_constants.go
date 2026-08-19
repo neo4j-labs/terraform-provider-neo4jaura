@@ -56,3 +56,37 @@ var ProjectRoles = []string{
 	ProjectRoleViewer,
 	ProjectRoleMetricsIntegrationReader,
 }
+
+// InviteProjectRoles are the project-role enum values accepted by the
+// organization-invite endpoints. These represent the same permission levels
+// as ProjectRoles but are spelled with a "namespace-" prefix instead of
+// "project-" — the two enums are not interchangeable.
+const (
+	InviteProjectRoleViewer                   string = "namespace-viewer"
+	InviteProjectRoleMember                   string = "namespace-member"
+	InviteProjectRoleAdmin                    string = "namespace-admin"
+	InviteProjectRoleMetricsIntegrationReader string = "namespace-metrics-integration-reader"
+)
+
+var InviteProjectRoles = []string{
+	InviteProjectRoleViewer,
+	InviteProjectRoleMember,
+	InviteProjectRoleAdmin,
+	InviteProjectRoleMetricsIntegrationReader,
+}
+
+const (
+	InviteStatusActive   string = "active"
+	InviteStatusAccepted string = "accepted"
+	InviteStatusRevoked  string = "revoked"
+	InviteStatusExpired  string = "expired"
+	InviteStatusDeclined string = "declined"
+)
+
+var InviteStatuses = []string{
+	InviteStatusActive,
+	InviteStatusAccepted,
+	InviteStatusRevoked,
+	InviteStatusExpired,
+	InviteStatusDeclined,
+}

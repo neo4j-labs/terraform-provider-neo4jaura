@@ -184,3 +184,27 @@ type PatchProjectUserResponse struct {
 type PatchOrganizationUserResponse struct {
 	Data OrganizationUserData `json:"data"`
 }
+
+type ProjectInviteData struct {
+	ProjectId    string   `json:"project_id"`
+	ProjectRoles []string `json:"project_roles"`
+}
+
+type OrganizationInviteData struct {
+	Id                string              `json:"id"`
+	Email             string              `json:"email"`
+	OrganizationId    string              `json:"organization_id"`
+	InvitedBy         string              `json:"invited_by"`
+	ExpiresAt         string              `json:"expires_at"`
+	Status            string              `json:"status"`
+	OrganizationRoles []string            `json:"organization_roles"`
+	ProjectInvites    []ProjectInviteData `json:"project_invites"`
+}
+
+type PostOrganizationInviteResponse struct {
+	Data OrganizationInviteData `json:"data"`
+}
+
+type GetOrganizationInvitesResponse struct {
+	Data []OrganizationInviteData `json:"data"`
+}

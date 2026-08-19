@@ -357,6 +357,45 @@ func (api *AuraApi) DeleteOrganizationUser(ctx context.Context, orgId, userId st
 	return fmt.Errorf("aura error: Status: %d. Response: %s", status, string(body))
 }
 
+func (api *AuraApi) PostOrganizationInvite(ctx context.Context, orgId string, req PostOrganizationInviteRequest) (PostOrganizationInviteResponse, error) {
+	payload, err := json.Marshal(req)
+	if err != nil {
+		return PostOrganizationInviteResponse{}, err
+	}
+	path := fmt.Sprintf("organizations/%s/invites", orgId)
+	body, status, err := api.v2beta1Client.Post(ctx, path, payload)
+	if err != nil {
+		return PostOrganizationInviteResponse{}, err
+	}
+	if status != http.StatusCreated && status != http.StatusOK {
+		return PostOrganizationInviteResponse{}, fmt.Errorf("aura error: Status: %d. Response: %s", status, string(body))
+	}
+	return util.Unmarshal[PostOrganizationInviteResponse](body)
+}
+
+func (api *AuraApi) GetOrganizationInvites(ctx context.Context, orgId string) (GetOrganizationInvitesResponse, error) {
+	payload, status, err := api.v2beta1Client.Get(ctx, fmt.Sprintf("organizations/%s/invites", orgId))
+	if err != nil {
+		return GetOrganizationInvitesResponse{}, err
+	}
+	return unmarshalAuraResponse[GetOrganizationInvitesResponse](http.MethodGet, status, payload)
+}
+
+func (api *AuraApi) DeleteOrganizationInvite(ctx context.Context, orgId, inviteId string) error {
+	path := fmt.Sprintf("organizations/%s/invites/%s", orgId, inviteId)
+	body, status, err := api.v2beta1Client.Delete(ctx, path)
+	if err != nil {
+		return err
+	}
+	if status == http.StatusNoContent || status == http.StatusOK || status == http.StatusAccepted {
+		return nil
+	}
+	if status == http.StatusNotFound {
+		return fmt.Errorf("invite %s in organization %s: %w", inviteId, orgId, ErrNotFound)
+	}
+	return fmt.Errorf("aura error: Status: %d. Response: %s", status, string(body))
+}
+
 func (api *AuraApi) WaitUntilInstanceIsDeleted(ctx context.Context, id string) (err error) {
 	_, err = util.WaitUntil(
 		ctx,

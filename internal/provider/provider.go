@@ -121,6 +121,7 @@ func (n *Neo4jAuraProvider) DataSources(_ context.Context) []func() datasource.D
 		auradatasource.NewSnapshotDataSource,
 		auradatasource.NewOrganizationsDataSource,
 		auradatasource.NewOrganizationUsersDataSource,
+		auradatasource.NewOrganizationInvitesDataSource,
 	}
 }
 
@@ -130,6 +131,7 @@ func (n *Neo4jAuraProvider) Resources(_ context.Context) []func() resource.Resou
 		auraresource.NewSnapshotResource,
 		auraresource.NewProjectUserResource,
 		auraresource.NewOrganizationUserResource,
+		auraresource.NewOrganizationInviteResource,
 	}
 }
 
