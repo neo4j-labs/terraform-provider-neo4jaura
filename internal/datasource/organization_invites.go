@@ -28,6 +28,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/client"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/domain"
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/util"
 )
 
 var (
@@ -57,6 +58,7 @@ type OrganizationInviteModel struct {
 	InvitedBy         types.String                   `tfsdk:"invited_by"`
 	ExpiresAt         types.String                   `tfsdk:"expires_at"`
 	Status            types.String                   `tfsdk:"status"`
+	UserId            types.String                   `tfsdk:"user_id"`
 }
 
 type DataSourceProjectInviteModel struct {
@@ -156,6 +158,13 @@ func (ds *OrganizationInvitesDataSource) Schema(_ context.Context, _ datasource.
 							MarkdownDescription: fmt.Sprintf("The status of the invite. Possible values: `%s`.", strings.Join(domain.InviteStatuses, "`, `")),
 							Description:         fmt.Sprintf("The status of the invite. Possible values: %s.", strings.Join(domain.InviteStatuses, ", ")),
 						},
+						"user_id": schema.StringAttribute{
+							Computed: true,
+							MarkdownDescription: "The ID of the user who accepted the invite. Populated once `status` is `accepted` by matching " +
+								"`email` against the organization's user list; `null` otherwise.",
+							Description: "The ID of the user who accepted the invite. Populated once status is accepted by matching email " +
+								"against the organization's user list; null otherwise.",
+						},
 					},
 				},
 			},
@@ -179,22 +188,40 @@ func (ds *OrganizationInvitesDataSource) Read(ctx context.Context, request datas
 		return
 	}
 
+	// Only fetch the org's user list if at least one invite is accepted — an invite never
+	// carries a user_id itself, so it must be resolved by matching email against this list.
+	var emailToUserId map[string]string
+	for _, inv := range invitesResp.Data {
+		if inv.Status == domain.InviteStatusAccepted {
+			usersResp, err := ds.auraApi.GetOrganizationUsers(ctx, orgId)
+			if err != nil {
+				response.Diagnostics.AddError("Error reading organization users", err.Error())
+				return
+			}
+			emailToUserId = make(map[string]string, len(usersResp.Data))
+			for _, u := range usersResp.Data {
+				emailToUserId[strings.ToLower(u.Email)] = u.UserId
+			}
+			break
+		}
+	}
+
 	invites := make([]OrganizationInviteModel, 0, len(invitesResp.Data))
 	for _, inv := range invitesResp.Data {
-		orgRoles := make([]types.String, len(inv.OrganizationRoles))
-		for i, r := range inv.OrganizationRoles {
-			orgRoles[i] = types.StringValue(r)
-		}
+		orgRoles := util.ToTypesStringSlice(util.SortedStrings(inv.OrganizationRoles))
 
 		projectInvites := make([]DataSourceProjectInviteModel, len(inv.ProjectInvites))
 		for i, pi := range inv.ProjectInvites {
-			roles := make([]types.String, len(pi.ProjectRoles))
-			for j, r := range pi.ProjectRoles {
-				roles[j] = types.StringValue(r)
-			}
 			projectInvites[i] = DataSourceProjectInviteModel{
 				ProjectId:    types.StringValue(pi.ProjectId),
-				ProjectRoles: roles,
+				ProjectRoles: util.ToTypesStringSlice(util.SortedStrings(pi.ProjectRoles)),
+			}
+		}
+
+		userId := types.StringNull()
+		if inv.Status == domain.InviteStatusAccepted {
+			if id, ok := emailToUserId[strings.ToLower(inv.Email)]; ok {
+				userId = types.StringValue(id)
 			}
 		}
 
@@ -206,6 +233,7 @@ func (ds *OrganizationInvitesDataSource) Read(ctx context.Context, request datas
 			InvitedBy:         types.StringValue(inv.InvitedBy),
 			ExpiresAt:         types.StringValue(inv.ExpiresAt),
 			Status:            types.StringValue(inv.Status),
+			UserId:            userId,
 		})
 	}
 

@@ -119,6 +119,9 @@ func (r *ProjectUserResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Validators: []validator.List{
 					listvalidator.ValueStringsAre(stringvalidator.OneOf(domain.ProjectRoles...)),
 				},
+				PlanModifiers: []planmodifier.List{
+					util.SortedStringList(),
+				},
 			},
 			"deregister_on_delete": schema.BoolAttribute{
 				Optional:            true,
@@ -215,7 +218,7 @@ func (r *ProjectUserResource) Read(ctx context.Context, request resource.ReadReq
 
 	for _, p := range detailsResp.Data.Projects {
 		if p.Id == projectId {
-			data.ProjectRoles = util.ToTypesStringSlice(p.ProjectRoles)
+			data.ProjectRoles = util.ToTypesStringSlice(util.SortedStrings(p.ProjectRoles))
 			response.Diagnostics.Append(response.State.Set(ctx, &data)...)
 			return
 		}

@@ -36,11 +36,18 @@ resource "neo4jaura_organization_invite" "this" {
   organization_id    = "` + inviteOrgId + `"
   email               = "morpheus@nebuchadnezzar.net"
   organization_roles  = ["organization-member"]
+  project_invites = [
+    {
+      project_id    = "89fcc404-a509-488e-a3a4-53d3e80b99b7"
+      project_roles = ["namespace-member"]
+    }
+  ]
 }
 `
 
-// TestAcc_organization_invite_create covers create and destroy (revoke) of a
-// plain org-level invite with no project_invites.
+// TestAcc_organization_invite_create covers create and destroy (revoke) of an
+// invite with a single project grant — project_invites is required by the
+// Aura API (at least one entry).
 func TestAcc_organization_invite_create(t *testing.T) {
 	testMockServer.Reset()
 
@@ -89,7 +96,7 @@ func TestAcc_organization_invite_create(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"neo4jaura_organization_invite.this",
 						tfjsonpath.New("project_invites"),
-						knownvalue.Null(),
+						knownvalue.ListSizeExact(1),
 					),
 					statecheck.ExpectKnownValue(
 						"neo4jaura_organization_invite.this",
@@ -173,6 +180,9 @@ func TestAcc_organization_invite_import(t *testing.T) {
 		ExpiresAt:         "2099-01-01T00:00:00Z",
 		Status:            "active",
 		OrganizationRoles: []string{"organization-admin"},
+		ProjectInvites: []client.ProjectInviteData{
+			{ProjectId: "89fcc404-a509-488e-a3a4-53d3e80b99b7", ProjectRoles: []string{"namespace-member"}},
+		},
 	})
 
 	importConfig := fmt.Sprintf(`%s
@@ -180,6 +190,12 @@ resource "neo4jaura_organization_invite" "this" {
   organization_id    = "%s"
   email              = "neo@nebuchadnezzar.net"
   organization_roles = ["organization-admin"]
+  project_invites = [
+    {
+      project_id    = "89fcc404-a509-488e-a3a4-53d3e80b99b7"
+      project_roles = ["namespace-member"]
+    }
+  ]
 }
 `, defaultProviderConfig, inviteOrgId)
 
@@ -233,6 +249,9 @@ func TestAcc_organization_invite_delete_skips_terminal_status(t *testing.T) {
 		ExpiresAt:         "2099-01-01T00:00:00Z",
 		Status:            "accepted",
 		OrganizationRoles: []string{"organization-member"},
+		ProjectInvites: []client.ProjectInviteData{
+			{ProjectId: "89fcc404-a509-488e-a3a4-53d3e80b99b7", ProjectRoles: []string{"namespace-member"}},
+		},
 	})
 
 	importConfig := fmt.Sprintf(`%s
@@ -240,6 +259,12 @@ resource "neo4jaura_organization_invite" "this" {
   organization_id    = "%s"
   email              = "cypher@nebuchadnezzar.net"
   organization_roles = ["organization-member"]
+  project_invites = [
+    {
+      project_id    = "89fcc404-a509-488e-a3a4-53d3e80b99b7"
+      project_roles = ["namespace-member"]
+    }
+  ]
 }
 `, defaultProviderConfig, inviteOrgId)
 
@@ -273,4 +298,174 @@ resource "neo4jaura_organization_invite" "this" {
 			},
 		},
 	})
+}
+
+// TestAcc_organization_invite_organization_roles_sorted_alphabetically
+// verifies that organization_roles ends up alphabetically sorted in state
+// even when configuration lists them out of order.
+func TestAcc_organization_invite_organization_roles_sorted_alphabetically(t *testing.T) {
+	testMockServer.Reset()
+
+	config := defaultProviderConfig + `
+resource "neo4jaura_organization_invite" "this" {
+  organization_id    = "` + inviteOrgId + `"
+  email              = "tank@nebuchadnezzar.net"
+  organization_roles = ["organization-owner", "organization-admin"]
+  project_invites = [
+    {
+      project_id    = "89fcc404-a509-488e-a3a4-53d3e80b99b7"
+      project_roles = ["namespace-member"]
+    }
+  ]
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_organization_invite.this",
+						tfjsonpath.New("organization_roles"),
+						knownvalue.SetExact([]knownvalue.Check{
+							knownvalue.StringExact("organization-admin"),
+							knownvalue.StringExact("organization-owner"),
+						}),
+					),
+				},
+			},
+		},
+	})
+}
+
+// TestAcc_organization_invite_resolves_user_id_when_accepted verifies that
+// importing an already-accepted invite resolves user_id by matching email
+// against the organization's user list.
+func TestAcc_organization_invite_resolves_user_id_when_accepted(t *testing.T) {
+	const acceptedInviteId = "invite-accepted-with-user"
+	const acceptedEmail = "switch@nebuchadnezzar.net"
+	const matchedUserId = "user-switch-001"
+	importID := fmt.Sprintf("%s,%s", inviteOrgId, acceptedInviteId)
+
+	testMockServer.Reset()
+	testMockServer.SeedOrganizationInvite(inviteOrgId, client.OrganizationInviteData{
+		Id:                acceptedInviteId,
+		Email:             acceptedEmail,
+		InvitedBy:         "user-morpheus",
+		ExpiresAt:         "2099-01-01T00:00:00Z",
+		Status:            "accepted",
+		OrganizationRoles: []string{"organization-member"},
+		ProjectInvites: []client.ProjectInviteData{
+			{ProjectId: "89fcc404-a509-488e-a3a4-53d3e80b99b7", ProjectRoles: []string{"namespace-member"}},
+		},
+	})
+	testMockServer.SeedOrganizationUser(inviteOrgId, client.OrganizationUserData{
+		UserId:            matchedUserId,
+		Email:             acceptedEmail,
+		OrganizationRoles: []string{"organization-member"},
+	})
+
+	importConfig := fmt.Sprintf(`%s
+resource "neo4jaura_organization_invite" "this" {
+  organization_id    = "%s"
+  email              = "%s"
+  organization_roles = ["organization-member"]
+  project_invites = [
+    {
+      project_id    = "89fcc404-a509-488e-a3a4-53d3e80b99b7"
+      project_roles = ["namespace-member"]
+    }
+  ]
+}
+`, defaultProviderConfig, inviteOrgId, acceptedEmail)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:             importConfig,
+				ResourceName:       "neo4jaura_organization_invite.this",
+				ImportState:        true,
+				ImportStateId:      importID,
+				ImportStatePersist: true,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_organization_invite.this",
+						tfjsonpath.New("status"),
+						knownvalue.StringExact("accepted"),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_organization_invite.this",
+						tfjsonpath.New("user_id"),
+						knownvalue.StringExact(matchedUserId),
+					),
+				},
+			},
+		},
+	})
+
+	testMockServer.Reset()
+}
+
+// TestAcc_organization_invite_user_id_null_when_unmatched verifies that an
+// accepted invite with no matching organization user leaves user_id null
+// instead of erroring.
+func TestAcc_organization_invite_user_id_null_when_unmatched(t *testing.T) {
+	const acceptedInviteId = "invite-accepted-no-user"
+	const acceptedEmail = "tank@nebuchadnezzar.net"
+	importID := fmt.Sprintf("%s,%s", inviteOrgId, acceptedInviteId)
+
+	testMockServer.Reset()
+	testMockServer.SeedOrganizationInvite(inviteOrgId, client.OrganizationInviteData{
+		Id:                acceptedInviteId,
+		Email:             acceptedEmail,
+		InvitedBy:         "user-morpheus",
+		ExpiresAt:         "2099-01-01T00:00:00Z",
+		Status:            "accepted",
+		OrganizationRoles: []string{"organization-member"},
+		ProjectInvites: []client.ProjectInviteData{
+			{ProjectId: "89fcc404-a509-488e-a3a4-53d3e80b99b7", ProjectRoles: []string{"namespace-member"}},
+		},
+	})
+
+	importConfig := fmt.Sprintf(`%s
+resource "neo4jaura_organization_invite" "this" {
+  organization_id    = "%s"
+  email              = "%s"
+  organization_roles = ["organization-member"]
+  project_invites = [
+    {
+      project_id    = "89fcc404-a509-488e-a3a4-53d3e80b99b7"
+      project_roles = ["namespace-member"]
+    }
+  ]
+}
+`, defaultProviderConfig, inviteOrgId, acceptedEmail)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:             importConfig,
+				ResourceName:       "neo4jaura_organization_invite.this",
+				ImportState:        true,
+				ImportStateId:      importID,
+				ImportStatePersist: true,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_organization_invite.this",
+						tfjsonpath.New("user_id"),
+						knownvalue.Null(),
+					),
+				},
+			},
+		},
+	})
+
+	testMockServer.Reset()
 }

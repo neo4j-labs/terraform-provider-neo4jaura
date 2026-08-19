@@ -24,12 +24,14 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -62,6 +64,7 @@ type OrganizationInviteResourceModel struct {
 	InvitedBy         types.String         `tfsdk:"invited_by"`
 	ExpiresAt         types.String         `tfsdk:"expires_at"`
 	Status            types.String         `tfsdk:"status"`
+	UserId            types.String         `tfsdk:"user_id"`
 }
 
 type ProjectInviteModel struct {
@@ -91,10 +94,10 @@ func (r *OrganizationInviteResource) Configure(_ context.Context, request resour
 
 func (r *OrganizationInviteResource) Schema(_ context.Context, _ resource.SchemaRequest, response *resource.SchemaResponse) {
 	response.Schema = schema.Schema{
-		MarkdownDescription: "Invites a user to an Aura organization by email, optionally granting project roles at the same time.\n\n" +
+		MarkdownDescription: "Invites a user to an Aura organization by email, granting project roles at the same time.\n\n" +
 			"-> **Note:** The Aura API has no endpoint to edit a pending invite. Any change to `email`, `organization_roles`, or " +
 			"`project_invites` will revoke the existing invite and create a new one.",
-		Description: "Invites a user to an Aura organization by email, optionally granting project roles at the same time. " +
+		Description: "Invites a user to an Aura organization by email, granting project roles at the same time. " +
 			"The Aura API has no endpoint to edit a pending invite, so any change to email, organization_roles, or project_invites " +
 			"will revoke the existing invite and create a new one.",
 		Attributes: map[string]schema.Attribute{
@@ -122,22 +125,27 @@ func (r *OrganizationInviteResource) Schema(_ context.Context, _ resource.Schema
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"organization_roles": schema.ListAttribute{
+			"organization_roles": schema.SetAttribute{
 				Required:            true,
 				ElementType:         types.StringType,
 				MarkdownDescription: fmt.Sprintf("The organization roles to grant the invitee. Possible values: `%s`.", strings.Join(domain.OrganizationRoles, "`, `")),
 				Description:         fmt.Sprintf("The organization roles to grant the invitee. Possible values: %s.", strings.Join(domain.OrganizationRoles, ", ")),
-				Validators: []validator.List{
-					listvalidator.ValueStringsAre(stringvalidator.OneOf(domain.OrganizationRoles...)),
+				Validators: []validator.Set{
+					setvalidator.ValueStringsAre(stringvalidator.OneOf(domain.OrganizationRoles...)),
 				},
-				PlanModifiers: []planmodifier.List{
-					listplanmodifier.RequiresReplace(),
+				PlanModifiers: []planmodifier.Set{
+					setplanmodifier.RequiresReplace(),
 				},
 			},
 			"project_invites": schema.ListNestedAttribute{
-				Required:            true,
-				MarkdownDescription: "Project roles to grant the invitee at the same time, alongside the organization role.",
-				Description:         "Project roles to grant the invitee at the same time, alongside the organization role.",
+				Required: true,
+				MarkdownDescription: "Project roles to grant the invitee at the same time, alongside the organization role. The Aura API " +
+					"requires at least one entry — every invite must grant access to at least one project.",
+				Description: "Project roles to grant the invitee at the same time, alongside the organization role. The Aura API " +
+					"requires at least one entry — every invite must grant access to at least one project.",
+				Validators: []validator.List{
+					listvalidator.SizeAtLeast(1),
+				},
 				PlanModifiers: []planmodifier.List{
 					listplanmodifier.RequiresReplace(),
 				},
@@ -148,13 +156,13 @@ func (r *OrganizationInviteResource) Schema(_ context.Context, _ resource.Schema
 							MarkdownDescription: "The ID of the project to grant roles in.",
 							Description:         "The ID of the project to grant roles in.",
 						},
-						"project_roles": schema.ListAttribute{
+						"project_roles": schema.SetAttribute{
 							Required:            true,
 							ElementType:         types.StringType,
 							MarkdownDescription: fmt.Sprintf("The project roles to grant. Possible values: `%s`.", strings.Join(domain.InviteProjectRoles, "`, `")),
 							Description:         fmt.Sprintf("The project roles to grant. Possible values: %s.", strings.Join(domain.InviteProjectRoles, ", ")),
-							Validators: []validator.List{
-								listvalidator.ValueStringsAre(stringvalidator.OneOf(domain.InviteProjectRoles...)),
+							Validators: []validator.Set{
+								setvalidator.ValueStringsAre(stringvalidator.OneOf(domain.InviteProjectRoles...)),
 							},
 						},
 					},
@@ -174,6 +182,16 @@ func (r *OrganizationInviteResource) Schema(_ context.Context, _ resource.Schema
 				Computed:            true,
 				MarkdownDescription: fmt.Sprintf("The status of the invite. Possible values: `%s`.", strings.Join(domain.InviteStatuses, "`, `")),
 				Description:         fmt.Sprintf("The status of the invite. Possible values: %s.", strings.Join(domain.InviteStatuses, ", ")),
+			},
+			"user_id": schema.StringAttribute{
+				Computed: true,
+				MarkdownDescription: "The ID of the user who accepted the invite. Populated once `status` becomes `accepted` by matching " +
+					"`email` against the organization's user list; `null` otherwise.",
+				Description: "The ID of the user who accepted the invite. Populated once status becomes accepted by matching email " +
+					"against the organization's user list; null otherwise.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}
@@ -202,6 +220,10 @@ func (r *OrganizationInviteResource) Create(ctx context.Context, request resourc
 	}
 
 	populateOrganizationInviteModel(&data, inviteResp.Data)
+	if err := r.resolveUserId(ctx, orgId, &data); err != nil {
+		response.Diagnostics.AddError("Error resolving invite's user", err.Error())
+		return
+	}
 	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
 }
 
@@ -225,6 +247,10 @@ func (r *OrganizationInviteResource) Read(ctx context.Context, request resource.
 	for _, inv := range invitesResp.Data {
 		if inv.Id == inviteId {
 			populateOrganizationInviteModel(&data, inv)
+			if err := r.resolveUserId(ctx, orgId, &data); err != nil {
+				response.Diagnostics.AddError("Error resolving invite's user", err.Error())
+				return
+			}
 			response.Diagnostics.Append(response.State.Set(ctx, &data)...)
 			return
 		}
@@ -290,6 +316,36 @@ func (r *OrganizationInviteResource) ImportState(ctx context.Context, request re
 	response.Diagnostics.Append(response.State.SetAttribute(ctx, path.Root("organization_roles"), []string{})...)
 }
 
+// resolveUserId populates data.UserId once the invite has been accepted, by matching
+// data.Email against the organization's user list. The invite object itself never carries a
+// user_id since the Aura API doesn't return one. If a match isn't found yet (e.g. eventual
+// consistency right after acceptance), it's left null and retried on the next Read.
+func (r *OrganizationInviteResource) resolveUserId(ctx context.Context, orgId string, data *OrganizationInviteResourceModel) error {
+	if data.Status.ValueString() != domain.InviteStatusAccepted {
+		data.UserId = types.StringNull()
+		return nil
+	}
+	if !data.UserId.IsNull() && !data.UserId.IsUnknown() && data.UserId.ValueString() != "" {
+		return nil
+	}
+
+	usersResp, err := r.auraApi.GetOrganizationUsers(ctx, orgId)
+	if err != nil {
+		return err
+	}
+
+	email := data.Email.ValueString()
+	for _, u := range usersResp.Data {
+		if strings.EqualFold(u.Email, email) {
+			data.UserId = types.StringValue(u.UserId)
+			return nil
+		}
+	}
+
+	data.UserId = types.StringNull()
+	return nil
+}
+
 func toProjectInviteRequests(models []ProjectInviteModel) []client.ProjectInviteRequest {
 	if len(models) == 0 {
 		return nil
@@ -313,17 +369,11 @@ func populateOrganizationInviteModel(data *OrganizationInviteResourceModel, apiD
 	data.ExpiresAt = types.StringValue(apiData.ExpiresAt)
 	data.Status = types.StringValue(apiData.Status)
 
-	// A nil (not just empty) slice is required so an unset `project_invites`
-	// in config (null) round-trips through Create/Read as null rather than []
-	// — otherwise Terraform reports an inconsistent result after apply.
-	var projectInvites []ProjectInviteModel
-	if len(apiData.ProjectInvites) > 0 {
-		projectInvites = make([]ProjectInviteModel, len(apiData.ProjectInvites))
-		for i, pi := range apiData.ProjectInvites {
-			projectInvites[i] = ProjectInviteModel{
-				ProjectId:    types.StringValue(pi.ProjectId),
-				ProjectRoles: util.ToTypesStringSlice(pi.ProjectRoles),
-			}
+	projectInvites := make([]ProjectInviteModel, len(apiData.ProjectInvites))
+	for i, pi := range apiData.ProjectInvites {
+		projectInvites[i] = ProjectInviteModel{
+			ProjectId:    types.StringValue(pi.ProjectId),
+			ProjectRoles: util.ToTypesStringSlice(pi.ProjectRoles),
 		}
 	}
 	data.ProjectInvites = projectInvites

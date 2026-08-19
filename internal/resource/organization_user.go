@@ -24,7 +24,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -120,13 +120,13 @@ func (r *OrganizationUserResource) Schema(_ context.Context, _ resource.SchemaRe
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"organization_roles": schema.ListAttribute{
+			"organization_roles": schema.SetAttribute{
 				Required:            true,
 				ElementType:         types.StringType,
 				MarkdownDescription: fmt.Sprintf("The roles assigned to the user within the organization. Possible values: `%s`.", strings.Join(domain.OrganizationRoles, "`, `")),
 				Description:         fmt.Sprintf("The roles assigned to the user within the organization. Possible values: %s.", strings.Join(domain.OrganizationRoles, ", ")),
-				Validators: []validator.List{
-					listvalidator.ValueStringsAre(stringvalidator.OneOf(domain.OrganizationRoles...)),
+				Validators: []validator.Set{
+					setvalidator.ValueStringsAre(stringvalidator.OneOf(domain.OrganizationRoles...)),
 				},
 			},
 			"deregister_on_delete": schema.BoolAttribute{

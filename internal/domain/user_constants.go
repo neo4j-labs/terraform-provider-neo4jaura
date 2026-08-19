@@ -32,29 +32,29 @@ var MfaEnrollmentStatuses = []string{
 }
 
 const (
-	OrganizationRoleOwner  string = "organization-owner"
 	OrganizationRoleAdmin  string = "organization-admin"
 	OrganizationRoleMember string = "organization-member"
+	OrganizationRoleOwner  string = "organization-owner"
 )
 
 var OrganizationRoles = []string{
-	OrganizationRoleOwner,
 	OrganizationRoleAdmin,
 	OrganizationRoleMember,
+	OrganizationRoleOwner,
 }
 
 const (
 	ProjectRoleAdmin                    string = "project-admin"
 	ProjectRoleMember                   string = "project-member"
-	ProjectRoleViewer                   string = "project-viewer"
 	ProjectRoleMetricsIntegrationReader string = "project-metrics-integration-reader"
+	ProjectRoleViewer                   string = "project-viewer"
 )
 
 var ProjectRoles = []string{
 	ProjectRoleAdmin,
 	ProjectRoleMember,
-	ProjectRoleViewer,
 	ProjectRoleMetricsIntegrationReader,
+	ProjectRoleViewer,
 }
 
 // InviteProjectRoles are the project-role enum values accepted by the
@@ -62,17 +62,17 @@ var ProjectRoles = []string{
 // as ProjectRoles but are spelled with a "namespace-" prefix instead of
 // "project-" — the two enums are not interchangeable.
 const (
-	InviteProjectRoleViewer                   string = "namespace-viewer"
-	InviteProjectRoleMember                   string = "namespace-member"
 	InviteProjectRoleAdmin                    string = "namespace-admin"
+	InviteProjectRoleMember                   string = "namespace-member"
 	InviteProjectRoleMetricsIntegrationReader string = "namespace-metrics-integration-reader"
+	InviteProjectRoleViewer                   string = "namespace-viewer"
 )
 
 var InviteProjectRoles = []string{
-	InviteProjectRoleViewer,
-	InviteProjectRoleMember,
 	InviteProjectRoleAdmin,
+	InviteProjectRoleMember,
 	InviteProjectRoleMetricsIntegrationReader,
+	InviteProjectRoleViewer,
 }
 
 const (

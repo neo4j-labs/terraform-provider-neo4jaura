@@ -1,0 +1,3 @@
+kind: Added
+body: 'neo4jaura_organization_invite and neo4jaura_organization_invites now expose a user_id, resolved by matching email against the organization''s user list once an invite is accepted'
+time: 2026-08-19T00:00:00Z

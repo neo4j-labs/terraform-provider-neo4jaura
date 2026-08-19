@@ -28,6 +28,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/client"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/domain"
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/util"
 )
 
 var (
@@ -281,10 +282,7 @@ func (ds *OrganizationUsersDataSource) Read(ctx context.Context, request datasou
 		switch {
 		case includeProjects && projectId != "":
 			// Roles already fetched from the project users call; name from the projects list.
-			roles := make([]types.String, len(projectMemberRoles[u.UserId]))
-			for j, r := range projectMemberRoles[u.UserId] {
-				roles[j] = types.StringValue(r)
-			}
+			roles := util.ToTypesStringSlice(util.SortedStrings(projectMemberRoles[u.UserId]))
 			projectModels = []UserProjectModel{{
 				Id:           types.StringValue(projectId),
 				Name:         types.StringValue(projectName),
@@ -299,14 +297,10 @@ func (ds *OrganizationUsersDataSource) Read(ctx context.Context, request datasou
 			}
 			projectModels = make([]UserProjectModel, len(detailsResp.Data.Projects))
 			for i, p := range detailsResp.Data.Projects {
-				roles := make([]types.String, len(p.ProjectRoles))
-				for j, r := range p.ProjectRoles {
-					roles[j] = types.StringValue(r)
-				}
 				projectModels[i] = UserProjectModel{
 					Id:           types.StringValue(p.Id),
 					Name:         types.StringValue(p.Name),
-					ProjectRoles: roles,
+					ProjectRoles: util.ToTypesStringSlice(util.SortedStrings(p.ProjectRoles)),
 				}
 			}
 		default:
@@ -326,10 +320,7 @@ func (ds *OrganizationUsersDataSource) Read(ctx context.Context, request datasou
 			}
 		}
 
-		orgRoles := make([]types.String, len(u.OrganizationRoles))
-		for i, r := range u.OrganizationRoles {
-			orgRoles[i] = types.StringValue(r)
-		}
+		orgRoles := util.ToTypesStringSlice(util.SortedStrings(u.OrganizationRoles))
 
 		users = append(users, OrganizationUserModel{
 			Id:                         types.StringValue(u.UserId),

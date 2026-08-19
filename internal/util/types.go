@@ -17,7 +17,11 @@
 
 package util
 
-import "github.com/hashicorp/terraform-plugin-framework/types"
+import (
+	"sort"
+
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
 
 // ToStringSlice converts []types.String to []string.
 func ToStringSlice(ts []types.String) []string {
@@ -35,6 +39,13 @@ func ToTypesStringSlice(ss []string) []types.String {
 		result[i] = types.StringValue(s)
 	}
 	return result
+}
+
+// SortedStrings returns a sorted copy of ss, leaving the input untouched.
+func SortedStrings(ss []string) []string {
+	sorted := append([]string(nil), ss...)
+	sort.Strings(sorted)
+	return sorted
 }
 
 // SlicesEqualIgnoringOrder checks whether two string slices contain the same elements (order-independent).
