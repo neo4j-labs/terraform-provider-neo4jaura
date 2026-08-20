@@ -123,3 +123,88 @@ type PostSnapshotResponse struct {
 type PostSnapshotData struct {
 	SnapshotId string `json:"snapshot_id"`
 }
+
+type GetProjectUsersResponse struct {
+	Data []ProjectUserData `json:"data"`
+}
+
+type ProjectUserData struct {
+	UserId       string   `json:"user_id"`
+	Email        string   `json:"email"`
+	ProjectRoles []string `json:"project_roles"`
+}
+
+type GetOrganizationUsersResponse struct {
+	Data []OrganizationUserData `json:"data"`
+}
+
+type OrganizationUserData struct {
+	UserId                     string          `json:"user_id"`
+	Email                      string          `json:"email"`
+	ExemptFromAutomaticRemoval bool            `json:"exempt_from_automatic_removal"`
+	LastActivityAt             *string         `json:"last_activity_at"`
+	MfaEnrollmentStatus        string          `json:"mfa_enrollment_status"`
+	MfaEnrolledMethods         []MfaMethodData `json:"mfa_enrolled_methods"`
+	OrganizationRoles          []string        `json:"organization_roles"`
+}
+
+type MfaMethodData struct {
+	Id         string `json:"id"`
+	EnrolledAt string `json:"enrolled_at"`
+}
+
+type GetOrganizationUserDetailsResponse struct {
+	Data OrganizationUserDetailsData `json:"data"`
+}
+
+type OrganizationUserDetailsData struct {
+	OrganizationUserData
+	Projects []UserProjectData `json:"projects"`
+}
+
+type UserProjectData struct {
+	Id           string   `json:"id"`
+	Name         string   `json:"name"`
+	ProjectRoles []string `json:"project_roles"`
+}
+
+type GetOrganizationsResponse struct {
+	Data []OrganizationData `json:"data"`
+}
+
+type OrganizationData struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type PatchProjectUserResponse struct {
+	Data ProjectUserData `json:"data"`
+}
+
+type PatchOrganizationUserResponse struct {
+	Data OrganizationUserData `json:"data"`
+}
+
+type ProjectInviteData struct {
+	ProjectId    string   `json:"project_id"`
+	ProjectRoles []string `json:"project_roles"`
+}
+
+type OrganizationInviteData struct {
+	Id                string              `json:"id"`
+	Email             string              `json:"email"`
+	OrganizationId    string              `json:"organization_id"`
+	InvitedBy         string              `json:"invited_by"`
+	ExpiresAt         string              `json:"expires_at"`
+	Status            string              `json:"status"`
+	OrganizationRoles []string            `json:"organization_roles"`
+	ProjectInvites    []ProjectInviteData `json:"project_invites"`
+}
+
+type PostOrganizationInviteResponse struct {
+	Data OrganizationInviteData `json:"data"`
+}
+
+type GetOrganizationInvitesResponse struct {
+	Data []OrganizationInviteData `json:"data"`
+}

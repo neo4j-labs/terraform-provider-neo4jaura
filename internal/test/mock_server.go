@@ -61,15 +61,28 @@ type MockServer struct {
 	// calls should return an empty list before returning seeded snapshots.
 	// Used to simulate a recently-created instance with no snapshots yet.
 	snapshotListEmptyUntil map[string]int
+	// projectUsers is keyed by "<orgId>/<projectId>/<userId>" and stores project roles.
+	projectUsers map[string][]string
+	// organizationUsers stores dynamically seeded or PATCH-updated org user data,
+	// keyed by "<orgId>/<userId>". Takes precedence over static user data.
+	organizationUsers map[string]client.OrganizationUserData
+	// deletedOrganizationUsers tracks users deleted via DELETE; subsequent GETs return 404.
+	deletedOrganizationUsers map[string]bool
+	// invites is keyed by "<orgId>/<inviteId>" and stores organization invites.
+	invites map[string]client.OrganizationInviteData
 }
 
 // NewMockServer creates a new MockServer, registers all handlers, and starts
 // the underlying httptest.Server. Call Close() when finished.
 func NewMockServer() *MockServer {
 	ms := &MockServer{
-		instances:              make(map[string]*mockInstanceState),
-		snapshots:              make(map[string]*mockSnapshotState),
-		snapshotListEmptyUntil: make(map[string]int),
+		instances:                make(map[string]*mockInstanceState),
+		snapshots:                make(map[string]*mockSnapshotState),
+		snapshotListEmptyUntil:   make(map[string]int),
+		projectUsers:             make(map[string][]string),
+		organizationUsers:        make(map[string]client.OrganizationUserData),
+		deletedOrganizationUsers: make(map[string]bool),
+		invites:                  make(map[string]client.OrganizationInviteData),
 	}
 
 	mux := http.NewServeMux()
@@ -79,6 +92,7 @@ func NewMockServer() *MockServer {
 
 	// All other endpoints go through the auth middleware.
 	mux.HandleFunc("/v1/", ms.withAuth(ms.routeV1))
+	mux.HandleFunc("/v2beta1/", ms.withAuth(ms.routeV2Beta1))
 
 	ms.server = httptest.NewServer(mux)
 	return ms
@@ -102,6 +116,10 @@ func (ms *MockServer) Reset() {
 	ms.instances = make(map[string]*mockInstanceState)
 	ms.snapshots = make(map[string]*mockSnapshotState)
 	ms.snapshotListEmptyUntil = make(map[string]int)
+	ms.projectUsers = make(map[string][]string)
+	ms.organizationUsers = make(map[string]client.OrganizationUserData)
+	ms.deletedOrganizationUsers = make(map[string]bool)
+	ms.invites = make(map[string]client.OrganizationInviteData)
 }
 
 // HoldSnapshotList makes the next n calls to GET /v1/instances/{instanceId}/snapshots
@@ -159,6 +177,85 @@ func (ms *MockServer) SnapshotExists(instanceId, snapshotId string) bool {
 	defer ms.mu.Unlock()
 	_, ok := ms.snapshots[snapshotKey(instanceId, snapshotId)]
 	return ok
+}
+
+// SeedProjectUser inserts a project user membership into the mock's state store.
+func (ms *MockServer) SeedProjectUser(orgId, projectId, userId string, roles []string) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	ms.projectUsers[projectUserKey(orgId, projectId, userId)] = roles
+}
+
+// ProjectUserExists reports whether a project user with the given IDs is in the mock's state store.
+func (ms *MockServer) ProjectUserExists(orgId, projectId, userId string) bool {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	_, ok := ms.projectUsers[projectUserKey(orgId, projectId, userId)]
+	return ok
+}
+
+// SeedOrganizationUser inserts an org user into the mock's dynamic state store,
+// making it available via GET /v2beta1/organizations/{orgId}/users/{userId}.
+// It also clears any prior deletion marker for the same user.
+func (ms *MockServer) SeedOrganizationUser(orgId string, user client.OrganizationUserData) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	key := orgUserKey(orgId, user.UserId)
+	ms.organizationUsers[key] = user
+	delete(ms.deletedOrganizationUsers, key)
+}
+
+// OrganizationUserExists reports whether an org user with the given IDs is present
+// in the mock (not deleted). Returns false for users that were never seeded or were
+// deleted via DELETE.
+func (ms *MockServer) OrganizationUserExists(orgId, userId string) bool {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	key := orgUserKey(orgId, userId)
+	if ms.deletedOrganizationUsers[key] {
+		return false
+	}
+	if _, ok := ms.organizationUsers[key]; ok {
+		return true
+	}
+	// Fall back to static users.
+	return userId == "user-001" || userId == "user-002"
+}
+
+// SeedOrganizationInvite inserts an invite into the mock's state store, making
+// it available via GET /v2beta1/organizations/{orgId}/invites.
+func (ms *MockServer) SeedOrganizationInvite(orgId string, invite client.OrganizationInviteData) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	invite.OrganizationId = orgId
+	ms.invites[inviteKey(orgId, invite.Id)] = invite
+}
+
+// OrganizationInviteStatus returns the current status of an invite and whether
+// it exists in the mock's state store. Used to verify Delete behavior (e.g.
+// that an active invite is revoked rather than removed outright).
+func (ms *MockServer) OrganizationInviteStatus(orgId, inviteId string) (string, bool) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	invite, ok := ms.invites[inviteKey(orgId, inviteId)]
+	if !ok {
+		return "", false
+	}
+	return invite.Status, true
+}
+
+// OrganizationInvites returns all invites currently stored for the given org.
+func (ms *MockServer) OrganizationInvites(orgId string) []client.OrganizationInviteData {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	var data []client.OrganizationInviteData
+	for key, invite := range ms.invites {
+		if strings.HasPrefix(key, orgId+"/") {
+			data = append(data, invite)
+		}
+	}
+	return data
 }
 
 // SeedSnapshot inserts a snapshot into the mock's state store. The snapshot
@@ -508,11 +605,488 @@ func (ms *MockServer) handleGetSnapshot(w http.ResponseWriter, _ *http.Request, 
 }
 
 // ---------------------------------------------------------------------------
+// V2Beta1 router
+// ---------------------------------------------------------------------------
+
+func (ms *MockServer) routeV2Beta1(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2beta1/")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+
+	switch {
+	// GET /v2beta1/organizations
+	case len(parts) == 1 && parts[0] == "organizations" && r.Method == http.MethodGet:
+		ms.handleGetOrganizations(w, r)
+
+	// GET /v2beta1/organizations/{id}/projects
+	case len(parts) == 3 && parts[0] == "organizations" && parts[2] == "projects" && r.Method == http.MethodGet:
+		ms.handleGetProjectsByOrganization(w, r, parts[1])
+
+	// GET /v2beta1/organizations/{id}/users
+	case len(parts) == 3 && parts[0] == "organizations" && parts[2] == "users" && r.Method == http.MethodGet:
+		ms.handleGetOrgUsers(w, r, parts[1])
+
+	// GET /v2beta1/organizations/{orgId}/users/{userId}
+	case len(parts) == 4 && parts[0] == "organizations" && parts[2] == "users" && r.Method == http.MethodGet:
+		ms.handleGetOrgUser(w, r, parts[1], parts[3])
+
+	// GET /v2beta1/organizations/{orgId}/projects/{projectId}/users
+	case len(parts) == 5 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "users" && r.Method == http.MethodGet:
+		ms.handleGetProjectUsers(w, r, parts[1], parts[3])
+
+	// POST /v2beta1/organizations/{orgId}/projects/{projectId}/users
+	case len(parts) == 5 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "users" && r.Method == http.MethodPost:
+		ms.handlePostProjectUser(w, r, parts[1], parts[3])
+
+	// PATCH /v2beta1/organizations/{orgId}/projects/{projectId}/users/{userId}
+	case len(parts) == 6 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "users" && r.Method == http.MethodPatch:
+		ms.handlePatchProjectUser(w, r, parts[1], parts[3], parts[5])
+
+	// DELETE /v2beta1/organizations/{orgId}/projects/{projectId}/users/{userId}
+	case len(parts) == 6 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "users" && r.Method == http.MethodDelete:
+		ms.handleDeleteProjectUser(w, r, parts[1], parts[3], parts[5])
+
+	// PATCH /v2beta1/organizations/{orgId}/users/{userId}
+	case len(parts) == 4 && parts[0] == "organizations" && parts[2] == "users" && r.Method == http.MethodPatch:
+		ms.handlePatchOrgUser(w, r, parts[1], parts[3])
+
+	// DELETE /v2beta1/organizations/{orgId}/users/{userId}
+	case len(parts) == 4 && parts[0] == "organizations" && parts[2] == "users" && r.Method == http.MethodDelete:
+		ms.handleDeleteOrgUser(w, r, parts[1], parts[3])
+
+	// GET /v2beta1/organizations/{orgId}/invites
+	case len(parts) == 3 && parts[0] == "organizations" && parts[2] == "invites" && r.Method == http.MethodGet:
+		ms.handleGetOrganizationInvites(w, r, parts[1])
+
+	// POST /v2beta1/organizations/{orgId}/invites
+	case len(parts) == 3 && parts[0] == "organizations" && parts[2] == "invites" && r.Method == http.MethodPost:
+		ms.handlePostOrganizationInvite(w, r, parts[1])
+
+	// DELETE /v2beta1/organizations/{orgId}/invites/{inviteId}
+	case len(parts) == 4 && parts[0] == "organizations" && parts[2] == "invites" && r.Method == http.MethodDelete:
+		ms.handleDeleteOrganizationInvite(w, r, parts[1], parts[3])
+
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+func (ms *MockServer) handleGetProjectUsers(w http.ResponseWriter, _ *http.Request, orgId, projectId string) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	// Build the list from the mutable projectUsers store first, then fall back to seeded data.
+	var data []client.ProjectUserData
+	for key, roles := range ms.projectUsers {
+		parts := strings.SplitN(key, "/", 3)
+		if len(parts) == 3 && parts[0] == orgId && parts[1] == projectId {
+			data = append(data, client.ProjectUserData{
+				UserId:       parts[2],
+				ProjectRoles: roles,
+			})
+		}
+	}
+
+	// If no dynamic state exists for this project, return static seed data.
+	if len(data) == 0 {
+		seeded := map[string][]client.ProjectUserData{
+			"proj-001": {
+				{UserId: "user-001", Email: "alice@example.com", ProjectRoles: []string{"owner"}},
+			},
+			"proj-002": {
+				{UserId: "user-001", Email: "alice@example.com", ProjectRoles: []string{"viewer"}},
+				{UserId: "user-002", Email: "bob@example.com", ProjectRoles: []string{"owner"}},
+			},
+		}
+		if seededData, ok := seeded[projectId]; ok {
+			data = seededData
+		}
+	}
+
+	if data == nil {
+		data = []client.ProjectUserData{}
+	}
+	writeJSON(w, http.StatusOK, client.GetProjectUsersResponse{Data: data})
+}
+
+func (ms *MockServer) handlePostProjectUser(w http.ResponseWriter, r *http.Request, orgId, projectId string) {
+	var req client.PostProjectUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if req.UserId == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	key := projectUserKey(orgId, projectId, req.UserId)
+	ms.mu.Lock()
+	ms.projectUsers[key] = req.ProjectRoles
+	ms.mu.Unlock()
+
+	w.WriteHeader(http.StatusCreated)
+}
+
+func (ms *MockServer) handlePatchProjectUser(w http.ResponseWriter, r *http.Request, orgId, projectId, userId string) {
+	var req client.PatchProjectUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	key := projectUserKey(orgId, projectId, userId)
+	ms.mu.Lock()
+	_, exists := ms.projectUsers[key]
+	if !exists {
+		ms.mu.Unlock()
+		http.NotFound(w, r)
+		return
+	}
+	ms.projectUsers[key] = req.ProjectRoles
+	ms.mu.Unlock()
+
+	writeJSON(w, http.StatusOK, client.PatchProjectUserResponse{
+		Data: client.ProjectUserData{
+			UserId:       userId,
+			ProjectRoles: req.ProjectRoles,
+		},
+	})
+}
+
+func (ms *MockServer) handleDeleteProjectUser(w http.ResponseWriter, _ *http.Request, orgId, projectId, userId string) {
+	key := projectUserKey(orgId, projectId, userId)
+	ms.mu.Lock()
+	_, exists := ms.projectUsers[key]
+	if !exists {
+		ms.mu.Unlock()
+		http.NotFound(w, nil)
+		return
+	}
+	delete(ms.projectUsers, key)
+	ms.mu.Unlock()
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (ms *MockServer) handleGetOrgUsers(w http.ResponseWriter, _ *http.Request, orgId string) {
+	lastActivity := "2024-06-01T12:00:00Z"
+	staticUsers := []client.OrganizationUserData{
+		{
+			UserId:                     "user-001",
+			Email:                      "alice@example.com",
+			ExemptFromAutomaticRemoval: false,
+			LastActivityAt:             &lastActivity,
+			MfaEnrollmentStatus:        "enrolled",
+			MfaEnrolledMethods:         []client.MfaMethodData{{Id: "totp", EnrolledAt: "2024-01-01T00:00:00Z"}},
+			OrganizationRoles:          []string{"admin"},
+		},
+		{
+			UserId:                     "user-002",
+			Email:                      "bob@example.com",
+			ExemptFromAutomaticRemoval: true,
+			LastActivityAt:             nil,
+			MfaEnrollmentStatus:        "not_enrolled",
+			MfaEnrolledMethods:         []client.MfaMethodData{},
+			OrganizationRoles:          []string{"member"},
+		},
+	}
+
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	byId := make(map[string]client.OrganizationUserData, len(staticUsers))
+	order := make([]string, 0, len(staticUsers))
+	for _, u := range staticUsers {
+		byId[u.UserId] = u
+		order = append(order, u.UserId)
+	}
+
+	// Overlay/append dynamic users seeded (or patched) for this specific org.
+	for key, dynamic := range ms.organizationUsers {
+		parts := strings.SplitN(key, "/", 2)
+		if len(parts) != 2 || parts[0] != orgId {
+			continue
+		}
+		if _, exists := byId[dynamic.UserId]; !exists {
+			order = append(order, dynamic.UserId)
+		}
+		byId[dynamic.UserId] = dynamic
+	}
+
+	data := make([]client.OrganizationUserData, 0, len(order))
+	for _, id := range order {
+		if ms.deletedOrganizationUsers[orgUserKey(orgId, id)] {
+			continue
+		}
+		data = append(data, byId[id])
+	}
+
+	writeJSON(w, http.StatusOK, client.GetOrganizationUsersResponse{Data: data})
+}
+
+func (ms *MockServer) handleGetOrgUser(w http.ResponseWriter, _ *http.Request, orgId, userId string) {
+	lastActivity := "2024-06-01T12:00:00Z"
+
+	staticUsers := map[string]client.OrganizationUserData{
+		"user-001": {
+			UserId:                     "user-001",
+			Email:                      "alice@example.com",
+			ExemptFromAutomaticRemoval: false,
+			LastActivityAt:             &lastActivity,
+			MfaEnrollmentStatus:        "enrolled",
+			MfaEnrolledMethods:         []client.MfaMethodData{{Id: "totp", EnrolledAt: "2024-01-01T00:00:00Z"}},
+			OrganizationRoles:          []string{"organization-admin"},
+		},
+		"user-002": {
+			UserId:                     "user-002",
+			Email:                      "bob@example.com",
+			ExemptFromAutomaticRemoval: true,
+			LastActivityAt:             nil,
+			MfaEnrollmentStatus:        "not_enrolled",
+			MfaEnrolledMethods:         []client.MfaMethodData{},
+			OrganizationRoles:          []string{"organization-member"},
+		},
+	}
+	staticProjects := map[string][]client.UserProjectData{
+		"user-001": {
+			{Id: "proj-001", Name: "Alpha", ProjectRoles: []string{"owner"}},
+			{Id: "proj-002", Name: "Beta", ProjectRoles: []string{"viewer"}},
+		},
+		"user-002": {
+			{Id: "proj-002", Name: "Beta", ProjectRoles: []string{"owner"}},
+		},
+	}
+
+	key := orgUserKey(orgId, userId)
+
+	ms.mu.Lock()
+
+	if ms.deletedOrganizationUsers[key] {
+		ms.mu.Unlock()
+		http.NotFound(w, nil)
+		return
+	}
+
+	var userData client.OrganizationUserData
+	if dynamic, ok := ms.organizationUsers[key]; ok {
+		userData = dynamic
+	} else {
+		static, ok := staticUsers[userId]
+		if !ok {
+			ms.mu.Unlock()
+			http.NotFound(w, nil)
+			return
+		}
+		userData = static
+	}
+
+	projects := make([]client.UserProjectData, len(staticProjects[userId]))
+	copy(projects, staticProjects[userId])
+
+	staticProjectIds := make(map[string]struct{}, len(staticProjects[userId]))
+	for _, p := range staticProjects[userId] {
+		staticProjectIds[p.Id] = struct{}{}
+	}
+
+	// Append dynamic project memberships from projectUsers store (not already in static list).
+	for pkey, roles := range ms.projectUsers {
+		parts := strings.SplitN(pkey, "/", 3)
+		if len(parts) == 3 && parts[0] == orgId && parts[2] == userId {
+			projectId := parts[1]
+			if _, exists := staticProjectIds[projectId]; !exists {
+				projects = append(projects, client.UserProjectData{
+					Id:           projectId,
+					ProjectRoles: roles,
+				})
+			}
+		}
+	}
+
+	ms.mu.Unlock()
+
+	writeJSON(w, http.StatusOK, client.GetOrganizationUserDetailsResponse{
+		Data: client.OrganizationUserDetailsData{
+			OrganizationUserData: userData,
+			Projects:             projects,
+		},
+	})
+}
+
+func (ms *MockServer) handlePatchOrgUser(w http.ResponseWriter, r *http.Request, orgId, userId string) {
+	var req client.PatchOrganizationUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	key := orgUserKey(orgId, userId)
+	lastActivity := "2024-06-01T12:00:00Z"
+
+	staticUsers := map[string]client.OrganizationUserData{
+		"user-001": {
+			UserId: "user-001", Email: "alice@example.com",
+			ExemptFromAutomaticRemoval: false, LastActivityAt: &lastActivity,
+			MfaEnrollmentStatus: "enrolled",
+			MfaEnrolledMethods:  []client.MfaMethodData{{Id: "totp", EnrolledAt: "2024-01-01T00:00:00Z"}},
+		},
+		"user-002": {
+			UserId: "user-002", Email: "bob@example.com",
+			ExemptFromAutomaticRemoval: true,
+			MfaEnrollmentStatus:        "not_enrolled",
+			MfaEnrolledMethods:         []client.MfaMethodData{},
+		},
+	}
+
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	if ms.deletedOrganizationUsers[key] {
+		http.NotFound(w, nil)
+		return
+	}
+
+	var userData client.OrganizationUserData
+	if dynamic, ok := ms.organizationUsers[key]; ok {
+		userData = dynamic
+	} else if static, ok := staticUsers[userId]; ok {
+		userData = static
+	} else {
+		http.NotFound(w, nil)
+		return
+	}
+
+	userData.OrganizationRoles = req.OrganizationRoles
+	ms.organizationUsers[key] = userData
+
+	writeJSON(w, http.StatusOK, client.PatchOrganizationUserResponse{Data: userData})
+}
+
+func (ms *MockServer) handleDeleteOrgUser(w http.ResponseWriter, _ *http.Request, orgId, userId string) {
+	key := orgUserKey(orgId, userId)
+
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	if ms.deletedOrganizationUsers[key] {
+		http.NotFound(w, nil)
+		return
+	}
+
+	ms.deletedOrganizationUsers[key] = true
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (ms *MockServer) handlePostOrganizationInvite(w http.ResponseWriter, r *http.Request, orgId string) {
+	var req client.PostOrganizationInviteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if req.Email == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	projectInvites := make([]client.ProjectInviteData, len(req.ProjectInvites))
+	for i, pi := range req.ProjectInvites {
+		projectInvites[i] = client.ProjectInviteData(pi)
+	}
+
+	invite := client.OrganizationInviteData{
+		Id:                fmt.Sprintf("invite-%d", time.Now().UnixNano()),
+		Email:             req.Email,
+		OrganizationId:    orgId,
+		InvitedBy:         "mock-inviter-id",
+		ExpiresAt:         "2099-01-01T00:00:00Z",
+		Status:            domain.InviteStatusActive,
+		OrganizationRoles: req.OrganizationRoles,
+		ProjectInvites:    projectInvites,
+	}
+
+	ms.mu.Lock()
+	ms.invites[inviteKey(orgId, invite.Id)] = invite
+	ms.mu.Unlock()
+
+	writeJSON(w, http.StatusCreated, client.PostOrganizationInviteResponse{Data: invite})
+}
+
+func (ms *MockServer) handleGetOrganizationInvites(w http.ResponseWriter, _ *http.Request, orgId string) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	var data []client.OrganizationInviteData
+	for key, invite := range ms.invites {
+		parts := strings.SplitN(key, "/", 2)
+		if len(parts) == 2 && parts[0] == orgId {
+			data = append(data, invite)
+		}
+	}
+	if data == nil {
+		data = []client.OrganizationInviteData{}
+	}
+	writeJSON(w, http.StatusOK, client.GetOrganizationInvitesResponse{Data: data})
+}
+
+func (ms *MockServer) handleDeleteOrganizationInvite(w http.ResponseWriter, _ *http.Request, orgId, inviteId string) {
+	key := inviteKey(orgId, inviteId)
+
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	invite, ok := ms.invites[key]
+	if !ok {
+		http.NotFound(w, nil)
+		return
+	}
+	if invite.Status != domain.InviteStatusActive {
+		http.Error(w, "invite cannot be deleted", http.StatusBadRequest)
+		return
+	}
+	invite.Status = domain.InviteStatusRevoked
+	ms.invites[key] = invite
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (ms *MockServer) handleGetProjectsByOrganization(w http.ResponseWriter, _ *http.Request, _ string) {
+	resp := client.GetProjectsResponse{
+		Data: []client.ProjectResponseData{
+			{Id: "test-org-project-id-001", Name: "Org Project One"},
+			{Id: "test-org-project-id-002", Name: "Org Project Two"},
+			{Id: "proj-001", Name: "Alpha"},
+			{Id: "proj-002", Name: "Beta"},
+		},
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (ms *MockServer) handleGetOrganizations(w http.ResponseWriter, _ *http.Request) {
+	resp := client.GetOrganizationsResponse{
+		Data: []client.OrganizationData{
+			{Id: "test-org-id-001", Name: "Test Organization"},
+		},
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 func snapshotKey(instanceId, snapshotId string) string {
 	return instanceId + "/" + snapshotId
+}
+
+func projectUserKey(orgId, projectId, userId string) string {
+	return orgId + "/" + projectId + "/" + userId
+}
+
+func orgUserKey(orgId, userId string) string {
+	return orgId + "/" + userId
+}
+
+func inviteKey(orgId, inviteId string) string {
+	return orgId + "/" + inviteId
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
