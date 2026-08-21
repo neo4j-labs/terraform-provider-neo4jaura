@@ -1,6 +1,6 @@
 module github.com/neo4j-labs/terraform-provider-neo4jaura
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/hashicorp/go-retryablehttp v0.7.8
