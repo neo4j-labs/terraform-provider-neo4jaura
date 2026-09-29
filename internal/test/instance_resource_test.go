@@ -19,6 +19,7 @@ package test
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -120,6 +121,98 @@ resource "neo4jaura_instance" "this" {
   secondaries_count   = 1
 }
 `, defaultProviderConfig)
+
+var businessCriticalMultiDatabaseConfig = fmt.Sprintf(`
+%[1]s
+resource "neo4jaura_instance" "this" {
+  name           = "TestMultiDatabase"
+  cloud_provider = "aws"
+  region         = "us-east-1"
+  memory         = "4GB"
+  storage        = "8GB"
+  type           = "business-critical"
+  organization_id = "test-org-id"
+  project_id     = "test-project-id-001"
+  multi_database = true
+}
+`, defaultProviderConfig)
+
+func TestAcc_business_critical_multi_database_creation(t *testing.T) {
+	testMockServer.Reset()
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckInstanceDestroyed(testMockServer),
+		Steps: []resource.TestStep{{
+			Config: businessCriticalMultiDatabaseConfig,
+			ConfigStateChecks: []statecheck.StateCheck{
+				statecheck.ExpectKnownValue("neo4jaura_instance.this", tfjsonpath.New("multi_database"), knownvalue.Bool(true)),
+				statecheck.ExpectKnownValue("neo4jaura_instance.this", tfjsonpath.New("instance_id"), knownvalue.StringFunc(nonEmptyString)),
+			},
+		}, {
+			RefreshState: true,
+		}},
+	})
+}
+
+func TestAcc_multi_database_creation_rejects_unenabled_instance(t *testing.T) {
+	testMockServer.Reset()
+	testMockServer.DisableMultiDatabaseOnNextCreate()
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{{
+			Config:      businessCriticalMultiDatabaseConfig,
+			ExpectError: regexp.MustCompile("Multi-database was not enabled"),
+		}},
+	})
+}
+
+func TestAcc_multi_database_instance_disappears(t *testing.T) {
+	testMockServer.Reset()
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckInstanceDestroyed(testMockServer),
+		Steps: []resource.TestStep{{
+			Config:             businessCriticalMultiDatabaseConfig,
+			Check:              deleteInstanceOutOfBand(testMockServer, "neo4jaura_instance.this"),
+			ExpectNonEmptyPlan: true,
+		}},
+	})
+}
+
+func TestAcc_multi_database_requires_business_critical_and_organization(t *testing.T) {
+	testMockServer.Reset()
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{{
+			Config: defaultProviderConfig + `
+resource "neo4jaura_instance" "this" {
+  name = "invalid"
+  region = "us-east-1"
+  project_id = "test-project-id-001"
+  type = "professional-db"
+  multi_database = true
+  organization_id = "test-org-id"
+}`,
+			PlanOnly:    true,
+			ExpectError: regexp.MustCompile("multi_database is only supported on business-critical"),
+		}, {
+			Config: defaultProviderConfig + `
+resource "neo4jaura_instance" "this" {
+  name = "invalid"
+  region = "us-east-1"
+  project_id = "test-project-id-001"
+  type = "business-critical"
+  multi_database = true
+}`,
+			PlanOnly:    true,
+			ExpectError: regexp.MustCompile("organization_id is required when multi_database is true"),
+		}},
+	})
+}
 
 func TestAcc_can_create_instance_resource(t *testing.T) {
 	testMockServer.Reset()

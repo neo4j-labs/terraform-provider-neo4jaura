@@ -65,6 +65,8 @@ type InstanceResourceModel struct {
 	Type                  types.String `tfsdk:"type"`
 	CloudProvider         types.String `tfsdk:"cloud_provider"`
 	ProjectId             types.String `tfsdk:"project_id"`
+	OrganizationId        types.String `tfsdk:"organization_id"`
+	MultiDatabase         types.Bool   `tfsdk:"multi_database"`
 	ConnectionUrl         types.String `tfsdk:"connection_url"`
 	Username              types.String `tfsdk:"username"`
 	Password              types.String `tfsdk:"password"`
@@ -190,6 +192,20 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"organization_id": schema.StringAttribute{
+				MarkdownDescription: "Organization ID required when multi_database is true.",
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"multi_database": schema.BoolAttribute{
+				MarkdownDescription: "Enable multiple databases at instance creation. Requires Business Critical and organization_id. Cannot be changed after creation.",
+				Optional:            true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplace(),
 				},
 			},
 			"connection_url": schema.StringAttribute{
@@ -334,6 +350,7 @@ func (r *InstanceResource) ConfigValidators(_ context.Context) []resource.Config
 		&cdcTierValidator{},
 		&vectorOptimizedValidator{},
 		&graphAnalyticsPluginValidator{},
+		&multiDatabaseValidator{},
 	}
 }
 
@@ -388,7 +405,22 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		postInstanceRequest.GraphAnalyticsPlugin = data.GraphAnalyticsPlugin.ValueBoolPointer()
 	}
 
-	postInstanceResp, err := r.auraApi.PostInstance(ctx, *postInstanceRequest)
+	var postInstanceResp client.PostInstanceResponse
+	var err error
+	if data.MultiDatabase.ValueBool() {
+		postInstanceResp, err = r.auraApi.PostMultiDatabaseInstance(ctx, data.OrganizationId.ValueString(), data.ProjectId.ValueString(), client.PostMultiDatabaseInstanceRequest{
+			Name:            data.Name.ValueString(),
+			Region:          data.Region.ValueString(),
+			Memory:          data.Memory.ValueString(),
+			Storage:         data.Storage.ValueStringPointer(),
+			Type:            data.Type.ValueString(),
+			CloudProvider:   data.CloudProvider.ValueString(),
+			MultiDatabase:   true,
+			VectorOptimized: data.VectorOptimized.ValueBoolPointer(),
+		})
+	} else {
+		postInstanceResp, err = r.auraApi.PostInstance(ctx, *postInstanceRequest)
+	}
 	if err != nil {
 		response.Diagnostics.AddError("Error while creating an instance", err.Error())
 		return
@@ -408,6 +440,17 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		response.Diagnostics.AddError("Instance is not running in time",
 			fmt.Sprintf("instance_id=%s: %s", postInstanceResp.Data.Id, err.Error()))
 		return
+	}
+	if data.MultiDatabase.ValueBool() {
+		enabled, err := r.auraApi.GetMultiDatabaseInstance(ctx, data.OrganizationId.ValueString(), data.ProjectId.ValueString(), postInstanceResp.Data.Id)
+		if err != nil {
+			response.Diagnostics.AddError("Error verifying multi-database instance", fmt.Sprintf("instance_id=%s: %s", postInstanceResp.Data.Id, err.Error()))
+			return
+		}
+		if !enabled {
+			response.Diagnostics.AddError("Multi-database was not enabled", fmt.Sprintf("instance_id=%s: Aura reported multi_database=false after creation", postInstanceResp.Data.Id))
+			return
+		}
 	}
 
 	// CDC enrichment mode and secondaries_count must be set via PATCH after instance creation
@@ -516,6 +559,27 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 
 	if response.Diagnostics.HasError() {
 		return
+	}
+	if stateData.MultiDatabase.ValueBool() {
+		enabled, err := r.auraApi.GetMultiDatabaseInstance(ctx, stateData.OrganizationId.ValueString(), stateData.ProjectId.ValueString(), stateData.InstanceId.ValueString())
+		if err != nil {
+			if errors.Is(err, client.ErrNotFound) {
+				_, v1Err := r.auraApi.GetInstanceById(ctx, stateData.InstanceId.ValueString())
+				if errors.Is(v1Err, client.ErrNotFound) {
+					response.State.RemoveResource(ctx)
+					return
+				}
+				if v1Err == nil {
+					response.Diagnostics.AddError("Cannot verify multi-database setting", fmt.Sprintf("instance_id=%s: v2beta1 returned 404 but v1 still finds the instance; check organization_id and project_id", stateData.InstanceId.ValueString()))
+					return
+				}
+				response.Diagnostics.AddError("Error while checking multi-database setting", fmt.Sprintf("instance_id=%s: v2beta1: %s; v1: %s", stateData.InstanceId.ValueString(), err.Error(), v1Err.Error()))
+				return
+			}
+			response.Diagnostics.AddError("Error while checking multi-database setting", fmt.Sprintf("instance_id=%s: %s", stateData.InstanceId.ValueString(), err.Error()))
+			return
+		}
+		stateData.MultiDatabase = types.BoolValue(enabled)
 	}
 
 	instance, err := r.auraApi.GetInstanceById(ctx, stateData.InstanceId.ValueString())
