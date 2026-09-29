@@ -62,6 +62,44 @@ resource "neo4jaura_instance" "protected" {
 }
 ```
 
+### Business Critical Instance With Multiple Databases
+
+Multiple databases must be enabled when the instance is created. This option uses the Aura v2beta1 API and requires an Aura organization ID as well as the project ID. Existing single-database instances cannot be converted. Protect instances containing data against unintended replacement.
+
+```terraform
+terraform {
+  required_providers {
+    neo4jaura = {
+      source = "neo4j-labs/neo4jaura"
+    }
+  }
+}
+
+variable "organization_id" {
+  type = string
+}
+
+variable "project_id" {
+  type = string
+}
+
+resource "neo4jaura_instance" "multi_database" {
+  name            = "example-multi-database"
+  cloud_provider  = "aws"
+  region          = "us-east-1"
+  memory          = "4GB"
+  storage         = "8GB"
+  type            = "business-critical"
+  organization_id = var.organization_id
+  project_id      = var.project_id
+  multi_database  = true
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+```
+
 ### Paused Instance
 
 ```terraform
@@ -129,6 +167,8 @@ resource "neo4jaura_instance" "restored" {
 Terraform will recreate the Aura instance when any of these arguments change:
 
 - `cloud_provider`
+- `multi_database`
+- `organization_id`
 - `project_id`
 - `region`
 - `type`
@@ -151,6 +191,8 @@ For databases with valuable data, use the [Instance With Destroy Protection](#in
 - `cloud_provider` (String) Cloud provider. One of: `gcp`, `aws`, `azure`.
 - `graph_analytics_plugin` (Boolean) The graph analytics plugin configuration of the instance.
 - `memory` (String) Memory allocated for the instance. One of: `1GB`, `2GB`, `4GB`, `8GB`, `16GB`, `24GB`, `32GB`, `48GB`, `64GB`, `128GB`, `192GB`, `256GB`, `384GB`, `512GB`.
+- `multi_database` (Boolean) Enable multiple databases at instance creation. Requires Business Critical and organization_id. Cannot be changed after creation.
+- `organization_id` (String) Organization ID required when multi_database is true.
 - `secondaries_count` (Number) The number of secondaries in the instance (VDC only).
 - `source` (Attributes) The source from which the instance is created. (see [below for nested schema](#nestedatt--source))
 - `status` (String) The status of the instance. One of: `creating`, `destroying`, `running`, `pausing`, `paused`, `suspending`, `suspended`, `resuming`, `loading`, `loading failed`, `restoring`, `updating`, `overwriting`.
