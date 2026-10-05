@@ -131,3 +131,32 @@ func deleteInstanceOutOfBand(ms *MockServer, resourceName string) func(*terrafor
 		return nil
 	}
 }
+
+// checkImportedAttributes returns an ImportStateCheck that asserts the attributes
+// of the single resource produced by an import step. Attributes listed in
+// nullAttributes are asserted to be absent from state, which is how a null value
+// is represented. This is the only way to assert on an import-only test step:
+// ConfigStateChecks are run for config (apply) steps only.
+func checkImportedAttributes(expected map[string]string, nullAttributes ...string) resource.ImportStateCheckFunc {
+	return func(states []*terraform.InstanceState) error {
+		if len(states) != 1 {
+			return fmt.Errorf("expected exactly 1 imported resource in state, got %d", len(states))
+		}
+		attributes := states[0].Attributes
+		for name, want := range expected {
+			got, ok := attributes[name]
+			if !ok {
+				return fmt.Errorf("expected attribute %s to be %q, but it is null", name, want)
+			}
+			if got != want {
+				return fmt.Errorf("expected attribute %s to be %q, got %q", name, want, got)
+			}
+		}
+		for _, name := range nullAttributes {
+			if got, ok := attributes[name]; ok {
+				return fmt.Errorf("expected attribute %s to be null, got %q", name, got)
+			}
+		}
+		return nil
+	}
+}

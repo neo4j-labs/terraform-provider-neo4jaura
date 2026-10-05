@@ -23,13 +23,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -137,17 +135,21 @@ func (r *OrganizationInviteResource) Schema(_ context.Context, _ resource.Schema
 					setplanmodifier.RequiresReplace(),
 				},
 			},
-			"project_invites": schema.ListNestedAttribute{
+			// A set, not a list: the Aura API does not preserve the configured order of
+			// the project invites, and ordering carries no meaning. As a list, an invite
+			// whose API response came back reordered planned as a replacement, which
+			// revokes the live invite and sends a new one.
+			"project_invites": schema.SetNestedAttribute{
 				Required: true,
 				MarkdownDescription: "Project roles to grant the invitee at the same time, alongside the organization role. The Aura API " +
-					"requires at least one entry — every invite must grant access to at least one project.",
+					"requires at least one entry — every invite must grant access to at least one project. Order is not significant.",
 				Description: "Project roles to grant the invitee at the same time, alongside the organization role. The Aura API " +
-					"requires at least one entry — every invite must grant access to at least one project.",
-				Validators: []validator.List{
-					listvalidator.SizeAtLeast(1),
+					"requires at least one entry — every invite must grant access to at least one project. Order is not significant.",
+				Validators: []validator.Set{
+					setvalidator.SizeAtLeast(1),
 				},
-				PlanModifiers: []planmodifier.List{
-					listplanmodifier.RequiresReplace(),
+				PlanModifiers: []planmodifier.Set{
+					setplanmodifier.RequiresReplace(),
 				},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{

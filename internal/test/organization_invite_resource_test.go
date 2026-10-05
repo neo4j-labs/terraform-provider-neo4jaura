@@ -27,6 +27,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/client"
+	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/domain"
 )
 
 const inviteOrgId = "test-org-id-001"
@@ -226,6 +227,13 @@ resource "neo4jaura_organization_invite" "this" {
 						knownvalue.StringExact("neo@nebuchadnezzar.net"),
 					),
 				},
+			},
+			{
+				// Fails with "the plan was not empty" if the imported state does not
+				// round-trip: every attribute set by the configuration has to be populated
+				// by ImportState or Read, or the next plan proposes changes to live state.
+				Config:   importConfig,
+				PlanOnly: true,
 			},
 		},
 	})
@@ -463,6 +471,70 @@ resource "neo4jaura_organization_invite" "this" {
 						knownvalue.Null(),
 					),
 				},
+			},
+		},
+	})
+
+	testMockServer.Reset()
+}
+
+// TestAcc_organization_invite_project_invites_order_ignored verifies that the order
+// in which the Aura API returns project_invites does not matter. project_invites is
+// RequiresReplace, so while it was a list a reordered API response planned as a
+// replacement — revoking the live invite and emailing a new one.
+func TestAcc_organization_invite_project_invites_order_ignored(t *testing.T) {
+	const orderInviteId = "invite-order-test"
+	importID := fmt.Sprintf("%s,%s", inviteOrgId, orderInviteId)
+
+	testMockServer.Reset()
+	// The seeded invite lists the projects in the opposite order to the configuration.
+	testMockServer.SeedOrganizationInvite(inviteOrgId, client.OrganizationInviteData{
+		Id:                orderInviteId,
+		Email:             "neo@nebuchadnezzar.net",
+		InvitedBy:         "user-morpheus",
+		ExpiresAt:         "2099-01-01T00:00:00Z",
+		Status:            domain.InviteStatusActive,
+		OrganizationRoles: []string{"organization-admin"},
+		ProjectInvites: []client.ProjectInviteData{
+			{ProjectId: "proj-B", ProjectRoles: []string{"namespace-member"}},
+			{ProjectId: "proj-A", ProjectRoles: []string{"namespace-admin"}},
+		},
+	})
+
+	orderConfig := fmt.Sprintf(`%s
+resource "neo4jaura_organization_invite" "this" {
+  organization_id    = %q
+  email              = "neo@nebuchadnezzar.net"
+  organization_roles = ["organization-admin"]
+  project_invites = [
+    {
+      project_id    = "proj-A"
+      project_roles = ["project-admin"]
+    },
+    {
+      project_id    = "proj-B"
+      project_roles = ["project-member"]
+    }
+  ]
+}
+`, defaultProviderConfig, inviteOrgId)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:             orderConfig,
+				ResourceName:       "neo4jaura_organization_invite.this",
+				ImportState:        true,
+				ImportStateId:      importID,
+				ImportStatePersist: true,
+			},
+			{
+				// Fails with "the plan was not empty" if the order difference between
+				// the configuration and the API response shows up as a diff.
+				Config:   orderConfig,
+				PlanOnly: true,
 			},
 		},
 	})

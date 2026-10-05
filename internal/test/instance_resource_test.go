@@ -23,6 +23,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	"github.com/neo4j-labs/terraform-provider-neo4jaura/internal/client"
@@ -313,10 +314,12 @@ func TestAcc_can_import_instance_resource(t *testing.T) {
 	secondariesCount := 1
 
 	examples := []struct {
-		name             string
-		instance         client.GetInstanceData
-		config           string
-		extraStateChecks []statecheck.StateCheck
+		name     string
+		instance client.GetInstanceData
+		config   string
+		// extraAttrs holds tier specific attributes expected in the imported state,
+		// in addition to the ones every instance has.
+		extraAttrs map[string]string
 	}{
 		{
 			name: "free tier",
@@ -330,8 +333,7 @@ func TestAcc_can_import_instance_resource(t *testing.T) {
 				Type:          domain.InstanceTypeFreeDb,
 				TenantId:      "test-project-id-001",
 			},
-			config:           freeTierInstanceConfig,
-			extraStateChecks: []statecheck.StateCheck{},
+			config: freeTierInstanceConfig,
 		},
 
 		{
@@ -346,8 +348,7 @@ func TestAcc_can_import_instance_resource(t *testing.T) {
 				Type:          domain.InstanceTypeProfessionalDb,
 				TenantId:      "test-project-id-001",
 			},
-			config:           professionalTierInstanceConfig,
-			extraStateChecks: []statecheck.StateCheck{},
+			config: professionalTierInstanceConfig,
 		},
 
 		{
@@ -364,12 +365,8 @@ func TestAcc_can_import_instance_resource(t *testing.T) {
 				CdcEnrichmentMode: &cdcEnrichmentModeFull,
 			},
 			config: businessCriticalTierInstanceConfig,
-			extraStateChecks: []statecheck.StateCheck{
-				statecheck.ExpectKnownValue(
-					"neo4jaura_instance.this",
-					tfjsonpath.New("cdc_enrichment_mode"),
-					knownvalue.StringExact(domain.CdcEnrichmentModeFull),
-				),
+			extraAttrs: map[string]string{
+				"cdc_enrichment_mode": domain.CdcEnrichmentModeFull,
 			},
 		},
 
@@ -387,12 +384,8 @@ func TestAcc_can_import_instance_resource(t *testing.T) {
 				SecondariesCount: &secondariesCount,
 			},
 			config: businessCriticalWithSecondariesConfig,
-			extraStateChecks: []statecheck.StateCheck{
-				statecheck.ExpectKnownValue(
-					"neo4jaura_instance.this",
-					tfjsonpath.New("secondaries_count"),
-					knownvalue.Int32Exact(1),
-				),
+			extraAttrs: map[string]string{
+				"secondaries_count": "1",
 			},
 		},
 	}
@@ -403,25 +396,29 @@ func TestAcc_can_import_instance_resource(t *testing.T) {
 			testMockServer.SeedInstance(example.instance)
 			instanceId := example.instance.Id
 
-			stateChecks := []statecheck.StateCheck{
-				statecheck.ExpectKnownValue(
-					"neo4jaura_instance.this",
-					tfjsonpath.New("instance_id"),
-					knownvalue.StringExact(instanceId),
-				),
+			expectedAttrs := map[string]string{
+				"instance_id": instanceId,
+				"name":        example.instance.Name,
+				// Issue #43: project_id and version must be populated on import,
+				// otherwise the next plan proposes replacing a live instance.
+				"project_id": example.instance.TenantId,
+				"version":    domain.InstanceVersion5,
 			}
-			stateChecks = append(stateChecks, example.extraStateChecks...)
+			for name, value := range example.extraAttrs {
+				expectedAttrs[name] = value
+			}
 			resource.Test(tt, resource.TestCase{
 				PreCheck:                 func() { testAccPreCheck(tt) },
 				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 				CheckDestroy:             testAccCheckInstanceDestroyed(testMockServer),
 				Steps: []resource.TestStep{
 					{
-						Config:            example.config,
-						ResourceName:      "neo4jaura_instance.this",
-						ImportState:       true,
-						ImportStateId:     instanceId,
-						ConfigStateChecks: stateChecks,
+						Config:        example.config,
+						ResourceName:  "neo4jaura_instance.this",
+						ImportState:   true,
+						ImportStateId: instanceId,
+						// The Aura API only returns the credentials on creation.
+						ImportStateCheck: checkImportedAttributes(expectedAttrs, "username", "password"),
 					},
 				},
 			})
@@ -612,6 +609,136 @@ func TestAcc_instance_disappears(t *testing.T) {
 				Config:             freeTierInstanceConfig,
 				Check:              deleteInstanceOutOfBand(testMockServer, "neo4jaura_instance.this"),
 				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
+}
+
+// Test for issue #43: after importing an instance the next plan must be empty.
+// Read has to populate project_id and version (both RequiresReplace) from the API,
+// and username/password must stay null instead of becoming "known after apply".
+// https://github.com/neo4j-labs/terraform-provider-neo4jaura/issues/43
+func TestAcc_imported_instance_produces_clean_plan(t *testing.T) {
+	const importedInstanceId = "import-clean-plan-id"
+	const importedProjectId = "test-project-id-001"
+
+	const importedInstanceConfig = defaultProviderConfig + `
+resource "neo4jaura_instance" "this" {
+  name           = "ImportedInstance"
+  cloud_provider = "gcp"
+  region         = "europe-west1"
+  memory         = "2GB"
+  type           = "professional-db"
+  project_id     = "` + importedProjectId + `"
+}
+`
+
+	const renamedInstanceConfig = defaultProviderConfig + `
+resource "neo4jaura_instance" "this" {
+  name           = "RenamedImportedInstance"
+  cloud_provider = "gcp"
+  region         = "europe-west1"
+  memory         = "2GB"
+  type           = "professional-db"
+  project_id     = "` + importedProjectId + `"
+}
+`
+
+	storage := domain.InstanceStorage4GB
+	createdAt := "2024-06-01T12:00:00Z"
+	vectorOptimized := false
+	graphAnalyticsPlugin := false
+
+	testMockServer.Reset()
+	testMockServer.SeedInstance(client.GetInstanceData{
+		Id:                   importedInstanceId,
+		Name:                 "ImportedInstance",
+		Status:               domain.InstanceStatusRunning,
+		CloudProvider:        domain.CloudProviderGcp,
+		Region:               "europe-west1",
+		Memory:               domain.InstanceMemory2GB,
+		Type:                 domain.InstanceTypeProfessionalDb,
+		TenantId:             importedProjectId,
+		ConnectionUrl:        "neo4j+s://import-clean-plan-id.databases.neo4j.io",
+		Storage:              &storage,
+		CreatedAt:            &createdAt,
+		VectorOptimized:      &vectorOptimized,
+		GraphAnalyticsPlugin: &graphAnalyticsPlugin,
+	})
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckInstanceDestroyed(testMockServer),
+		Steps: []resource.TestStep{
+			{
+				Config:             importedInstanceConfig,
+				ResourceName:       "neo4jaura_instance.this",
+				ImportState:        true,
+				ImportStateId:      importedInstanceId,
+				ImportStatePersist: true,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("project_id"),
+						knownvalue.StringExact(importedProjectId),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("version"),
+						knownvalue.StringExact(domain.InstanceVersion5),
+					),
+					// The Aura API only returns the credentials on creation.
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("username"),
+						knownvalue.Null(),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("password"),
+						knownvalue.Null(),
+					),
+				},
+			},
+			{
+				// Fails with "the plan was not empty" if the imported state drifts
+				// from the configuration (before the fix: version forced a replacement).
+				Config:   importedInstanceConfig,
+				PlanOnly: true,
+			},
+			{
+				// An in-place update of an imported instance must not error with an
+				// unknown value for the credentials the API never returns, and must
+				// not replace the instance.
+				Config: renamedInstanceConfig,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("neo4jaura_instance.this", plancheck.ResourceActionUpdate),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("instance_id"),
+						knownvalue.StringExact(importedInstanceId),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact("RenamedImportedInstance"),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("username"),
+						knownvalue.Null(),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.this",
+						tfjsonpath.New("password"),
+						knownvalue.Null(),
+					),
+				},
 			},
 		},
 	})

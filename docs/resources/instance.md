@@ -165,8 +165,8 @@ For databases with valuable data, use the [Instance With Destroy Protection](#in
 - `created_at` (String) The timestamp when the instance was created.
 - `instance_id` (String) The unique identifier of the instance.
 - `metrics_integration_url` (String) The endpoint URL for metrics integration.
-- `password` (String, Sensitive) The password for the instance database.
-- `username` (String) The username for the instance database.
+- `password` (String, Sensitive) The password for the instance database. Only returned when the instance is created, so it is `null` for an imported instance.
+- `username` (String) The username for the instance database. Only returned when the instance is created, so it is `null` for an imported instance.
 
 <a id="nestedatt--source"></a>
 ### Nested Schema for `source`
@@ -178,3 +178,22 @@ Required:
 Optional:
 
 - `snapshot_id` (String) The unique identifier of the snapshot from the source instance.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# An existing Aura instance can be imported using its instance ID.
+terraform import neo4jaura_instance.this 2f49c2b3
+```
+
+### After Import
+
+The Aura API reports neither the database credentials nor the Neo4j version of an existing instance, so for an imported instance:
+
+- `username` and `password` stay `null` — they are only returned when the instance is created. Reset the credentials in the Aura Console if you need them.
+- `version` is set to the default (`5`).
+- `source` is not read back either, so leave it out of the configuration of an imported instance; adding it would force a replacement.
