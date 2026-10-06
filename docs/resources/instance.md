@@ -194,6 +194,6 @@ terraform import neo4jaura_instance.this 2f49c2b3
 
 The Aura API reports neither the database credentials nor the Neo4j version of an existing instance, so for an imported instance:
 
-- `username` and `password` stay `null` — they are only returned when the instance is created. Reset the credentials in the Aura Console if you need them.
+- `username` and `password` stay `null` — they are only returned when the instance is created.
 - `version` is set to the default (`5`).
 - `source` is not read back either, so leave it out of the configuration of an imported instance; adding it would force a replacement.
