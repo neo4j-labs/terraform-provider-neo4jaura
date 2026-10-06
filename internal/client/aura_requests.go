@@ -34,6 +34,19 @@ type PostInstanceRequest struct {
 	SourceSnapshotId     *string `json:"source_snapshot_id,omitempty"`
 }
 
+// PostMultiDatabaseInstanceRequest follows the v2beta1 instance creation API.
+// Unlike v1, the organization and project are part of the URL, not the body.
+type PostMultiDatabaseInstanceRequest struct {
+	Name            string  `json:"name"`
+	Region          string  `json:"region"`
+	Memory          string  `json:"memory"`
+	Storage         *string `json:"storage,omitempty"`
+	Type            string  `json:"type"`
+	CloudProvider   string  `json:"cloud_provider"`
+	MultiDatabase   bool    `json:"multi_database"`
+	VectorOptimized *bool   `json:"vector_optimized,omitempty"`
+}
+
 type PatchInstanceRequest struct {
 	Name                 *string `json:"name,omitempty"`
 	Memory               *string `json:"memory,omitempty"`

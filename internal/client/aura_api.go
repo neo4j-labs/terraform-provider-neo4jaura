@@ -108,6 +108,39 @@ func (api *AuraApi) PostInstance(ctx context.Context, request PostInstanceReques
 	return unmarshalAuraResponse[PostInstanceResponse](http.MethodPost, status, body)
 }
 
+func (api *AuraApi) PostMultiDatabaseInstance(ctx context.Context, organizationId, projectId string, request PostMultiDatabaseInstanceRequest) (PostInstanceResponse, error) {
+	payload, err := json.Marshal(request)
+	if err != nil {
+		return PostInstanceResponse{}, err
+	}
+	path := fmt.Sprintf("organizations/%s/projects/%s/instances", organizationId, projectId)
+	body, status, err := api.v2beta1Client.Post(ctx, path, payload)
+	if err != nil {
+		return PostInstanceResponse{}, err
+	}
+	return unmarshalAuraResponse[PostInstanceResponse](http.MethodPost, status, body)
+}
+
+func (api *AuraApi) GetMultiDatabaseInstance(ctx context.Context, organizationId, projectId, instanceId string) (bool, error) {
+	path := fmt.Sprintf("organizations/%s/projects/%s/instances/%s", organizationId, projectId, instanceId)
+	body, status, err := api.v2beta1Client.Get(ctx, path)
+	if err != nil {
+		return false, err
+	}
+	if status == http.StatusNotFound {
+		return false, fmt.Errorf("instance %s: %w", instanceId, ErrNotFound)
+	}
+	response, err := unmarshalAuraResponse[struct {
+		Data struct {
+			MultiDatabase bool `json:"multi_database"`
+		} `json:"data"`
+	}](http.MethodGet, status, body)
+	if err != nil {
+		return false, err
+	}
+	return response.Data.MultiDatabase, nil
+}
+
 func (api *AuraApi) GetInstanceById(ctx context.Context, id string) (GetInstanceResponse, error) {
 	payload, status, err := api.v1auraClient.Get(ctx, "instances/"+id)
 	if err != nil {
