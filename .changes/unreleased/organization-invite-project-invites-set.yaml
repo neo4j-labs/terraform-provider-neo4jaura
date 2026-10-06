@@ -1,8 +1,0 @@
-kind: Fixed
-body: '`neo4jaura_organization_invite.project_invites` is now a set instead of a list.
-  Ordering is not meaningful and the Aura API does not preserve it, so an API response
-  that came back in a different order than the configuration planned a replacement
-  of the invite — revoking the live invite and emailing a new one. Existing state and
-  configurations need no changes, but the attribute can no longer be indexed
-  (`project_invites[0]`); use a `for` expression or `tolist()` instead'
-time: 2026-09-29T00:00:00Z

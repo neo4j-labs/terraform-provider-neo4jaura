@@ -1,5 +1,0 @@
-kind: Fixed
-body: '`neo4jaura_instance` import no longer leaves `project_id`, `version`, `username`
-  and `password` unset in state, which made the next plan propose destroying and
-  recreating a live instance'
-time: 2026-09-21T00:00:00Z
