@@ -49,6 +49,11 @@ var (
 	_ resource.ResourceWithImportState = &InstanceResource{}
 )
 
+// defaultInstanceVersion is the Neo4j version used when the configuration does not
+// specify one. It backs the schema default and the value Read backfills for imported
+// instances, since the Aura API never reports the version of an existing instance.
+const defaultInstanceVersion = domain.InstanceVersion5
+
 func NewInstanceResource() resource.Resource {
 	return &InstanceResource{}
 }
@@ -201,20 +206,20 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				},
 			},
 			"username": schema.StringAttribute{
-				MarkdownDescription: "The username for the instance database.",
-				Description:         "The username for the instance database.",
+				MarkdownDescription: "The username for the instance database. Only returned when the instance is created, so it is `null` for an imported instance.",
+				Description:         "The username for the instance database. Only returned when the instance is created, so it is null for an imported instance.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					UseStateForUnknownOrNull(),
 				},
 			},
 			"password": schema.StringAttribute{
-				MarkdownDescription: "The password for the instance database.",
-				Description:         "The password for the instance database.",
+				MarkdownDescription: "The password for the instance database. Only returned when the instance is created, so it is `null` for an imported instance.",
+				Description:         "The password for the instance database. Only returned when the instance is created, so it is null for an imported instance.",
 				Computed:            true,
 				Sensitive:           true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					UseStateForUnknownOrNull(),
 				},
 			},
 			"version": schema.StringAttribute{
@@ -222,7 +227,7 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Description:         fmt.Sprintf("Version of Neo4j. One of [%s]", strings.Join(supportedVersions, ", ")),
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("5"),
+				Default:             stringdefault.StaticString(defaultInstanceVersion),
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -534,6 +539,15 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 	stateData.Memory = types.StringValue(instance.Data.Memory)
 	stateData.Type = types.StringValue(instance.Data.Type)
 	stateData.CloudProvider = types.StringValue(instance.Data.CloudProvider)
+	stateData.ProjectId = types.StringValue(instance.Data.TenantId)
+
+	// The Aura API does not report the Neo4j version of an existing instance, so it
+	// cannot be read back. Leaving it null after an import makes the next plan apply the
+	// schema default, which forces a replacement of a live instance. Backfill the default
+	// instead: it is the only version the provider accepts.
+	if stateData.Version.IsNull() || stateData.Version.IsUnknown() {
+		stateData.Version = types.StringValue(defaultInstanceVersion)
+	}
 
 	if instance.Data.ConnectionUrl != "" {
 		stateData.ConnectionUrl = types.StringValue(instance.Data.ConnectionUrl)
@@ -820,6 +834,13 @@ func (r *InstanceResource) Delete(ctx context.Context, request resource.DeleteRe
 
 func (r *InstanceResource) ImportState(ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("instance_id"), request, response)
+
+	response.Diagnostics.AddWarning(
+		"Instance credentials are not available for an imported instance",
+		"The Aura API only returns the database username and password when an instance is created, "+
+			"so `username` and `password` stay null for an imported instance. "+
+			"Retrieve or reset the credentials in the Aura Console if you need them.",
+	)
 }
 
 func (r *InstanceResource) resumeInstance(ctx context.Context, id string) util.DiagnosticsError {

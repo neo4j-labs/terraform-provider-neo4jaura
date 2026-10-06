@@ -216,6 +216,13 @@ resource "neo4jaura_project_user" "this" {
 					),
 				},
 			},
+			{
+				// Fails with "the plan was not empty" if the imported state does not
+				// round-trip: every attribute set by the configuration has to be populated
+				// by ImportState or Read, or the next plan proposes changes to live state.
+				Config:   importConfig,
+				PlanOnly: true,
+			},
 		},
 	})
 }

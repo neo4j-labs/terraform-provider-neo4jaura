@@ -79,3 +79,13 @@ The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/c
 
 {{codefile "shell" .ImportFile }}
 {{- end }}
+{{- if or .HasImport .HasImportIDConfig .HasImportIdentityConfig }}
+
+### After Import
+
+The Aura API reports neither the database credentials nor the Neo4j version of an existing instance, so for an imported instance:
+
+- `username` and `password` stay `null` — they are only returned when the instance is created.
+- `version` is set to the default (`5`).
+- `source` is not read back either, so leave it out of the configuration of an imported instance; adding it would force a replacement.
+{{- end }}

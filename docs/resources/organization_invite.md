@@ -57,7 +57,7 @@ output "accepted_user_id" {
 - `email` (String) The email address of the invitee.
 - `organization_id` (String) The ID of the organization to invite the user to.
 - `organization_roles` (Set of String) The organization roles to grant the invitee. Possible values: `organization-admin`, `organization-member`, `organization-owner`.
-- `project_invites` (Attributes List) Project roles to grant the invitee at the same time, alongside the organization role. The Aura API requires at least one entry — every invite must grant access to at least one project. (see [below for nested schema](#nestedatt--project_invites))
+- `project_invites` (Attributes Set) Project roles to grant the invitee at the same time, alongside the organization role. The Aura API requires at least one entry — every invite must grant access to at least one project. Order is not significant. (see [below for nested schema](#nestedatt--project_invites))
 
 ### Read-Only
 

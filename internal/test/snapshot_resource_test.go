@@ -88,8 +88,10 @@ func TestAcc_can_import_snapshot(t *testing.T) {
 
 	testConfig := fmt.Sprintf(`
 %s
-resource "neo4jaura_snapshot" "this" {}
-`, defaultProviderConfig)
+resource "neo4jaura_snapshot" "this" {
+  instance_id = %q
+}
+`, defaultProviderConfig, instanceId)
 
 	testMockServer.Reset()
 	testMockServer.SeedInstance(client.GetInstanceData{
@@ -110,10 +112,11 @@ resource "neo4jaura_snapshot" "this" {}
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config:        testConfig,
-				ResourceName:  "neo4jaura_snapshot.this",
-				ImportState:   true,
-				ImportStateId: fmt.Sprintf("%s,%s", instanceId, snapshotId),
+				Config:             testConfig,
+				ResourceName:       "neo4jaura_snapshot.this",
+				ImportState:        true,
+				ImportStateId:      fmt.Sprintf("%s,%s", instanceId, snapshotId),
+				ImportStatePersist: true,
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"neo4jaura_snapshot.this",
@@ -136,6 +139,13 @@ resource "neo4jaura_snapshot" "this" {}
 						knownvalue.StringExact(domain.SnapshotStatusCompleted),
 					),
 				},
+			},
+			{
+				// Fails with "the plan was not empty" if the imported state does not
+				// round-trip: every attribute set by the configuration has to be populated
+				// by ImportState or Read, or the next plan proposes changes to live state.
+				Config:   testConfig,
+				PlanOnly: true,
 			},
 		},
 	})

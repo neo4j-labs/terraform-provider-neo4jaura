@@ -65,7 +65,8 @@ output "new_user_id" {
 
 - **Invites are immutable.** Changing
   `email`, `organization_roles`, or `project_invites` on `neo4jaura_organization_invite` revokes
-  the existing invite and creates a new one (`RequiresReplace` on all three). Deleting an invite
+  the existing invite and creates a new one (`RequiresReplace` on all three). `organization_roles`
+  and `project_invites` are sets, so reordering their entries is not a change. Deleting an invite
   that isn't `active` (already `accepted`, `revoked`, `expired`, or `declined`) is a local no-op —
   the provider does not call the API, since the Aura API rejects deleting a non-active
   invite.
