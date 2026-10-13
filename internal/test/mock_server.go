@@ -155,6 +155,17 @@ func (ms *MockServer) SeedInstance(instance client.GetInstanceData) {
 	}
 }
 
+// SeedMultiDatabaseInstance inserts a pre-built instance that reports multi_database=true on the v2beta1 API.
+func (ms *MockServer) SeedMultiDatabaseInstance(instance client.GetInstanceData) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	ms.instances[instance.Id] = &mockInstanceState{
+		instance:      instance,
+		getCount:      1,
+		multiDatabase: true,
+	}
+}
+
 // InstanceExists reports whether an instance with the given ID is currently
 // present in the mock server's state store. Used by testAccCheckInstanceDestroyed
 // to verify the instance was actually deleted.
@@ -382,9 +393,9 @@ func (ms *MockServer) handleGetTenants(w http.ResponseWriter, _ *http.Request) {
 }
 
 // handlePostInstance creates a new instance in "creating" state and returns 202
-// with a PostInstanceResponse. A unique ID is generated from the current time.
+// with a PostInstanceV1Response. A unique ID is generated from the current time.
 func (ms *MockServer) handlePostInstance(w http.ResponseWriter, r *http.Request) {
-	var req client.PostInstanceRequest
+	var req client.PostInstanceV1Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
@@ -411,8 +422,8 @@ func (ms *MockServer) handlePostInstance(w http.ResponseWriter, r *http.Request)
 	}
 	ms.mu.Unlock()
 
-	resp := client.PostInstanceResponse{
-		Data: client.PostInstanceData{
+	resp := client.PostInstanceV1Response{
+		Data: client.PostInstanceV1Data{
 			Id:            id,
 			Name:          req.Name,
 			TenantId:      req.TenantId,
@@ -690,7 +701,7 @@ func (ms *MockServer) handlePostMultiDatabaseInstance(w http.ResponseWriter, r *
 		http.Error(w, "missing organization or project", http.StatusBadRequest)
 		return
 	}
-	var req client.PostMultiDatabaseInstanceRequest
+	var req client.PostInstanceV2Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !req.MultiDatabase || req.Type != domain.InstanceTypeBusinessCritical {
 		http.Error(w, "invalid multi-database request", http.StatusBadRequest)
 		return
@@ -709,8 +720,8 @@ func (ms *MockServer) handlePostMultiDatabaseInstance(w http.ResponseWriter, r *
 		multiDatabase: enabled,
 	}
 	ms.mu.Unlock()
-	writeJSON(w, http.StatusAccepted, client.PostInstanceResponse{Data: client.PostInstanceData{
-		Id: id, Name: req.Name, TenantId: projectId, CloudProvider: req.CloudProvider,
+	writeJSON(w, http.StatusAccepted, client.PostInstanceV2Response{Data: client.PostInstanceV2Data{
+		Id: id, Name: req.Name, ProjectId: projectId, CloudProvider: req.CloudProvider,
 		Region: req.Region, Type: req.Type, Username: "neo4j", Password: "test-password",
 		ConnectionUrl: "neo4j+s://test.databases.neo4j.io",
 	}})
@@ -730,7 +741,7 @@ func (ms *MockServer) handleGetMultiDatabaseInstance(w http.ResponseWriter, _ *h
 		http.NotFound(w, nil)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"id": instanceId, "multi_database": multiDatabase}})
+	writeJSON(w, http.StatusOK, client.GetInstanceV2Response{Data: client.GetInstanceV2Data{Id: instanceId, ProjectId: projectId, MultiDatabase: multiDatabase}})
 }
 
 func (ms *MockServer) handleGetProjectUsers(w http.ResponseWriter, _ *http.Request, orgId, projectId string) {
@@ -1115,6 +1126,7 @@ func (ms *MockServer) handleGetProjectsByOrganization(w http.ResponseWriter, _ *
 	resp := client.GetProjectsResponse{
 		Data: []client.ProjectResponseData{
 			{Id: "test-org-project-id-001", Name: "Org Project One"},
+			{Id: "test-project-id-001", Name: "Instance Project"},
 			{Id: "test-org-project-id-002", Name: "Org Project Two"},
 			{Id: "proj-001", Name: "Alpha"},
 			{Id: "proj-002", Name: "Beta"},

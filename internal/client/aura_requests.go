@@ -17,7 +17,7 @@
 
 package client
 
-type PostInstanceRequest struct {
+type PostInstanceV1Request struct {
 	Version              string  `json:"version"`
 	Region               string  `json:"region"`
 	Memory               string  `json:"memory"`
@@ -34,9 +34,9 @@ type PostInstanceRequest struct {
 	SourceSnapshotId     *string `json:"source_snapshot_id,omitempty"`
 }
 
-// PostMultiDatabaseInstanceRequest follows the v2beta1 instance creation API.
+// PostInstanceV2Request follows the v2beta1 instance creation API.
 // Unlike v1, the organization and project are part of the URL, not the body.
-type PostMultiDatabaseInstanceRequest struct {
+type PostInstanceV2Request struct {
 	Name            string  `json:"name"`
 	Region          string  `json:"region"`
 	Memory          string  `json:"memory"`

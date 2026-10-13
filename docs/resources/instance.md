@@ -191,8 +191,8 @@ For databases with valuable data, use the [Instance With Destroy Protection](#in
 - `cloud_provider` (String) Cloud provider. One of: `gcp`, `aws`, `azure`.
 - `graph_analytics_plugin` (Boolean) The graph analytics plugin configuration of the instance.
 - `memory` (String) Memory allocated for the instance. One of: `1GB`, `2GB`, `4GB`, `8GB`, `16GB`, `24GB`, `32GB`, `48GB`, `64GB`, `128GB`, `192GB`, `256GB`, `384GB`, `512GB`.
-- `multi_database` (Boolean) Enable multiple databases at instance creation. Requires Business Critical and organization_id. Cannot be changed after creation.
-- `organization_id` (String) Organization ID required when multi_database is true.
+- `multi_database` (Boolean) Enable multiple databases at instance creation. Requires `business-critical` and `organization_id`. Cannot be changed after creation.
+- `organization_id` (String) The unique identifier of the organization that owns the project. Required when `multi_database` is true. If not set, it is looked up from `project_id`.
 - `secondaries_count` (Number) The number of secondaries in the instance (VDC only).
 - `source` (Attributes) The source from which the instance is created. (see [below for nested schema](#nestedatt--source))
 - `status` (String) The status of the instance. One of: `creating`, `destroying`, `running`, `pausing`, `paused`, `suspending`, `suspended`, `resuming`, `loading`, `loading failed`, `restoring`, `updating`, `overwriting`.

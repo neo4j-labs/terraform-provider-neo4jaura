@@ -156,6 +156,88 @@ func TestAcc_business_critical_multi_database_creation(t *testing.T) {
 	})
 }
 
+const importMultiDatabaseInstanceId = "import-multi-database-id"
+
+const importedMultiDatabaseConfig = defaultProviderConfig + `
+resource "neo4jaura_instance" "this" {
+  name            = "TestMultiDatabase"
+  cloud_provider  = "aws"
+  region          = "us-east-1"
+  memory          = "4GB"
+  storage         = "8GB"
+  type            = "business-critical"
+  organization_id = "test-org-id-001"
+  project_id      = "test-project-id-001"
+  multi_database  = true
+}
+`
+
+const importedBusinessCriticalWithoutOrganizationConfig = defaultProviderConfig + `
+resource "neo4jaura_instance" "this" {
+  name           = "TestMultiDatabase"
+  cloud_provider = "aws"
+  region         = "us-east-1"
+  memory         = "4GB"
+  storage        = "8GB"
+  type           = "business-critical"
+  project_id     = "test-project-id-001"
+}
+`
+
+// TestAcc_import_multi_database_instance_does_not_replace verifies that organization_id, project_id
+// and multi_database are populated on import, so that a follow-up apply does not replace the instance.
+func TestAcc_import_multi_database_instance_does_not_replace(t *testing.T) {
+	storage := domain.InstanceStorage8GB
+	examples := []struct {
+		name   string
+		config string
+	}{
+		{name: "organization_id configured", config: importedMultiDatabaseConfig},
+		{name: "organization_id looked up", config: importedBusinessCriticalWithoutOrganizationConfig},
+	}
+	for _, example := range examples {
+		t.Run(example.name, func(tt *testing.T) {
+			testMockServer.Reset()
+			testMockServer.SeedMultiDatabaseInstance(client.GetInstanceData{
+				Id:            importMultiDatabaseInstanceId,
+				Name:          "TestMultiDatabase",
+				Status:        domain.InstanceStatusRunning,
+				CloudProvider: domain.CloudProviderAws,
+				Region:        "us-east-1",
+				Memory:        domain.InstanceMemory4GB,
+				Storage:       &storage,
+				Type:          domain.InstanceTypeBusinessCritical,
+				TenantId:      "test-project-id-001",
+			})
+			resource.Test(tt, resource.TestCase{
+				PreCheck:                 func() { testAccPreCheck(tt) },
+				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+				CheckDestroy:             testAccCheckInstanceDestroyed(testMockServer),
+				Steps: []resource.TestStep{{
+					Config:             example.config,
+					ResourceName:       "neo4jaura_instance.this",
+					ImportState:        true,
+					ImportStateId:      importMultiDatabaseInstanceId,
+					ImportStatePersist: true,
+				}, {
+					Config: example.config,
+					ConfigPlanChecks: resource.ConfigPlanChecks{
+						PreApply: []plancheck.PlanCheck{
+							plancheck.ExpectResourceAction("neo4jaura_instance.this", plancheck.ResourceActionNoop),
+						},
+					},
+					ConfigStateChecks: []statecheck.StateCheck{
+						statecheck.ExpectKnownValue("neo4jaura_instance.this", tfjsonpath.New("instance_id"), knownvalue.StringExact(importMultiDatabaseInstanceId)),
+						statecheck.ExpectKnownValue("neo4jaura_instance.this", tfjsonpath.New("organization_id"), knownvalue.StringExact("test-org-id-001")),
+						statecheck.ExpectKnownValue("neo4jaura_instance.this", tfjsonpath.New("project_id"), knownvalue.StringExact("test-project-id-001")),
+						statecheck.ExpectKnownValue("neo4jaura_instance.this", tfjsonpath.New("multi_database"), knownvalue.Bool(true)),
+					},
+				}},
+			})
+		})
+	}
+}
+
 func TestAcc_multi_database_creation_rejects_unenabled_instance(t *testing.T) {
 	testMockServer.Reset()
 	testMockServer.DisableMultiDatabaseOnNextCreate()
