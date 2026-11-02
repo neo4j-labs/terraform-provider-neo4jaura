@@ -1,0 +1,3 @@
+kind: Fixed
+body: 'Importing `neo4jaura_instance` no longer plans a replacement: `project_id`, `version`, `organization_id` and `multi_database` are now populated on read.'
+time: 2026-10-13T00:00:00Z

@@ -40,11 +40,11 @@ type ProjectResponseData struct {
 	Name string `json:"name"`
 }
 
-type PostInstanceResponse struct {
-	Data PostInstanceData `json:"data"`
+type PostInstanceV1Response struct {
+	Data PostInstanceV1Data `json:"data"`
 }
 
-type PostInstanceData struct {
+type PostInstanceV1Data struct {
 	Id            string `json:"id"`
 	Name          string `json:"name"`
 	TenantId      string `json:"tenant_id"`
@@ -54,6 +54,35 @@ type PostInstanceData struct {
 	Type          string `json:"type"`
 	Username      string `json:"username"`
 	Password      string `json:"password"`
+}
+
+// PostInstanceV2Response is the v2beta1 instance creation payload. It differs from v1,
+// e.g. tenant_id is replaced by project_id.
+type PostInstanceV2Response struct {
+	Data PostInstanceV2Data `json:"data"`
+}
+
+type PostInstanceV2Data struct {
+	Id            string `json:"id"`
+	Name          string `json:"name"`
+	ProjectId     string `json:"project_id"`
+	CloudProvider string `json:"cloud_provider"`
+	ConnectionUrl string `json:"connection_url"`
+	Region        string `json:"region"`
+	Type          string `json:"type"`
+	Username      string `json:"username"`
+	Password      string `json:"password"`
+}
+
+// GetInstanceV2Response holds the subset of the v2beta1 instance payload used by the provider.
+type GetInstanceV2Response struct {
+	Data GetInstanceV2Data `json:"data"`
+}
+
+type GetInstanceV2Data struct {
+	Id            string `json:"id"`
+	ProjectId     string `json:"project_id"`
+	MultiDatabase bool   `json:"multi_database"`
 }
 
 type GetInstanceResponse struct {

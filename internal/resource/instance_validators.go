@@ -67,7 +67,38 @@ var (
 	_ resource.ConfigValidator = &cdcTierValidator{}
 	_ resource.ConfigValidator = &vectorOptimizedValidator{}
 	_ resource.ConfigValidator = &graphAnalyticsPluginValidator{}
+	_ resource.ConfigValidator = &multiDatabaseValidator{}
 )
+
+type multiDatabaseValidator struct{}
+
+func (v *multiDatabaseValidator) Description(_ context.Context) string {
+	return "multi_database requires a business-critical instance and organization_id"
+}
+
+func (v *multiDatabaseValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v *multiDatabaseValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data InstanceResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() || data.MultiDatabase.IsNull() || data.MultiDatabase.IsUnknown() || !data.MultiDatabase.ValueBool() {
+		return
+	}
+	if !data.Type.IsNull() && !data.Type.IsUnknown() && data.Type.ValueString() != domain.InstanceTypeBusinessCritical {
+		resp.Diagnostics.AddAttributeError(path.Root("multi_database"), "Invalid Configuration", "multi_database is only supported on business-critical instances")
+	}
+	if !data.OrganizationId.IsUnknown() && (data.OrganizationId.IsNull() || data.OrganizationId.ValueString() == "") {
+		resp.Diagnostics.AddAttributeError(path.Root("organization_id"), "Invalid Configuration", "organization_id is required when multi_database is true")
+	}
+	if !data.Source.IsNull() && !data.Source.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(path.Root("source"), "Invalid Configuration", "source cannot be used with multi_database because the v2beta1 create API does not support it")
+	}
+	if !data.GraphAnalyticsPlugin.IsNull() && !data.GraphAnalyticsPlugin.IsUnknown() && data.GraphAnalyticsPlugin.ValueBool() {
+		resp.Diagnostics.AddAttributeError(path.Root("graph_analytics_plugin"), "Invalid Configuration", "graph_analytics_plugin cannot be used with multi_database in this provider")
+	}
+}
 
 // cdcTierValidator validates that CDC enrichment mode is only used with supported tiers
 type cdcTierValidator struct{}

@@ -17,7 +17,7 @@
 
 package client
 
-type PostInstanceRequest struct {
+type PostInstanceV1Request struct {
 	Version              string  `json:"version"`
 	Region               string  `json:"region"`
 	Memory               string  `json:"memory"`
@@ -32,6 +32,19 @@ type PostInstanceRequest struct {
 	GraphAnalyticsPlugin *bool   `json:"graph_analytics_plugin,omitempty"`
 	SourceInstanceId     *string `json:"source_instance_id,omitempty"`
 	SourceSnapshotId     *string `json:"source_snapshot_id,omitempty"`
+}
+
+// PostInstanceV2Request follows the v2beta1 instance creation API.
+// Unlike v1, the organization and project are part of the URL, not the body.
+type PostInstanceV2Request struct {
+	Name            string  `json:"name"`
+	Region          string  `json:"region"`
+	Memory          string  `json:"memory"`
+	Storage         *string `json:"storage,omitempty"`
+	Type            string  `json:"type"`
+	CloudProvider   string  `json:"cloud_provider"`
+	MultiDatabase   bool    `json:"multi_database"`
+	VectorOptimized *bool   `json:"vector_optimized,omitempty"`
 }
 
 type PatchInstanceRequest struct {

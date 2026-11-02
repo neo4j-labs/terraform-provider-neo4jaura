@@ -94,18 +94,64 @@ func (api *AuraApi) GetTenants(ctx context.Context) (GetProjectsResponse, error)
 	return unmarshalAuraResponse[GetProjectsResponse](http.MethodGet, status, payload)
 }
 
-func (api *AuraApi) PostInstance(ctx context.Context, request PostInstanceRequest) (PostInstanceResponse, error) {
+func (api *AuraApi) PostInstanceV1(ctx context.Context, request PostInstanceV1Request) (PostInstanceV1Response, error) {
 	payload, err := json.Marshal(request)
 	if err != nil {
-		return PostInstanceResponse{}, err
+		return PostInstanceV1Response{}, err
 	}
 
 	body, status, err := api.v1auraClient.Post(ctx, "instances", payload)
 	if err != nil {
-		return PostInstanceResponse{}, err
+		return PostInstanceV1Response{}, err
 	}
 
-	return unmarshalAuraResponse[PostInstanceResponse](http.MethodPost, status, body)
+	return unmarshalAuraResponse[PostInstanceV1Response](http.MethodPost, status, body)
+}
+
+func (api *AuraApi) PostInstanceV2(ctx context.Context, organizationId, projectId string, request PostInstanceV2Request) (PostInstanceV2Response, error) {
+	payload, err := json.Marshal(request)
+	if err != nil {
+		return PostInstanceV2Response{}, err
+	}
+	path := fmt.Sprintf("organizations/%s/projects/%s/instances", organizationId, projectId)
+	body, status, err := api.v2beta1Client.Post(ctx, path, payload)
+	if err != nil {
+		return PostInstanceV2Response{}, err
+	}
+	return unmarshalAuraResponse[PostInstanceV2Response](http.MethodPost, status, body)
+}
+
+func (api *AuraApi) GetInstanceV2(ctx context.Context, organizationId, projectId, instanceId string) (GetInstanceV2Response, error) {
+	path := fmt.Sprintf("organizations/%s/projects/%s/instances/%s", organizationId, projectId, instanceId)
+	body, status, err := api.v2beta1Client.Get(ctx, path)
+	if err != nil {
+		return GetInstanceV2Response{}, err
+	}
+	if status == http.StatusNotFound {
+		return GetInstanceV2Response{}, fmt.Errorf("instance %s: %w", instanceId, ErrNotFound)
+	}
+	return unmarshalAuraResponse[GetInstanceV2Response](http.MethodGet, status, body)
+}
+
+// FindOrganizationIdByProjectId returns the ID of the organization that owns the given project.
+// It returns ErrNotFound when none of the organizations visible to the caller contain the project.
+func (api *AuraApi) FindOrganizationIdByProjectId(ctx context.Context, projectId string) (string, error) {
+	organizations, err := api.GetOrganizations(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, organization := range organizations.Data {
+		projects, err := api.GetProjectsByOrganizationId(ctx, organization.Id)
+		if err != nil {
+			return "", err
+		}
+		for _, project := range projects.Data {
+			if project.Id == projectId {
+				return organization.Id, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("organization for project %s: %w", projectId, ErrNotFound)
 }
 
 func (api *AuraApi) GetInstanceById(ctx context.Context, id string) (GetInstanceResponse, error) {
