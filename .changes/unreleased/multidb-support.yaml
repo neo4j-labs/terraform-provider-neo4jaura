@@ -1,0 +1,3 @@
+kind: Added
+body: 'Add multi-database (multidb) support: `neo4jaura_instance_v2` resource (v2beta1 API, with `multi_database`), `neo4jaura_database` resource (including `replicate_from_database_id` replication) and `neo4jaura_databases` data source'
+time: 2026-11-05T17:54:00Z

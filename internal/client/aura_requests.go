@@ -57,6 +57,30 @@ type PatchOrganizationUserRequest struct {
 	OrganizationRoles []string `json:"organization_roles"`
 }
 
+type PostDatabaseRequest struct {
+	Name                    string  `json:"name"`
+	ReplicateFromDatabaseId *string `json:"replicate_from_database_id,omitempty"`
+}
+
+type PostInstanceV2Request struct {
+	Name            string  `json:"name"`
+	Region          string  `json:"region"`
+	Memory          string  `json:"memory"`
+	Type            string  `json:"type"`
+	CloudProvider   string  `json:"cloud_provider"`
+	Storage         *string `json:"storage,omitempty"`
+	MultiDatabase   *bool   `json:"multi_database,omitempty"`
+	VectorOptimized *bool   `json:"vector_optimized,omitempty"`
+	// GraphAnalytics is one of "unavailable", "serverless" or "plugin" in the
+	// v2beta1 API (v1 exposed this as the boolean graph_analytics_plugin).
+	GraphAnalytics *string `json:"graph_analytics,omitempty"`
+}
+
+type PatchInstanceV2Request struct {
+	Memory  *string `json:"memory,omitempty"`
+	Storage *string `json:"storage,omitempty"`
+}
+
 type ProjectInviteRequest struct {
 	ProjectId    string   `json:"project_id"`
 	ProjectRoles []string `json:"project_roles"`
