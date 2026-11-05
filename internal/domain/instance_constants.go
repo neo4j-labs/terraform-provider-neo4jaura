@@ -94,3 +94,9 @@ const (
 	CdcEnrichmentModeDiff string = "DIFF"
 	CdcEnrichmentModeFull string = "FULL"
 )
+
+const (
+	GraphAnalyticsUnavailable string = "unavailable"
+	GraphAnalyticsServerless  string = "serverless"
+	GraphAnalyticsPlugin      string = "plugin"
+)

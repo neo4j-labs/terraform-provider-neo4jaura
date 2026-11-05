@@ -455,3 +455,141 @@ func (api *AuraApi) WaitUntilInstanceIsDeleted(ctx context.Context, id string) (
 	)
 	return
 }
+
+// ---------------------------------------------------------------------------
+// v2beta1 instance databases (multidb)
+// ---------------------------------------------------------------------------
+
+func (api *AuraApi) GetDatabasesByInstanceId(ctx context.Context, organizationId, projectId, instanceId string) (GetDatabasesResponse, error) {
+	path := fmt.Sprintf("organizations/%s/projects/%s/instances/%s/databases", organizationId, projectId, instanceId)
+	payload, status, err := api.v2beta1Client.Get(ctx, path)
+	if err != nil {
+		return GetDatabasesResponse{}, err
+	}
+	if status == 404 {
+		return GetDatabasesResponse{}, fmt.Errorf("instance %s in organization %s project %s: %w", instanceId, organizationId, projectId, ErrNotFound)
+	}
+	return unmarshalAuraResponse[GetDatabasesResponse](http.MethodGet, status, payload)
+}
+
+func (api *AuraApi) GetDatabaseById(ctx context.Context, organizationId, projectId, instanceId, databaseId string) (GetDatabaseResponse, error) {
+	path := fmt.Sprintf("organizations/%s/projects/%s/instances/%s/databases/%s", organizationId, projectId, instanceId, databaseId)
+	payload, status, err := api.v2beta1Client.Get(ctx, path)
+	if err != nil {
+		return GetDatabaseResponse{}, err
+	}
+	if status == 404 {
+		return GetDatabaseResponse{}, fmt.Errorf("database %s (instance %s, organization %s, project %s): %w", databaseId, instanceId, organizationId, projectId, ErrNotFound)
+	}
+	return unmarshalAuraResponse[GetDatabaseResponse](http.MethodGet, status, payload)
+}
+
+func (api *AuraApi) PostDatabase(ctx context.Context, organizationId, projectId, instanceId string, request PostDatabaseRequest) (PostDatabaseResponse, error) {
+	payload, err := json.Marshal(request)
+	if err != nil {
+		return PostDatabaseResponse{}, err
+	}
+	path := fmt.Sprintf("organizations/%s/projects/%s/instances/%s/databases", organizationId, projectId, instanceId)
+	body, status, err := api.v2beta1Client.Post(ctx, path, payload)
+	if err != nil {
+		return PostDatabaseResponse{}, err
+	}
+	// The create-database endpoint returns 201 Created (not 202 Accepted like
+	// the other mutating endpoints), so the status is validated explicitly.
+	if status != http.StatusCreated && status != http.StatusOK {
+		return PostDatabaseResponse{}, fmt.Errorf("aura error: Status: %d. Response: %s", status, string(body))
+	}
+	return util.Unmarshal[PostDatabaseResponse](body)
+}
+
+func (api *AuraApi) DeleteDatabaseById(ctx context.Context, organizationId, projectId, instanceId, databaseId string) error {
+	path := fmt.Sprintf("organizations/%s/projects/%s/instances/%s/databases/%s", organizationId, projectId, instanceId, databaseId)
+	body, status, err := api.v2beta1Client.Delete(ctx, path)
+	if err != nil {
+		return err
+	}
+	if status == http.StatusNotFound {
+		return fmt.Errorf("database %s (instance %s, organization %s, project %s): %w", databaseId, instanceId, organizationId, projectId, ErrNotFound)
+	}
+	if status == http.StatusAccepted || status == http.StatusOK || status == http.StatusNoContent {
+		return nil
+	}
+	return fmt.Errorf("aura error: Status: %d. Response: %s", status, string(body))
+}
+
+// WaitUntilDatabaseIsDeleted polls the get-database endpoint until it responds
+// with 404, since DELETE /databases/{id} is asynchronous (202 Accepted).
+func (api *AuraApi) WaitUntilDatabaseIsDeleted(ctx context.Context, organizationId, projectId, instanceId, databaseId string) error {
+	_, err := util.WaitUntil(
+		ctx,
+		func() (status int, err error) {
+			path := fmt.Sprintf("organizations/%s/projects/%s/instances/%s/databases/%s", organizationId, projectId, instanceId, databaseId)
+			_, status, err = api.v2beta1Client.Get(ctx, path)
+			tflog.Trace(ctx, fmt.Sprintf("Received response status %+d and error %+v", status, err))
+			return
+		},
+		func(status int, err error) bool {
+			return err == nil && status == 404
+		},
+		time.Millisecond*500,
+		api.instanceTimeout,
+	)
+	return err
+}
+
+// ---------------------------------------------------------------------------
+// v2beta1 instances
+// ---------------------------------------------------------------------------
+
+func (api *AuraApi) PostInstanceV2(ctx context.Context, organizationId, projectId string, request PostInstanceV2Request) (PostInstanceV2Response, error) {
+	payload, err := json.Marshal(request)
+	if err != nil {
+		return PostInstanceV2Response{}, err
+	}
+	path := fmt.Sprintf("organizations/%s/projects/%s/instances", organizationId, projectId)
+	body, status, err := api.v2beta1Client.Post(ctx, path, payload)
+	if err != nil {
+		return PostInstanceV2Response{}, err
+	}
+	return unmarshalAuraResponse[PostInstanceV2Response](http.MethodPost, status, body)
+}
+
+func (api *AuraApi) GetInstanceV2ById(ctx context.Context, organizationId, projectId, instanceId string) (GetInstanceV2Response, error) {
+	path := fmt.Sprintf("organizations/%s/projects/%s/instances/%s", organizationId, projectId, instanceId)
+	payload, status, err := api.v2beta1Client.Get(ctx, path)
+	if err != nil {
+		return GetInstanceV2Response{}, err
+	}
+	if status == 404 {
+		return GetInstanceV2Response{}, fmt.Errorf("instance %s in organization %s project %s: %w", instanceId, organizationId, projectId, ErrNotFound)
+	}
+	return unmarshalAuraResponse[GetInstanceV2Response](http.MethodGet, status, payload)
+}
+
+func (api *AuraApi) PatchInstanceV2(ctx context.Context, organizationId, projectId, instanceId string, request PatchInstanceV2Request) error {
+	payload, err := json.Marshal(request)
+	if err != nil {
+		return err
+	}
+	path := fmt.Sprintf("organizations/%s/projects/%s/instances/%s", organizationId, projectId, instanceId)
+	body, status, err := api.v2beta1Client.Patch(ctx, path, payload)
+	if err != nil {
+		return err
+	}
+	return validateResponseStatus(http.MethodPatch, status, body)
+}
+
+func (api *AuraApi) DeleteInstanceV2ById(ctx context.Context, organizationId, projectId, instanceId string) error {
+	path := fmt.Sprintf("organizations/%s/projects/%s/instances/%s", organizationId, projectId, instanceId)
+	body, status, err := api.v2beta1Client.Delete(ctx, path)
+	if err != nil {
+		return err
+	}
+	if status == http.StatusNotFound {
+		return fmt.Errorf("instance %s in organization %s project %s: %w", instanceId, organizationId, projectId, ErrNotFound)
+	}
+	if status == http.StatusAccepted || status == http.StatusOK || status == http.StatusNoContent {
+		return nil
+	}
+	return fmt.Errorf("aura error: Status: %d. Response: %s", status, string(body))
+}

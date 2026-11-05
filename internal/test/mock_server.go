@@ -70,6 +70,18 @@ type MockServer struct {
 	deletedOrganizationUsers map[string]bool
 	// invites is keyed by "<orgId>/<inviteId>" and stores organization invites.
 	invites map[string]client.OrganizationInviteData
+	// databases is keyed by "<orgId>/<projectId>/<instanceId>/<dbId>" and stores
+	// the databases of multi-database-capable instances.
+	databases map[string]client.DatabaseSummaryData
+	// databaseCreateCount tracks, per "<orgId>/<projectId>/<instanceId>", how many
+	// databases have been created via POST; used to generate deterministic IDs.
+	databaseCreateCount map[string]int
+	// instanceMultiDatabase tracks the multi_database flag of v2beta1-created
+	// instances, keyed by instance ID.
+	instanceMultiDatabase map[string]bool
+	// instanceGraphAnalytics tracks the v2beta1 graph_analytics capability of
+	// v2beta1-created instances, keyed by instance ID.
+	instanceGraphAnalytics map[string]string
 }
 
 // NewMockServer creates a new MockServer, registers all handlers, and starts
@@ -83,6 +95,10 @@ func NewMockServer() *MockServer {
 		organizationUsers:        make(map[string]client.OrganizationUserData),
 		deletedOrganizationUsers: make(map[string]bool),
 		invites:                  make(map[string]client.OrganizationInviteData),
+		databases:                make(map[string]client.DatabaseSummaryData),
+		databaseCreateCount:      make(map[string]int),
+		instanceMultiDatabase:    make(map[string]bool),
+		instanceGraphAnalytics:   make(map[string]string),
 	}
 
 	mux := http.NewServeMux()
@@ -120,6 +136,10 @@ func (ms *MockServer) Reset() {
 	ms.organizationUsers = make(map[string]client.OrganizationUserData)
 	ms.deletedOrganizationUsers = make(map[string]bool)
 	ms.invites = make(map[string]client.OrganizationInviteData)
+	ms.databases = make(map[string]client.DatabaseSummaryData)
+	ms.databaseCreateCount = make(map[string]int)
+	ms.instanceMultiDatabase = make(map[string]bool)
+	ms.instanceGraphAnalytics = make(map[string]string)
 }
 
 // HoldSnapshotList makes the next n calls to GET /v1/instances/{instanceId}/snapshots
@@ -253,6 +273,49 @@ func (ms *MockServer) OrganizationInvites(orgId string) []client.OrganizationInv
 	for key, invite := range ms.invites {
 		if strings.HasPrefix(key, orgId+"/") {
 			data = append(data, invite)
+		}
+	}
+	return data
+}
+
+// SeedDatabase inserts a database into the mock's state store, making it
+// available via the v2beta1 instance-database endpoints.
+func (ms *MockServer) SeedDatabase(orgId, projectId, instanceId string, db client.DatabaseSummaryData) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	ms.databases[databaseKey(orgId, projectId, instanceId, db.Id)] = db
+}
+
+// DatabaseExists reports whether a database with the given IDs is present in
+// the mock's state store. Used by CheckDestroy assertions.
+func (ms *MockServer) DatabaseExists(orgId, projectId, instanceId, databaseId string) bool {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	_, ok := ms.databases[databaseKey(orgId, projectId, instanceId, databaseId)]
+	return ok
+}
+
+// DeleteDatabase removes a database from the mock's state store out-of-band,
+// simulating an external deletion without going through the Terraform delete
+// path. After calling this, GET on the database returns 404, which triggers
+// resp.State.RemoveResource in DatabaseResource.Read and causes Terraform to
+// plan recreation on the next apply.
+func (ms *MockServer) DeleteDatabase(orgId, projectId, instanceId, databaseId string) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	delete(ms.databases, databaseKey(orgId, projectId, instanceId, databaseId))
+}
+
+// Databases returns all databases currently stored for the given instance.
+func (ms *MockServer) Databases(orgId, projectId, instanceId string) []client.DatabaseSummaryData {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	prefix := orgId + "/" + projectId + "/" + instanceId + "/"
+	var data []client.DatabaseSummaryData
+	for key, db := range ms.databases {
+		if strings.HasPrefix(key, prefix) {
+			data = append(data, db)
 		}
 	}
 	return data
@@ -665,6 +728,38 @@ func (ms *MockServer) routeV2Beta1(w http.ResponseWriter, r *http.Request) {
 	case len(parts) == 4 && parts[0] == "organizations" && parts[2] == "invites" && r.Method == http.MethodDelete:
 		ms.handleDeleteOrganizationInvite(w, r, parts[1], parts[3])
 
+	// GET /v2beta1/organizations/{orgId}/projects/{projectId}/instances/{instanceId}/databases
+	case len(parts) == 7 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "instances" && parts[6] == "databases" && r.Method == http.MethodGet:
+		ms.handleGetDatabases(w, r, parts[1], parts[3], parts[5])
+
+	// POST /v2beta1/organizations/{orgId}/projects/{projectId}/instances/{instanceId}/databases
+	case len(parts) == 7 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "instances" && parts[6] == "databases" && r.Method == http.MethodPost:
+		ms.handlePostDatabase(w, r, parts[1], parts[3], parts[5])
+
+	// GET /v2beta1/organizations/{orgId}/projects/{projectId}/instances/{instanceId}/databases/{databaseId}
+	case len(parts) == 8 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "instances" && parts[6] == "databases" && r.Method == http.MethodGet:
+		ms.handleGetDatabase(w, r, parts[1], parts[3], parts[5], parts[7])
+
+	// DELETE /v2beta1/organizations/{orgId}/projects/{projectId}/instances/{instanceId}/databases/{databaseId}
+	case len(parts) == 8 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "instances" && parts[6] == "databases" && r.Method == http.MethodDelete:
+		ms.handleDeleteDatabase(w, r, parts[1], parts[3], parts[5], parts[7])
+
+	// POST /v2beta1/organizations/{orgId}/projects/{projectId}/instances
+	case len(parts) == 5 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "instances" && r.Method == http.MethodPost:
+		ms.handlePostInstanceV2(w, r, parts[1], parts[3])
+
+	// GET /v2beta1/organizations/{orgId}/projects/{projectId}/instances/{instanceId}
+	case len(parts) == 6 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "instances" && r.Method == http.MethodGet:
+		ms.handleGetInstanceV2(w, r, parts[1], parts[3], parts[5])
+
+	// PATCH /v2beta1/organizations/{orgId}/projects/{projectId}/instances/{instanceId}
+	case len(parts) == 6 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "instances" && r.Method == http.MethodPatch:
+		ms.handlePatchInstanceV2(w, r, parts[1], parts[3], parts[5])
+
+	// DELETE /v2beta1/organizations/{orgId}/projects/{projectId}/instances/{instanceId}
+	case len(parts) == 6 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "instances" && r.Method == http.MethodDelete:
+		ms.handleDeleteInstance(w, r, parts[5])
+
 	default:
 		http.NotFound(w, r)
 	}
@@ -1070,6 +1165,218 @@ func (ms *MockServer) handleGetOrganizations(w http.ResponseWriter, _ *http.Requ
 }
 
 // ---------------------------------------------------------------------------
+// V2beta1 instance-database handlers (multidb)
+// ---------------------------------------------------------------------------
+
+func (ms *MockServer) handleGetDatabases(w http.ResponseWriter, _ *http.Request, orgId, projectId, instanceId string) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	prefix := databaseKeyPrefix(orgId, projectId, instanceId)
+	data := []client.DatabaseSummaryData{}
+	for key, db := range ms.databases {
+		if strings.HasPrefix(key, prefix) {
+			data = append(data, db)
+		}
+	}
+	writeJSON(w, http.StatusOK, client.GetDatabasesResponse{Data: data})
+}
+
+func (ms *MockServer) handlePostDatabase(w http.ResponseWriter, r *http.Request, orgId, projectId, instanceId string) {
+	var req client.PostDatabaseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if req.Name == "" {
+		http.Error(w, "database name is required", http.StatusBadRequest)
+		return
+	}
+
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	// Replication source must exist on the same instance (spec: 422 otherwise).
+	if req.ReplicateFromDatabaseId != nil {
+		if _, ok := ms.databases[databaseKey(orgId, projectId, instanceId, *req.ReplicateFromDatabaseId)]; !ok {
+			http.Error(w, "replicate_from_database_id does not exist on this instance", http.StatusUnprocessableEntity)
+			return
+		}
+	}
+
+	prefix := databaseKeyPrefix(orgId, projectId, instanceId)
+	ms.databaseCreateCount[prefix]++
+	db := client.DatabaseSummaryData{
+		Id:   fmt.Sprintf("db-%s-%04d", instanceId, ms.databaseCreateCount[prefix]),
+		Name: req.Name,
+	}
+	ms.databases[databaseKey(orgId, projectId, instanceId, db.Id)] = db
+
+	writeJSON(w, http.StatusCreated, client.PostDatabaseResponse{Data: db})
+}
+
+func (ms *MockServer) handleGetDatabase(w http.ResponseWriter, _ *http.Request, orgId, projectId, instanceId, databaseId string) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	db, ok := ms.databases[databaseKey(orgId, projectId, instanceId, databaseId)]
+	if !ok {
+		http.NotFound(w, nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, client.GetDatabaseResponse{Data: db})
+}
+
+func (ms *MockServer) handleDeleteDatabase(w http.ResponseWriter, _ *http.Request, orgId, projectId, instanceId, databaseId string) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	key := databaseKey(orgId, projectId, instanceId, databaseId)
+	if _, ok := ms.databases[key]; !ok {
+		http.NotFound(w, nil)
+		return
+	}
+	delete(ms.databases, key)
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// ---------------------------------------------------------------------------
+// V2beta1 instance handlers — share the v1 instance state store so the v1
+// state machine (creating→running) and delete polling apply to both APIs.
+// ---------------------------------------------------------------------------
+
+// handlePostInstanceV2 creates an instance via the v2beta1 payload shape and
+// returns 202 with the v2beta1 response (including credentials and the
+// connection URL, which only the create response ever exposes).
+func (ms *MockServer) handlePostInstanceV2(w http.ResponseWriter, r *http.Request, orgId, projectId string) {
+	var req client.PostInstanceV2Request
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	id := fmt.Sprintf("inst-%d", time.Now().UnixNano())
+
+	ms.mu.Lock()
+	ms.instances[id] = &mockInstanceState{
+		instance: client.GetInstanceData{
+			Id:              id,
+			Name:            req.Name,
+			Status:          domain.InstanceStatusCreating,
+			TenantId:        projectId,
+			CloudProvider:   req.CloudProvider,
+			Region:          req.Region,
+			Type:            req.Type,
+			Memory:          req.Memory,
+			Storage:         req.Storage,
+			VectorOptimized: req.VectorOptimized,
+		},
+		getCount: 0,
+	}
+	ms.instanceMultiDatabase[id] = req.MultiDatabase != nil && *req.MultiDatabase
+	if req.GraphAnalytics != nil {
+		ms.instanceGraphAnalytics[id] = *req.GraphAnalytics
+	} else {
+		ms.instanceGraphAnalytics[id] = domain.GraphAnalyticsUnavailable
+	}
+	ms.mu.Unlock()
+
+	resp := client.PostInstanceV2Response{
+		Data: client.PostInstanceV2Data{
+			Id:                id,
+			Name:              req.Name,
+			ProjectId:         projectId,
+			CloudProvider:     req.CloudProvider,
+			Region:            req.Region,
+			Type:              req.Type,
+			Memory:            req.Memory,
+			Storage:           req.Storage,
+			Username:          "neo4j",
+			Password:          "mock-password",
+			ConnectionUrl:     fmt.Sprintf("neo4j+s://%s.databases.neo4j.io", id),
+			MultiDatabase:     req.MultiDatabase,
+			DefaultDatabaseId: strPtr("neo4j"),
+		},
+	}
+	writeJSON(w, http.StatusAccepted, resp)
+}
+
+// handleGetInstanceV2 renders the shared v1 instance state in the v2beta1
+// shape. It does not advance the v1 state machine — only v1 GETs drive the
+// creating→running transition, mirroring the provider's polling flow.
+func (ms *MockServer) handleGetInstanceV2(w http.ResponseWriter, _ *http.Request, orgId, projectId, id string) {
+	ms.mu.Lock()
+	state, ok := ms.instances[id]
+	if !ok {
+		ms.mu.Unlock()
+		http.NotFound(w, nil)
+		return
+	}
+	snap := state.instance
+	multiDatabase := ms.instanceMultiDatabase[id]
+	graphAnalytics := ms.instanceGraphAnalytics[id]
+	ms.mu.Unlock()
+
+	data := client.GetInstanceV2Data{
+		Id:              snap.Id,
+		Name:            snap.Name,
+		Region:          snap.Region,
+		CloudProvider:   snap.CloudProvider,
+		Type:            snap.Type,
+		Memory:          snap.Memory,
+		Storage:         snap.Storage,
+		MultiDatabase:   &multiDatabase,
+		LegacyStatus:    snap.Status,
+		VectorOptimized: snap.VectorOptimized,
+		GraphAnalytics:  &graphAnalytics,
+	}
+	writeJSON(w, http.StatusOK, client.GetInstanceV2Response{Data: data})
+}
+
+// handlePatchInstanceV2 applies the v2beta1 memory/storage in-place update to
+// the shared v1 instance state.
+func (ms *MockServer) handlePatchInstanceV2(w http.ResponseWriter, r *http.Request, orgId, projectId, id string) {
+	var req client.PatchInstanceV2Request
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	ms.mu.Lock()
+	state, ok := ms.instances[id]
+	if !ok {
+		ms.mu.Unlock()
+		http.NotFound(w, nil)
+		return
+	}
+	if req.Memory != nil {
+		state.instance.Memory = *req.Memory
+	}
+	if req.Storage != nil {
+		state.instance.Storage = req.Storage
+	}
+	snap := state.instance
+	multiDatabase := ms.instanceMultiDatabase[id]
+	graphAnalytics := ms.instanceGraphAnalytics[id]
+	ms.mu.Unlock()
+
+	data := client.GetInstanceV2Data{
+		Id:              snap.Id,
+		Name:            snap.Name,
+		Region:          snap.Region,
+		CloudProvider:   snap.CloudProvider,
+		Type:            snap.Type,
+		Memory:          snap.Memory,
+		Storage:         snap.Storage,
+		MultiDatabase:   &multiDatabase,
+		LegacyStatus:    snap.Status,
+		VectorOptimized: snap.VectorOptimized,
+		GraphAnalytics:  &graphAnalytics,
+	}
+	writeJSON(w, http.StatusAccepted, client.GetInstanceV2Response{Data: data})
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -1089,6 +1396,14 @@ func inviteKey(orgId, inviteId string) string {
 	return orgId + "/" + inviteId
 }
 
+func databaseKeyPrefix(orgId, projectId, instanceId string) string {
+	return orgId + "/" + projectId + "/" + instanceId + "/"
+}
+
+func databaseKey(orgId, projectId, instanceId, databaseId string) string {
+	return databaseKeyPrefix(orgId, projectId, instanceId) + databaseId
+}
+
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -1096,3 +1411,5 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 		panic(fmt.Sprintf("writeJSON: failed to encode response: %v", err))
 	}
 }
+
+func strPtr(s string) *string { return &s }

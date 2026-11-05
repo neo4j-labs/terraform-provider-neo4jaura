@@ -122,16 +122,19 @@ func (n *Neo4jAuraProvider) DataSources(_ context.Context) []func() datasource.D
 		auradatasource.NewOrganizationsDataSource,
 		auradatasource.NewOrganizationUsersDataSource,
 		auradatasource.NewOrganizationInvitesDataSource,
+		auradatasource.NewDatabasesDataSource,
 	}
 }
 
 func (n *Neo4jAuraProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		auraresource.NewInstanceResource,
+		auraresource.NewInstanceV2Resource,
 		auraresource.NewSnapshotResource,
 		auraresource.NewProjectUserResource,
 		auraresource.NewOrganizationUserResource,
 		auraresource.NewOrganizationInviteResource,
+		auraresource.NewDatabaseResource,
 	}
 }
 

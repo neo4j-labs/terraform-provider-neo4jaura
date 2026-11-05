@@ -7,9 +7,14 @@
 #   AURA_PROJECT_ID     — Aura project (tenant) ID to create test instances in
 #
 # Optional:
-#   LIVE_TEST_RUN       — -run filter, e.g. TestLive_instance_lifecycle
-#                         (defaults to all TestLive_* tests)
-#   LIVE_TEST_TIMEOUT   — go test timeout (default: 30m)
+#   LIVE_TEST_RUN          — -run filter, e.g. TestLive_instance_lifecycle
+#                            (defaults to all TestLive_* tests)
+#   LIVE_TEST_TIMEOUT      — go test timeout (default: 30m)
+#   AURA_ORGANIZATION_ID   — organization ID used by the database lifecycle test
+#                            (defaults to the first organization of the credential)
+#   AURA_TEST_REGION       — region for the instance created by the database
+#                            lifecycle test (default: europe-west1)
+#   AURA_TEST_CLOUD_PROVIDER — cloud provider for that instance (default: gcp)
 #
 # Usage:
 #   export AURA_CLIENT_ID=...

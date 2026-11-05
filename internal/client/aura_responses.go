@@ -172,6 +172,25 @@ type GetOrganizationsResponse struct {
 	Data []OrganizationData `json:"data"`
 }
 
+// DatabaseSummaryData is the database representation returned by the
+// v2beta1 databases endpoints (list, get, and create).
+type DatabaseSummaryData struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type GetDatabasesResponse struct {
+	Data []DatabaseSummaryData `json:"data"`
+}
+
+type GetDatabaseResponse struct {
+	Data DatabaseSummaryData `json:"data"`
+}
+
+type PostDatabaseResponse struct {
+	Data DatabaseSummaryData `json:"data"`
+}
+
 type OrganizationData struct {
 	Id   string `json:"id"`
 	Name string `json:"name"`
@@ -207,4 +226,47 @@ type PostOrganizationInviteResponse struct {
 
 type GetOrganizationInvitesResponse struct {
 	Data []OrganizationInviteData `json:"data"`
+}
+
+type PostInstanceV2Response struct {
+	Data PostInstanceV2Data `json:"data"`
+}
+
+// PostInstanceV2Data is returned by the v2beta1 create-instance endpoint,
+// which (like v1) is the only place credentials and the connection URL are
+// ever exposed.
+type PostInstanceV2Data struct {
+	Id                string  `json:"id"`
+	Name              string  `json:"name"`
+	ProjectId         string  `json:"project_id"`
+	CloudProvider     string  `json:"cloud_provider"`
+	ConnectionUrl     string  `json:"connection_url"`
+	Region            string  `json:"region"`
+	Type              string  `json:"type"`
+	Memory            string  `json:"memory"`
+	Storage           *string `json:"storage"`
+	Username          string  `json:"username"`
+	Password          string  `json:"password"`
+	MultiDatabase     *bool   `json:"multi_database"`
+	DefaultDatabaseId *string `json:"default_database_id"`
+}
+
+type GetInstanceV2Response struct {
+	Data GetInstanceV2Data `json:"data"`
+}
+
+type GetInstanceV2Data struct {
+	Id              string  `json:"id"`
+	Name            string  `json:"name"`
+	Region          string  `json:"region"`
+	CloudProvider   string  `json:"cloud_provider"`
+	Type            string  `json:"type"`
+	Memory          string  `json:"memory"`
+	Storage         *string `json:"storage"`
+	MultiDatabase   *bool   `json:"multi_database"`
+	VectorOptimized *bool   `json:"vector_optimized"`
+	// GraphAnalytics is one of "unavailable", "serverless" or "plugin" in the
+	// v2beta1 API (v1 exposed this as the boolean graph_analytics_plugin).
+	GraphAnalytics *string `json:"graph_analytics"`
+	LegacyStatus   string  `json:"legacy_status"`
 }
