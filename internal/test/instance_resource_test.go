@@ -158,6 +158,44 @@ func TestAcc_business_critical_multi_database_creation(t *testing.T) {
 	})
 }
 
+const multiDatabaseWithoutStorageConfig = defaultProviderConfig + `
+resource "neo4jaura_instance" "this" {
+  name            = "TestMultiDatabase"
+  cloud_provider  = "aws"
+  region          = "us-east-1"
+  memory          = "4GB"
+  type            = "business-critical"
+  organization_id = "test-org-id-001"
+  project_id      = "test-project-id-001"
+  multi_database  = true
+}
+`
+
+// TestAcc_multi_database_creation_without_storage verifies that the v2beta1 create omits storage when
+// it is not configured, instead of sending an empty string, and that state takes storage from the API.
+func TestAcc_multi_database_creation_without_storage(t *testing.T) {
+	testMockServer.Reset()
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckInstanceDestroyed(testMockServer),
+		Steps: []resource.TestStep{{
+			Config: multiDatabaseWithoutStorageConfig,
+			ConfigStateChecks: []statecheck.StateCheck{
+				statecheck.ExpectKnownValue("neo4jaura_instance.this", tfjsonpath.New("storage"), knownvalue.StringExact("8GB")),
+				statecheck.ExpectKnownValue("neo4jaura_instance.this", tfjsonpath.New("multi_database"), knownvalue.Bool(true)),
+			},
+		}, {
+			Config: multiDatabaseWithoutStorageConfig,
+			ConfigPlanChecks: resource.ConfigPlanChecks{
+				PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectEmptyPlan(),
+				},
+			},
+		}},
+	})
+}
+
 const importMultiDatabaseInstanceId = "import-multi-database-id"
 
 const importedMultiDatabaseConfig = defaultProviderConfig + `

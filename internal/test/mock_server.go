@@ -741,6 +741,15 @@ func (ms *MockServer) handlePostMultiDatabaseInstance(w http.ResponseWriter, r *
 		http.Error(w, "invalid multi-database request", http.StatusBadRequest)
 		return
 	}
+	if req.Storage != nil && *req.Storage == "" {
+		http.Error(w, "storage must not be empty", http.StatusBadRequest)
+		return
+	}
+	storage := req.Storage
+	if storage == nil {
+		defaultStorage := mockV2DefaultStorage
+		storage = &defaultStorage
+	}
 	id := fmt.Sprintf("inst-%d", time.Now().UnixNano())
 	ms.mu.Lock()
 	enabled := !ms.disableMultiDatabaseOnNextCreate
@@ -749,7 +758,7 @@ func (ms *MockServer) handlePostMultiDatabaseInstance(w http.ResponseWriter, r *
 		instance: client.GetInstanceData{
 			Id: id, Name: req.Name, Status: domain.InstanceStatusCreating,
 			TenantId: projectId, CloudProvider: req.CloudProvider, Region: req.Region,
-			Type: reportedInstanceType(req), Memory: req.Memory, Storage: req.Storage,
+			Type: reportedInstanceType(req), Memory: req.Memory, Storage: storage,
 			VectorOptimized: req.VectorOptimized,
 		},
 		multiDatabase: enabled,
@@ -761,6 +770,9 @@ func (ms *MockServer) handlePostMultiDatabaseInstance(w http.ResponseWriter, r *
 		ConnectionUrl: "neo4j+s://test.databases.neo4j.io",
 	}})
 }
+
+// mockV2DefaultStorage is the storage the mock's v2beta1 create assigns when the request omits storage.
+const mockV2DefaultStorage = "8GB"
 
 // mockV2InstanceTypeVirtualDedicatedCloud is the v2beta1 API name for the enterprise-db and enterprise-ds types.
 const mockV2InstanceTypeVirtualDedicatedCloud = "virtual-dedicated-cloud"

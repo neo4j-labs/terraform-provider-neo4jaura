@@ -425,16 +425,23 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 
 	var instanceId string
 	if data.MultiDatabase.ValueBool() {
-		postInstanceResp, err := r.auraApi.PostInstanceV2(ctx, data.OrganizationId.ValueString(), data.ProjectId.ValueString(), client.PostInstanceV2Request{
-			Name:            data.Name.ValueString(),
-			Region:          data.Region.ValueString(),
-			Memory:          data.Memory.ValueString(),
-			Storage:         data.Storage.ValueStringPointer(),
-			Type:            data.Type.ValueString(),
-			CloudProvider:   data.CloudProvider.ValueString(),
-			MultiDatabase:   true,
-			VectorOptimized: data.VectorOptimized.ValueBoolPointer(),
-		})
+		postInstanceV2Request := client.PostInstanceV2Request{
+			Name:          data.Name.ValueString(),
+			Region:        data.Region.ValueString(),
+			Memory:        data.Memory.ValueString(),
+			Type:          data.Type.ValueString(),
+			CloudProvider: data.CloudProvider.ValueString(),
+			MultiDatabase: true,
+		}
+		// Storage and VectorOptimized are Optional+Computed, so they are unknown when not configured.
+		// Omit them then; the API picks the defaults.
+		if !data.Storage.IsUnknown() {
+			postInstanceV2Request.Storage = data.Storage.ValueStringPointer()
+		}
+		if !data.VectorOptimized.IsUnknown() {
+			postInstanceV2Request.VectorOptimized = data.VectorOptimized.ValueBoolPointer()
+		}
+		postInstanceResp, err := r.auraApi.PostInstanceV2(ctx, data.OrganizationId.ValueString(), data.ProjectId.ValueString(), postInstanceV2Request)
 		if err != nil {
 			response.Diagnostics.AddError("Error while creating an instance", err.Error())
 			return
