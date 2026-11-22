@@ -37,8 +37,9 @@ const (
 // mockInstanceState holds the in-memory state for a single instance,
 // including a hit counter used to drive the state machine.
 type mockInstanceState struct {
-	instance client.GetInstanceData
-	getCount int
+	instance      client.GetInstanceData
+	getCount      int
+	multiDatabase bool
 }
 
 // mockSnapshotState holds the in-memory state for a single snapshot,
@@ -51,8 +52,16 @@ type mockSnapshotState struct {
 // MockServer is an httptest-backed mock for the Aura v1 API.
 // All state access is protected by mu so it is safe for parallel sub-tests.
 type MockServer struct {
-	mu     sync.Mutex
-	server *httptest.Server
+	mu                               sync.Mutex
+	server                           *httptest.Server
+	disableMultiDatabaseOnNextCreate bool
+	// organizationListCount counts GET /v2beta1/organizations calls; all access must hold mu.
+	organizationListCount int
+	// failOrganizationList makes GET /v2beta1/organizations return 403; all access must hold mu.
+	failOrganizationList bool
+	// multiDatabaseInstanceGetFailures maps an instance ID to the HTTP status that
+	// GET /v2beta1/.../instances/{id} returns for it; all access must hold mu.
+	multiDatabaseInstanceGetFailures map[string]int
 	// instances stores mock instance state; all access must hold mu.
 	instances map[string]*mockInstanceState
 	// snapshots is keyed by "<instanceId>/<snapshotId>"; all access must hold mu.
@@ -76,13 +85,14 @@ type MockServer struct {
 // the underlying httptest.Server. Call Close() when finished.
 func NewMockServer() *MockServer {
 	ms := &MockServer{
-		instances:                make(map[string]*mockInstanceState),
-		snapshots:                make(map[string]*mockSnapshotState),
-		snapshotListEmptyUntil:   make(map[string]int),
-		projectUsers:             make(map[string][]string),
-		organizationUsers:        make(map[string]client.OrganizationUserData),
-		deletedOrganizationUsers: make(map[string]bool),
-		invites:                  make(map[string]client.OrganizationInviteData),
+		multiDatabaseInstanceGetFailures: make(map[string]int),
+		instances:                        make(map[string]*mockInstanceState),
+		snapshots:                        make(map[string]*mockSnapshotState),
+		snapshotListEmptyUntil:           make(map[string]int),
+		projectUsers:                     make(map[string][]string),
+		organizationUsers:                make(map[string]client.OrganizationUserData),
+		deletedOrganizationUsers:         make(map[string]bool),
+		invites:                          make(map[string]client.OrganizationInviteData),
 	}
 
 	mux := http.NewServeMux()
@@ -120,6 +130,40 @@ func (ms *MockServer) Reset() {
 	ms.organizationUsers = make(map[string]client.OrganizationUserData)
 	ms.deletedOrganizationUsers = make(map[string]bool)
 	ms.invites = make(map[string]client.OrganizationInviteData)
+	ms.disableMultiDatabaseOnNextCreate = false
+	ms.organizationListCount = 0
+	ms.failOrganizationList = false
+	ms.multiDatabaseInstanceGetFailures = make(map[string]int)
+}
+
+// OrganizationListCount returns how many times GET /v2beta1/organizations was called since the last Reset.
+func (ms *MockServer) OrganizationListCount() int {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	return ms.organizationListCount
+}
+
+// FailMultiDatabaseInstanceGet makes GET /v2beta1/organizations/{orgId}/projects/{projectId}/instances/{instanceId}
+// respond with status for the given instance until the next Reset, simulating a v2beta1 API that
+// rejects (403) or cannot find (404) an instance the v1 API still reports.
+func (ms *MockServer) FailMultiDatabaseInstanceGet(instanceId string, status int) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	ms.multiDatabaseInstanceGetFailures[instanceId] = status
+}
+
+// FailOrganizationList makes GET /v2beta1/organizations respond with 403 until the next Reset,
+// simulating credentials without organization access, so organization_id cannot be looked up.
+func (ms *MockServer) FailOrganizationList() {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	ms.failOrganizationList = true
+}
+
+func (ms *MockServer) DisableMultiDatabaseOnNextCreate() {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	ms.disableMultiDatabaseOnNextCreate = true
 }
 
 // HoldSnapshotList makes the next n calls to GET /v1/instances/{instanceId}/snapshots
@@ -146,6 +190,17 @@ func (ms *MockServer) SeedInstance(instance client.GetInstanceData) {
 	}
 }
 
+// SeedMultiDatabaseInstance inserts a pre-built instance that reports multi_database=true on the v2beta1 API.
+func (ms *MockServer) SeedMultiDatabaseInstance(instance client.GetInstanceData) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	ms.instances[instance.Id] = &mockInstanceState{
+		instance:      instance,
+		getCount:      1,
+		multiDatabase: true,
+	}
+}
+
 // InstanceExists reports whether an instance with the given ID is currently
 // present in the mock server's state store. Used by testAccCheckInstanceDestroyed
 // to verify the instance was actually deleted.
@@ -154,6 +209,13 @@ func (ms *MockServer) InstanceExists(id string) bool {
 	defer ms.mu.Unlock()
 	_, ok := ms.instances[id]
 	return ok
+}
+
+// InstanceCount returns how many instances the mock server currently holds.
+func (ms *MockServer) InstanceCount() int {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	return len(ms.instances)
 }
 
 // DeleteInstance removes an instance from the mock's state store out-of-band,
@@ -373,9 +435,9 @@ func (ms *MockServer) handleGetTenants(w http.ResponseWriter, _ *http.Request) {
 }
 
 // handlePostInstance creates a new instance in "creating" state and returns 202
-// with a PostInstanceResponse. A unique ID is generated from the current time.
+// with a PostInstanceV1Response. A unique ID is generated from the current time.
 func (ms *MockServer) handlePostInstance(w http.ResponseWriter, r *http.Request) {
-	var req client.PostInstanceRequest
+	var req client.PostInstanceV1Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
@@ -402,8 +464,8 @@ func (ms *MockServer) handlePostInstance(w http.ResponseWriter, r *http.Request)
 	}
 	ms.mu.Unlock()
 
-	resp := client.PostInstanceResponse{
-		Data: client.PostInstanceData{
+	resp := client.PostInstanceV1Response{
+		Data: client.PostInstanceV1Data{
 			Id:            id,
 			Name:          req.Name,
 			TenantId:      req.TenantId,
@@ -613,6 +675,12 @@ func (ms *MockServer) routeV2Beta1(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 
 	switch {
+	case len(parts) == 5 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "instances" && r.Method == http.MethodPost:
+		ms.handlePostMultiDatabaseInstance(w, r, parts[1], parts[3])
+
+	case len(parts) == 6 && parts[0] == "organizations" && parts[2] == "projects" && parts[4] == "instances" && r.Method == http.MethodGet:
+		ms.handleGetMultiDatabaseInstance(w, r, parts[1], parts[3], parts[5])
+
 	// GET /v2beta1/organizations
 	case len(parts) == 1 && parts[0] == "organizations" && r.Method == http.MethodGet:
 		ms.handleGetOrganizations(w, r)
@@ -668,6 +736,92 @@ func (ms *MockServer) routeV2Beta1(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (ms *MockServer) handlePostMultiDatabaseInstance(w http.ResponseWriter, r *http.Request, organizationId, projectId string) {
+	if !organizationOwnsProject(organizationId, projectId) {
+		http.NotFound(w, r)
+		return
+	}
+	var req client.PostInstanceV2Request
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !req.MultiDatabase || !isV2MultiDatabaseType(req.Type) {
+		http.Error(w, "invalid multi-database request", http.StatusBadRequest)
+		return
+	}
+	if req.Storage != nil && *req.Storage == "" {
+		http.Error(w, "storage must not be empty", http.StatusBadRequest)
+		return
+	}
+	storage := req.Storage
+	if storage == nil {
+		defaultStorage := mockV2DefaultStorage
+		storage = &defaultStorage
+	}
+	id := fmt.Sprintf("inst-%d", time.Now().UnixNano())
+	ms.mu.Lock()
+	enabled := !ms.disableMultiDatabaseOnNextCreate
+	ms.disableMultiDatabaseOnNextCreate = false
+	ms.instances[id] = &mockInstanceState{
+		instance: client.GetInstanceData{
+			Id: id, Name: req.Name, Status: domain.InstanceStatusCreating,
+			TenantId: projectId, CloudProvider: req.CloudProvider, Region: req.Region,
+			Type: reportedInstanceType(req), Memory: req.Memory, Storage: storage,
+			VectorOptimized: req.VectorOptimized,
+		},
+		multiDatabase: enabled,
+	}
+	ms.mu.Unlock()
+	writeJSON(w, http.StatusAccepted, client.PostInstanceV2Response{Data: client.PostInstanceV2Data{
+		Id: id, Name: req.Name, ProjectId: projectId, CloudProvider: req.CloudProvider,
+		Region: req.Region, Type: req.Type, Username: "neo4j", Password: "test-password",
+		ConnectionUrl: "neo4j+s://test.databases.neo4j.io",
+	}})
+}
+
+// mockV2DefaultStorage is the storage the mock's v2beta1 create assigns when the request omits storage.
+const mockV2DefaultStorage = "8GB"
+
+// mockV2InstanceTypeVirtualDedicatedCloud is the v2beta1 API name for the enterprise-db and enterprise-ds types.
+const mockV2InstanceTypeVirtualDedicatedCloud = "virtual-dedicated-cloud"
+
+// isV2MultiDatabaseType reports whether the v2beta1 create API accepts multi_database for the type.
+// Like the real API, it expects virtual-dedicated-cloud instead of enterprise-db / enterprise-ds.
+func isV2MultiDatabaseType(instanceType string) bool {
+	return instanceType == domain.InstanceTypeBusinessCritical || instanceType == mockV2InstanceTypeVirtualDedicatedCloud
+}
+
+// reportedInstanceType returns the v1 type the mock reports for an instance created through v2beta1.
+// virtual-dedicated-cloud is enterprise-ds with graph_analytics=plugin, and enterprise-db otherwise.
+func reportedInstanceType(request client.PostInstanceV2Request) string {
+	if request.Type != mockV2InstanceTypeVirtualDedicatedCloud {
+		return request.Type
+	}
+	if request.GraphAnalytics != nil && *request.GraphAnalytics == "plugin" {
+		return domain.InstanceTypeEnterpriseDs
+	}
+	return domain.InstanceTypeEnterpriseDb
+}
+
+func (ms *MockServer) handleGetMultiDatabaseInstance(w http.ResponseWriter, _ *http.Request, organizationId, projectId, instanceId string) {
+	ms.mu.Lock()
+	failureStatus, failing := ms.multiDatabaseInstanceGetFailures[instanceId]
+	state, ok := ms.instances[instanceId]
+	var tenantId string
+	var multiDatabase bool
+	if ok {
+		tenantId = state.instance.TenantId
+		multiDatabase = state.multiDatabase
+	}
+	ms.mu.Unlock()
+	if failing {
+		http.Error(w, http.StatusText(failureStatus), failureStatus)
+		return
+	}
+	if !ok || !organizationOwnsProject(organizationId, projectId) || projectId != tenantId {
+		http.NotFound(w, nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, client.GetInstanceV2Response{Data: client.GetInstanceV2Data{Id: instanceId, ProjectId: projectId, MultiDatabase: multiDatabase}})
 }
 
 func (ms *MockServer) handleGetProjectUsers(w http.ResponseWriter, _ *http.Request, orgId, projectId string) {
@@ -1048,22 +1202,50 @@ func (ms *MockServer) handleDeleteOrganizationInvite(w http.ResponseWriter, _ *h
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (ms *MockServer) handleGetProjectsByOrganization(w http.ResponseWriter, _ *http.Request, _ string) {
-	resp := client.GetProjectsResponse{
-		Data: []client.ProjectResponseData{
-			{Id: "test-org-project-id-001", Name: "Org Project One"},
-			{Id: "test-org-project-id-002", Name: "Org Project Two"},
-			{Id: "proj-001", Name: "Alpha"},
-			{Id: "proj-002", Name: "Beta"},
-		},
+// mockOrganizationId is the only organization the mock's GET /v2beta1/organizations lists.
+const mockOrganizationId = "test-org-id-001"
+
+// mockOrganizationProjects are the projects GET /v2beta1/organizations/{id}/projects lists.
+var mockOrganizationProjects = []client.ProjectResponseData{
+	{Id: "test-org-project-id-001", Name: "Org Project One"},
+	{Id: "test-project-id-001", Name: "Instance Project"},
+	{Id: "test-org-project-id-002", Name: "Org Project Two"},
+	{Id: "proj-001", Name: "Alpha"},
+	{Id: "proj-002", Name: "Beta"},
+}
+
+// organizationOwnsProject reports whether the v2beta1 instance endpoints accept the organization and
+// project pair. Like the real API, an organization that does not own the project gets a 404.
+func organizationOwnsProject(organizationId, projectId string) bool {
+	if organizationId != mockOrganizationId {
+		return false
 	}
+	for _, project := range mockOrganizationProjects {
+		if project.Id == projectId {
+			return true
+		}
+	}
+	return false
+}
+
+func (ms *MockServer) handleGetProjectsByOrganization(w http.ResponseWriter, _ *http.Request, _ string) {
+	resp := client.GetProjectsResponse{Data: mockOrganizationProjects}
 	writeJSON(w, http.StatusOK, resp)
 }
 
 func (ms *MockServer) handleGetOrganizations(w http.ResponseWriter, _ *http.Request) {
+	ms.mu.Lock()
+	ms.organizationListCount++
+	failing := ms.failOrganizationList
+	ms.mu.Unlock()
+	if failing {
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+		return
+	}
+
 	resp := client.GetOrganizationsResponse{
 		Data: []client.OrganizationData{
-			{Id: "test-org-id-001", Name: "Test Organization"},
+			{Id: mockOrganizationId, Name: "Test Organization"},
 		},
 	}
 	writeJSON(w, http.StatusOK, resp)

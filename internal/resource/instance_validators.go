@@ -20,6 +20,7 @@ package resource
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -67,7 +68,49 @@ var (
 	_ resource.ConfigValidator = &cdcTierValidator{}
 	_ resource.ConfigValidator = &vectorOptimizedValidator{}
 	_ resource.ConfigValidator = &graphAnalyticsPluginValidator{}
+	_ resource.ConfigValidator = &multiDatabaseValidator{}
 )
+
+type multiDatabaseValidator struct{}
+
+func (v *multiDatabaseValidator) Description(_ context.Context) string {
+	instanceTypes := strings.Join(domain.MultiDatabaseInstanceTypes, ", ")
+	return fmt.Sprintf("multi_database requires one of the instance types [%s] and organization_id", instanceTypes)
+}
+
+func (v *multiDatabaseValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v *multiDatabaseValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data InstanceResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	v.validateMultiDatabase(data, resp)
+}
+
+func (v *multiDatabaseValidator) validateMultiDatabase(data InstanceResourceModel, resp *resource.ValidateConfigResponse) {
+	if data.MultiDatabase.IsNull() || data.MultiDatabase.IsUnknown() || !data.MultiDatabase.ValueBool() {
+		return
+	}
+	isTypeKnown := !data.Type.IsNull() && !data.Type.IsUnknown()
+	if isTypeKnown && !domain.SupportsMultiDatabase(data.Type.ValueString()) {
+		instanceTypes := strings.Join(domain.MultiDatabaseInstanceTypes, ", ")
+		detail := fmt.Sprintf("multi_database is only supported on instance types [%s]. Instance type '%s' does not support it.", instanceTypes, data.Type.ValueString())
+		resp.Diagnostics.AddAttributeError(path.Root("multi_database"), "Invalid Configuration", detail)
+	}
+	if !data.OrganizationId.IsUnknown() && (data.OrganizationId.IsNull() || data.OrganizationId.ValueString() == "") {
+		resp.Diagnostics.AddAttributeError(path.Root("organization_id"), "Invalid Configuration", "organization_id is required when multi_database is true")
+	}
+	if !data.Source.IsNull() && !data.Source.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(path.Root("source"), "Invalid Configuration", "source cannot be used with multi_database because the v2beta1 create API does not support it")
+	}
+	if !data.GraphAnalyticsPlugin.IsNull() && !data.GraphAnalyticsPlugin.IsUnknown() && data.GraphAnalyticsPlugin.ValueBool() {
+		resp.Diagnostics.AddAttributeError(path.Root("graph_analytics_plugin"), "Invalid Configuration", "graph_analytics_plugin cannot be used with multi_database in this provider")
+	}
+}
 
 // cdcTierValidator validates that CDC enrichment mode is only used with supported tiers
 type cdcTierValidator struct{}

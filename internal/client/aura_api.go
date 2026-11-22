@@ -20,6 +20,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -94,18 +95,99 @@ func (api *AuraApi) GetTenants(ctx context.Context) (GetProjectsResponse, error)
 	return unmarshalAuraResponse[GetProjectsResponse](http.MethodGet, status, payload)
 }
 
-func (api *AuraApi) PostInstance(ctx context.Context, request PostInstanceRequest) (PostInstanceResponse, error) {
+func (api *AuraApi) PostInstanceV1(ctx context.Context, request PostInstanceV1Request) (PostInstanceV1Response, error) {
 	payload, err := json.Marshal(request)
 	if err != nil {
-		return PostInstanceResponse{}, err
+		return PostInstanceV1Response{}, err
 	}
 
 	body, status, err := api.v1auraClient.Post(ctx, "instances", payload)
 	if err != nil {
-		return PostInstanceResponse{}, err
+		return PostInstanceV1Response{}, err
 	}
 
-	return unmarshalAuraResponse[PostInstanceResponse](http.MethodPost, status, body)
+	return unmarshalAuraResponse[PostInstanceV1Response](http.MethodPost, status, body)
+}
+
+// v2beta1InstanceKind is how the v2beta1 API expresses a v1 instance type: a type plus a graph_analytics mode.
+type v2beta1InstanceKind struct {
+	instanceType   string
+	graphAnalytics string
+}
+
+// v2beta1InstanceKinds maps the v1 instance types that v2beta1 names differently. These v2beta1 names stay
+// inside the client: the provider only exposes the v1 type names. Types not listed keep their name.
+var v2beta1InstanceKinds = map[string]v2beta1InstanceKind{
+	domain.InstanceTypeEnterpriseDb:   {instanceType: "virtual-dedicated-cloud", graphAnalytics: "serverless"},
+	domain.InstanceTypeEnterpriseDs:   {instanceType: "virtual-dedicated-cloud", graphAnalytics: "plugin"},
+	domain.InstanceTypeProfessionalDb: {instanceType: "professional", graphAnalytics: "serverless"},
+	domain.InstanceTypeProfessionalDs: {instanceType: "professional", graphAnalytics: "plugin"},
+}
+
+// translatedToV2beta1 returns a copy of the request with the v1 instance type translated to the v2beta1
+// type and graph_analytics mode.
+func translatedToV2beta1(request PostInstanceV2Request) PostInstanceV2Request {
+	kind, ok := v2beta1InstanceKinds[request.Type]
+	if !ok {
+		return request
+	}
+	request.Type = kind.instanceType
+	request.GraphAnalytics = &kind.graphAnalytics
+	return request
+}
+
+func (api *AuraApi) PostInstanceV2(ctx context.Context, organizationId, projectId string, request PostInstanceV2Request) (PostInstanceV2Response, error) {
+	v2beta1Request := translatedToV2beta1(request)
+	payload, err := json.Marshal(v2beta1Request)
+	if err != nil {
+		return PostInstanceV2Response{}, err
+	}
+	path := fmt.Sprintf("organizations/%s/projects/%s/instances", organizationId, projectId)
+	body, status, err := api.v2beta1Client.Post(ctx, path, payload)
+	if err != nil {
+		return PostInstanceV2Response{}, err
+	}
+	return unmarshalAuraResponse[PostInstanceV2Response](http.MethodPost, status, body)
+}
+
+func (api *AuraApi) GetInstanceV2(ctx context.Context, organizationId, projectId, instanceId string) (GetInstanceV2Response, error) {
+	path := fmt.Sprintf("organizations/%s/projects/%s/instances/%s", organizationId, projectId, instanceId)
+	body, status, err := api.v2beta1Client.Get(ctx, path)
+	if err != nil {
+		return GetInstanceV2Response{}, err
+	}
+	if status == http.StatusNotFound {
+		return GetInstanceV2Response{}, fmt.Errorf("instance %s: %w", instanceId, ErrNotFound)
+	}
+	return unmarshalAuraResponse[GetInstanceV2Response](http.MethodGet, status, body)
+}
+
+// FindOrganizationIdByProjectId returns the ID of the organization that owns the given project.
+// It returns ErrNotFound when none of the organizations visible to the caller contain the project.
+func (api *AuraApi) FindOrganizationIdByProjectId(ctx context.Context, projectId string) (string, error) {
+	organizations, err := api.GetOrganizations(ctx)
+	if err != nil {
+		return "", err
+	}
+	// A later organization may still own the project, so skip organizations whose projects cannot be
+	// listed and report them only if no organization matches.
+	var skippedErrors []error
+	for _, organization := range organizations.Data {
+		projects, err := api.GetProjectsByOrganizationId(ctx, organization.Id)
+		if err != nil {
+			skippedError := fmt.Errorf("listing projects of organization %s: %w", organization.Id, err)
+			skippedErrors = append(skippedErrors, skippedError)
+			continue
+		}
+		for _, project := range projects.Data {
+			if project.Id == projectId {
+				return organization.Id, nil
+			}
+		}
+	}
+	notFoundError := fmt.Errorf("organization for project %s: %w", projectId, ErrNotFound)
+	lookupErrors := append([]error{notFoundError}, skippedErrors...)
+	return "", errors.Join(lookupErrors...)
 }
 
 func (api *AuraApi) GetInstanceById(ctx context.Context, id string) (GetInstanceResponse, error) {

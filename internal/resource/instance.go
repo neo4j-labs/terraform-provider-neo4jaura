@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -70,6 +71,8 @@ type InstanceResourceModel struct {
 	Type                  types.String `tfsdk:"type"`
 	CloudProvider         types.String `tfsdk:"cloud_provider"`
 	ProjectId             types.String `tfsdk:"project_id"`
+	OrganizationId        types.String `tfsdk:"organization_id"`
+	MultiDatabase         types.Bool   `tfsdk:"multi_database"`
 	ConnectionUrl         types.String `tfsdk:"connection_url"`
 	Username              types.String `tfsdk:"username"`
 	Password              types.String `tfsdk:"password"`
@@ -195,6 +198,26 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"organization_id": schema.StringAttribute{
+				MarkdownDescription: fmt.Sprintf("The unique identifier of the organization that owns the project. Required when `multi_database` is true. If not set, it is looked up from `project_id` only for instance types that support multiple databases (`%s`), to determine `multi_database`; otherwise it stays null.", strings.Join(domain.MultiDatabaseInstanceTypes, "`, `")),
+				Description:         fmt.Sprintf("The unique identifier of the organization that owns the project. Required when multi_database is true. If not set, it is looked up from project_id only for instance types that support multiple databases [%s], to determine multi_database; otherwise it stays null.", strings.Join(domain.MultiDatabaseInstanceTypes, ", ")),
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+					requiresReplaceIfStateKnown(),
+				},
+			},
+			"multi_database": schema.BoolAttribute{
+				MarkdownDescription: fmt.Sprintf("Enable multiple databases at instance creation. Requires one of the instance types `%s`, and `organization_id`. Cannot be changed after creation.", strings.Join(domain.MultiDatabaseInstanceTypes, "`, `")),
+				Description:         fmt.Sprintf("Enable multiple databases at instance creation. Requires one of the instance types [%s], and organization_id. Cannot be changed after creation.", strings.Join(domain.MultiDatabaseInstanceTypes, ", ")),
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+					requiresReplaceIfStateKnownBool(),
 				},
 			},
 			"connection_url": schema.StringAttribute{
@@ -339,6 +362,7 @@ func (r *InstanceResource) ConfigValidators(_ context.Context) []resource.Config
 		&cdcTierValidator{},
 		&vectorOptimizedValidator{},
 		&graphAnalyticsPluginValidator{},
+		&multiDatabaseValidator{},
 	}
 }
 
@@ -350,7 +374,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		return
 	}
 
-	postInstanceRequest := &client.PostInstanceRequest{
+	postInstanceRequest := &client.PostInstanceV1Request{
 		Version:       data.Version.ValueString(),
 		Region:        data.Region.ValueString(),
 		Memory:        data.Memory.ValueString(),
@@ -393,26 +417,75 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		postInstanceRequest.GraphAnalyticsPlugin = data.GraphAnalyticsPlugin.ValueBoolPointer()
 	}
 
-	postInstanceResp, err := r.auraApi.PostInstance(ctx, *postInstanceRequest)
-	if err != nil {
-		response.Diagnostics.AddError("Error while creating an instance", err.Error())
-		return
+	// organization_id is only needed by the v2beta1 API, and multiDatabaseValidator requires it
+	// when multi_database is true. When it is not configured, store null instead of looking it up.
+	if data.OrganizationId.IsUnknown() {
+		data.OrganizationId = types.StringNull()
 	}
 
-	data.InstanceId = types.StringValue(postInstanceResp.Data.Id)
-	data.ConnectionUrl = types.StringValue(postInstanceResp.Data.ConnectionUrl)
-	data.Username = types.StringValue(postInstanceResp.Data.Username)
-	data.Password = types.StringValue(postInstanceResp.Data.Password)
+	var instanceId string
+	if data.MultiDatabase.ValueBool() {
+		postInstanceV2Request := client.PostInstanceV2Request{
+			Name:          data.Name.ValueString(),
+			Region:        data.Region.ValueString(),
+			Memory:        data.Memory.ValueString(),
+			Type:          data.Type.ValueString(),
+			CloudProvider: data.CloudProvider.ValueString(),
+			MultiDatabase: true,
+		}
+		// Storage and VectorOptimized are Optional+Computed, so they are unknown when not configured.
+		// Omit them then; the API picks the defaults.
+		if !data.Storage.IsUnknown() {
+			postInstanceV2Request.Storage = data.Storage.ValueStringPointer()
+		}
+		if !data.VectorOptimized.IsUnknown() {
+			postInstanceV2Request.VectorOptimized = data.VectorOptimized.ValueBoolPointer()
+		}
+		postInstanceResp, err := r.auraApi.PostInstanceV2(ctx, data.OrganizationId.ValueString(), data.ProjectId.ValueString(), postInstanceV2Request)
+		if err != nil {
+			response.Diagnostics.AddError("Error while creating an instance", err.Error())
+			return
+		}
+		instanceId = postInstanceResp.Data.Id
+		data.ConnectionUrl = types.StringValue(postInstanceResp.Data.ConnectionUrl)
+		data.Username = types.StringValue(postInstanceResp.Data.Username)
+		data.Password = types.StringValue(postInstanceResp.Data.Password)
+	} else {
+		postInstanceResp, err := r.auraApi.PostInstanceV1(ctx, *postInstanceRequest)
+		if err != nil {
+			response.Diagnostics.AddError("Error while creating an instance", err.Error())
+			return
+		}
+		instanceId = postInstanceResp.Data.Id
+		data.ConnectionUrl = types.StringValue(postInstanceResp.Data.ConnectionUrl)
+		data.Username = types.StringValue(postInstanceResp.Data.Username)
+		data.Password = types.StringValue(postInstanceResp.Data.Password)
+		// The v1 API cannot create multi-database instances.
+		data.MultiDatabase = types.BoolValue(false)
+	}
+	data.InstanceId = types.StringValue(instanceId)
 
-	tflog.Debug(ctx, "Created an instance with id "+postInstanceResp.Data.Id)
+	tflog.Debug(ctx, "Created an instance with id "+instanceId)
 
-	instance, err := r.auraApi.WaitUntilInstanceIsInState(ctx, postInstanceResp.Data.Id, func(r client.GetInstanceResponse) bool {
+	instance, err := r.auraApi.WaitUntilInstanceIsInState(ctx, instanceId, func(r client.GetInstanceResponse) bool {
 		return strings.ToLower(r.Data.Status) == domain.InstanceStatusRunning
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Instance is not running in time",
-			fmt.Sprintf("instance_id=%s: %s", postInstanceResp.Data.Id, err.Error()))
+			fmt.Sprintf("instance_id=%s: %s", instanceId, err.Error()))
 		return
+	}
+	if data.MultiDatabase.ValueBool() {
+		verifyDiags := r.verifyMultiDatabaseEnabled(ctx, &data)
+		if verifyDiags.HasError() {
+			// The instance exists and is billed. Save what is known so Terraform marks it tainted
+			// and replaces or destroys it, instead of losing track of it.
+			fillComputedAttributes(&data, instance.Data)
+			data.Status = types.StringValue(instance.Data.Status)
+			response.Diagnostics.Append(verifyDiags...)
+			response.Diagnostics.Append(response.State.Set(ctx, &data)...)
+			return
+		}
 	}
 
 	// CDC enrichment mode and secondaries_count must be set via PATCH after instance creation
@@ -425,78 +498,36 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		if needsCdcPatch {
 			cdcMode := data.CdcEnrichmentMode.ValueString()
 			patchRequest.CdcEnrichmentMode = &cdcMode
-			tflog.Debug(ctx, fmt.Sprintf("Patching instance %s with CDC enrichment mode: %s", postInstanceResp.Data.Id, cdcMode))
+			tflog.Debug(ctx, fmt.Sprintf("Patching instance %s with CDC enrichment mode: %s", instanceId, cdcMode))
 		}
 		if needsSecondariesPatch {
 			sc := data.SecondariesCount.ValueInt32()
 			patchRequest.SecondariesCount = &sc
-			tflog.Debug(ctx, fmt.Sprintf("Patching instance %s with secondaries_count: %d", postInstanceResp.Data.Id, sc))
+			tflog.Debug(ctx, fmt.Sprintf("Patching instance %s with secondaries_count: %d", instanceId, sc))
 		}
-		instance, err = r.auraApi.PatchInstanceById(ctx, postInstanceResp.Data.Id, patchRequest)
+		instance, err = r.auraApi.PatchInstanceById(ctx, instanceId, patchRequest)
 		if err != nil {
 			response.Diagnostics.AddError("Error while patching instance (CDC / secondaries_count)",
-				fmt.Sprintf("instance_id=%s: %s", postInstanceResp.Data.Id, err.Error()))
+				fmt.Sprintf("instance_id=%s: %s", instanceId, err.Error()))
 			return
 		}
-		instance, err = r.auraApi.WaitUntilInstanceIsInState(ctx, postInstanceResp.Data.Id, func(r client.GetInstanceResponse) bool {
+		instance, err = r.auraApi.WaitUntilInstanceIsInState(ctx, instanceId, func(r client.GetInstanceResponse) bool {
 			return strings.ToLower(r.Data.Status) == domain.InstanceStatusRunning
 		})
 		if err != nil {
 			response.Diagnostics.AddError("Instance is not running after PATCH",
-				fmt.Sprintf("instance_id=%s: %s", postInstanceResp.Data.Id, err.Error()))
+				fmt.Sprintf("instance_id=%s: %s", instanceId, err.Error()))
 			return
 		}
-		tflog.Debug(ctx, fmt.Sprintf("Successfully patched instance %s", postInstanceResp.Data.Id))
+		tflog.Debug(ctx, fmt.Sprintf("Successfully patched instance %s", instanceId))
 	}
 
-	if instance.Data.Storage != nil {
-		data.Storage = types.StringValue(*instance.Data.Storage)
-	} else {
-		data.Storage = types.StringNull()
-	}
-	if instance.Data.CreatedAt != nil {
-		data.CreatedAt = types.StringValue(*instance.Data.CreatedAt)
-	} else {
-		data.CreatedAt = types.StringNull()
-	}
-	if instance.Data.MetricsIntegrationUrl != nil {
-		data.MetricsIntegrationUrl = types.StringValue(*instance.Data.MetricsIntegrationUrl)
-	} else {
-		data.MetricsIntegrationUrl = types.StringNull()
-	}
-	if instance.Data.SecondariesCount != nil {
-		data.SecondariesCount = types.Int32Value(int32(*instance.Data.SecondariesCount))
-	} else if !data.SecondariesCount.IsNull() {
-		// API may omit secondaries_count in response; keep the value we set via PATCH
-		// data.SecondariesCount already has the correct planned value
-	} else {
-		data.SecondariesCount = types.Int32Null()
-	}
-	if instance.Data.CdcEnrichmentMode != nil {
-		data.CdcEnrichmentMode = types.StringValue(*instance.Data.CdcEnrichmentMode)
-	} else if !data.CdcEnrichmentMode.IsNull() {
-		// API returns null for CDC enrichment mode on business-critical tier
-		// Keep the planned value since we applied it via PATCH
-		// data.CdcEnrichmentMode already has the correct planned value
-	} else {
-		// No planned value and API returns null - leave as null
-		data.CdcEnrichmentMode = types.StringNull()
-	}
-	if instance.Data.VectorOptimized != nil {
-		data.VectorOptimized = types.BoolValue(*instance.Data.VectorOptimized)
-	} else {
-		data.VectorOptimized = types.BoolNull()
-	}
-	if instance.Data.GraphAnalyticsPlugin != nil {
-		data.GraphAnalyticsPlugin = types.BoolValue(*instance.Data.GraphAnalyticsPlugin)
-	} else {
-		data.GraphAnalyticsPlugin = types.BoolNull()
-	}
+	fillComputedAttributes(&data, instance.Data)
 
 	requestedStatus := data.Status
 	data.Status = types.StringValue(instance.Data.Status)
 
-	tflog.Debug(ctx, fmt.Sprintf("Instance %s is running", postInstanceResp.Data.Id))
+	tflog.Debug(ctx, fmt.Sprintf("Instance %s is running", instanceId))
 
 	// Pausing a new instance
 	if strings.ToLower(requestedStatus.ValueString()) == domain.InstanceStatusPaused {
@@ -522,7 +553,6 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 	if response.Diagnostics.HasError() {
 		return
 	}
-
 	instance, err := r.auraApi.GetInstanceById(ctx, stateData.InstanceId.ValueString())
 	if err != nil {
 		if errors.Is(err, client.ErrNotFound) {
@@ -532,6 +562,36 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 		response.Diagnostics.AddError("Error while getting instance details",
 			fmt.Sprintf("instance_id=%s: %s", stateData.InstanceId.ValueString(), err.Error()))
 		return
+	}
+
+	// project_id, organization_id and multi_database are populated on read so that an imported
+	// instance (whose state only holds instance_id) does not plan a replacement.
+	if instance.Data.TenantId != "" {
+		stateData.ProjectId = types.StringValue(instance.Data.TenantId)
+	}
+	if !domain.SupportsMultiDatabase(instance.Data.Type) {
+		stateData.MultiDatabase = types.BoolValue(false)
+	} else if stateData.MultiDatabase.IsNull() || stateData.MultiDatabase.ValueBool() {
+		// multi_database cannot be changed after creation, so a known false never needs re-checking.
+		// The organization lookup costs one API call per organization, so it only runs here,
+		// where organization_id is needed to ask the v2beta1 API about multi_database.
+		if stateData.OrganizationId.IsNull() || stateData.OrganizationId.ValueString() == "" {
+			stateData.OrganizationId = r.lookupOrganizationId(ctx, stateData.ProjectId.ValueString(), &response.Diagnostics)
+		}
+		if stateData.OrganizationId.IsNull() {
+			response.Diagnostics.AddWarning("Cannot determine multi_database setting",
+				fmt.Sprintf("instance_id=%s: organization_id is unknown; set organization_id in the configuration", stateData.InstanceId.ValueString()))
+		} else {
+			instanceV2, err := r.auraApi.GetInstanceV2(ctx, stateData.OrganizationId.ValueString(), stateData.ProjectId.ValueString(), stateData.InstanceId.ValueString())
+			if err != nil {
+				// A failed check must not block plan/apply of an instance that v1 still reports,
+				// so multi_database keeps its state value and the cause is only a warning.
+				detail := describeMultiDatabaseVerificationError(stateData.InstanceId.ValueString(), err)
+				response.Diagnostics.AddWarning("Cannot verify multi-database setting", detail)
+			} else {
+				stateData.MultiDatabase = types.BoolValue(instanceV2.Data.MultiDatabase)
+			}
+		}
 	}
 
 	stateData.Name = types.StringValue(instance.Data.Name)
@@ -778,6 +838,15 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 	} else {
 		plan.GraphAnalyticsPlugin = types.BoolNull()
 	}
+	// Both are only updated in place when state held null (see requiresReplaceIfStateKnown); the next
+	// Read re-checks multi_database against v2beta1 using the new organization_id. When unconfigured
+	// they are planned as unknown, so carry over the state value.
+	if plan.OrganizationId.IsUnknown() {
+		plan.OrganizationId = state.OrganizationId
+	}
+	if plan.MultiDatabase.IsUnknown() {
+		plan.MultiDatabase = state.MultiDatabase
+	}
 
 	response.Diagnostics.Append(response.State.Set(ctx, &plan)...)
 	if response.Diagnostics.HasError() {
@@ -843,6 +912,28 @@ func (r *InstanceResource) ImportState(ctx context.Context, request resource.Imp
 	)
 }
 
+// lookupOrganizationId finds the organization owning projectId. A failed lookup is reported as a
+// warning rather than an error: organization_id is only needed for multi-database instances.
+func (r *InstanceResource) lookupOrganizationId(ctx context.Context, projectId string, diagnostics *diag.Diagnostics) types.String {
+	organizationId, err := r.auraApi.FindOrganizationIdByProjectId(ctx, projectId)
+	if err != nil {
+		diagnostics.AddWarning("Cannot determine organization_id",
+			fmt.Sprintf("project_id=%s: %s. Set organization_id in the configuration to avoid this lookup.", projectId, err.Error()))
+		return types.StringNull()
+	}
+	return types.StringValue(organizationId)
+}
+
+// describeMultiDatabaseVerificationError explains why the v2beta1 API could not report multi_database
+// for an instance. A 404 while v1 still finds the instance usually means organization_id or
+// project_id is wrong, so that case points the user there.
+func describeMultiDatabaseVerificationError(instanceId string, err error) string {
+	if errors.Is(err, client.ErrNotFound) {
+		return fmt.Sprintf("instance_id=%s: v2beta1 returned 404 but v1 still finds the instance; check organization_id and project_id. multi_database is left unchanged.", instanceId)
+	}
+	return fmt.Sprintf("instance_id=%s: %s. multi_database is left unchanged.", instanceId, err.Error())
+}
+
 func (r *InstanceResource) resumeInstance(ctx context.Context, id string) util.DiagnosticsError {
 	_, err := r.auraApi.ResumeInstanceById(ctx, id)
 	if err != nil {
@@ -869,4 +960,71 @@ func (r *InstanceResource) pauseInstance(ctx context.Context, id string) util.Di
 		return util.NewDiagnosticsError("Error while waiting for instance to be paused", err.Error())
 	}
 	return util.NoDiagnosticsError()
+}
+
+// verifyMultiDatabaseEnabled asks the v2beta1 API whether the new instance really has multiple databases.
+// On failure it sets data.MultiDatabase to what is known: false when Aura reports it disabled, null when
+// the API call fails.
+func (r *InstanceResource) verifyMultiDatabaseEnabled(ctx context.Context, data *InstanceResourceModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+	instanceId := data.InstanceId.ValueString()
+	instanceV2, err := r.auraApi.GetInstanceV2(ctx, data.OrganizationId.ValueString(), data.ProjectId.ValueString(), instanceId)
+	if err != nil {
+		data.MultiDatabase = types.BoolNull()
+		diags.AddError("Error verifying multi-database instance", fmt.Sprintf("instance_id=%s: %s", instanceId, err.Error()))
+		return diags
+	}
+	if !instanceV2.Data.MultiDatabase {
+		data.MultiDatabase = types.BoolValue(false)
+		diags.AddError("Multi-database was not enabled", fmt.Sprintf("instance_id=%s: Aura reported multi_database=false after creation", instanceId))
+	}
+	return diags
+}
+
+// fillComputedAttributes copies the computed attributes the API reports for a new instance into data.
+// cdc_enrichment_mode and secondaries_count keep their planned values when the API omits them.
+func fillComputedAttributes(data *InstanceResourceModel, instance client.GetInstanceData) {
+	if instance.Storage != nil {
+		data.Storage = types.StringValue(*instance.Storage)
+	} else {
+		data.Storage = types.StringNull()
+	}
+	if instance.CreatedAt != nil {
+		data.CreatedAt = types.StringValue(*instance.CreatedAt)
+	} else {
+		data.CreatedAt = types.StringNull()
+	}
+	if instance.MetricsIntegrationUrl != nil {
+		data.MetricsIntegrationUrl = types.StringValue(*instance.MetricsIntegrationUrl)
+	} else {
+		data.MetricsIntegrationUrl = types.StringNull()
+	}
+	if instance.SecondariesCount != nil {
+		data.SecondariesCount = types.Int32Value(int32(*instance.SecondariesCount))
+	} else if !data.SecondariesCount.IsNull() {
+		// API may omit secondaries_count in response; keep the value we set via PATCH
+		// data.SecondariesCount already has the correct planned value
+	} else {
+		data.SecondariesCount = types.Int32Null()
+	}
+	if instance.CdcEnrichmentMode != nil {
+		data.CdcEnrichmentMode = types.StringValue(*instance.CdcEnrichmentMode)
+	} else if !data.CdcEnrichmentMode.IsNull() {
+		// API returns null for CDC enrichment mode on business-critical tier
+		// Keep the planned value since we applied it via PATCH
+		// data.CdcEnrichmentMode already has the correct planned value
+	} else {
+		// No planned value and API returns null - leave as null
+		data.CdcEnrichmentMode = types.StringNull()
+	}
+	if instance.VectorOptimized != nil {
+		data.VectorOptimized = types.BoolValue(*instance.VectorOptimized)
+	} else {
+		data.VectorOptimized = types.BoolNull()
+	}
+	if instance.GraphAnalyticsPlugin != nil {
+		data.GraphAnalyticsPlugin = types.BoolValue(*instance.GraphAnalyticsPlugin)
+	} else {
+		data.GraphAnalyticsPlugin = types.BoolNull()
+	}
 }
