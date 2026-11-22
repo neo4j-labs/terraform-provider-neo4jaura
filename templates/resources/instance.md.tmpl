@@ -20,9 +20,9 @@ description: |-
 
 {{ tffile "examples/resources/neo4jaura_instance/resource-with-prevent-destroy.tf" }}
 
-### Business Critical Instance With Multiple Databases
+### Instance With Multiple Databases
 
-Multiple databases must be enabled when the instance is created. This option uses the Aura v2beta1 API and requires an Aura organization ID as well as the project ID. Existing single-database instances cannot be converted. Protect instances containing data against unintended replacement.
+Multiple databases are supported on `business-critical`, `enterprise-db` and `enterprise-ds` instances and must be enabled when the instance is created. This option uses the Aura v2beta1 API and requires an Aura organization ID as well as the project ID. Existing single-database instances cannot be converted. Protect instances containing data against unintended replacement.
 
 {{ tffile "examples/resources/neo4jaura_instance/resource-multi-database.tf" }}
 

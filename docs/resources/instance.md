@@ -62,9 +62,9 @@ resource "neo4jaura_instance" "protected" {
 }
 ```
 
-### Business Critical Instance With Multiple Databases
+### Instance With Multiple Databases
 
-Multiple databases must be enabled when the instance is created. This option uses the Aura v2beta1 API and requires an Aura organization ID as well as the project ID. Existing single-database instances cannot be converted. Protect instances containing data against unintended replacement.
+Multiple databases are supported on `business-critical`, `enterprise-db` and `enterprise-ds` instances and must be enabled when the instance is created. This option uses the Aura v2beta1 API and requires an Aura organization ID as well as the project ID. Existing single-database instances cannot be converted. Protect instances containing data against unintended replacement.
 
 ```terraform
 terraform {
@@ -191,8 +191,8 @@ For databases with valuable data, use the [Instance With Destroy Protection](#in
 - `cloud_provider` (String) Cloud provider. One of: `gcp`, `aws`, `azure`.
 - `graph_analytics_plugin` (Boolean) The graph analytics plugin configuration of the instance.
 - `memory` (String) Memory allocated for the instance. One of: `1GB`, `2GB`, `4GB`, `8GB`, `16GB`, `24GB`, `32GB`, `48GB`, `64GB`, `128GB`, `192GB`, `256GB`, `384GB`, `512GB`.
-- `multi_database` (Boolean) Enable multiple databases at instance creation. Requires `business-critical` and `organization_id`. Cannot be changed after creation.
-- `organization_id` (String) The unique identifier of the organization that owns the project. Required when `multi_database` is true. If not set, it is looked up from `project_id`.
+- `multi_database` (Boolean) Enable multiple databases at instance creation. Requires one of the instance types `business-critical`, `enterprise-db`, `enterprise-ds`, and `organization_id`. Cannot be changed after creation.
+- `organization_id` (String) The unique identifier of the organization that owns the project. Required when `multi_database` is true. If not set, it is looked up from `project_id` only for instance types that support multiple databases (`business-critical`, `enterprise-db`, `enterprise-ds`), to determine `multi_database`; otherwise it stays null.
 - `secondaries_count` (Number) The number of secondaries in the instance (VDC only).
 - `source` (Attributes) The source from which the instance is created. (see [below for nested schema](#nestedatt--source))
 - `status` (String) The status of the instance. One of: `creating`, `destroying`, `running`, `pausing`, `paused`, `suspending`, `suspended`, `resuming`, `loading`, `loading failed`, `restoring`, `updating`, `overwriting`.

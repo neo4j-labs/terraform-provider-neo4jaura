@@ -201,8 +201,8 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				},
 			},
 			"organization_id": schema.StringAttribute{
-				MarkdownDescription: "The unique identifier of the organization that owns the project. Required when `multi_database` is true. If not set, it is looked up from `project_id`.",
-				Description:         "The unique identifier of the organization that owns the project. Required when multi_database is true. If not set, it is looked up from project_id.",
+				MarkdownDescription: fmt.Sprintf("The unique identifier of the organization that owns the project. Required when `multi_database` is true. If not set, it is looked up from `project_id` only for instance types that support multiple databases (`%s`), to determine `multi_database`; otherwise it stays null.", strings.Join(domain.MultiDatabaseInstanceTypes, "`, `")),
+				Description:         fmt.Sprintf("The unique identifier of the organization that owns the project. Required when multi_database is true. If not set, it is looked up from project_id only for instance types that support multiple databases [%s], to determine multi_database; otherwise it stays null.", strings.Join(domain.MultiDatabaseInstanceTypes, ", ")),
 				Optional:            true,
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
@@ -211,8 +211,8 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				},
 			},
 			"multi_database": schema.BoolAttribute{
-				MarkdownDescription: "Enable multiple databases at instance creation. Requires `business-critical` and `organization_id`. Cannot be changed after creation.",
-				Description:         "Enable multiple databases at instance creation. Requires business-critical and organization_id. Cannot be changed after creation.",
+				MarkdownDescription: fmt.Sprintf("Enable multiple databases at instance creation. Requires one of the instance types `%s`, and `organization_id`. Cannot be changed after creation.", strings.Join(domain.MultiDatabaseInstanceTypes, "`, `")),
+				Description:         fmt.Sprintf("Enable multiple databases at instance creation. Requires one of the instance types [%s], and organization_id. Cannot be changed after creation.", strings.Join(domain.MultiDatabaseInstanceTypes, ", ")),
 				Optional:            true,
 				Computed:            true,
 				PlanModifiers: []planmodifier.Bool{
@@ -417,8 +417,10 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		postInstanceRequest.GraphAnalyticsPlugin = data.GraphAnalyticsPlugin.ValueBoolPointer()
 	}
 
-	if data.OrganizationId.IsNull() || data.OrganizationId.IsUnknown() {
-		data.OrganizationId = r.lookupOrganizationId(ctx, data.ProjectId.ValueString(), &response.Diagnostics)
+	// organization_id is only needed by the v2beta1 API, and multiDatabaseValidator requires it
+	// when multi_database is true. When it is not configured, store null instead of looking it up.
+	if data.OrganizationId.IsUnknown() {
+		data.OrganizationId = types.StringNull()
 	}
 
 	var instanceId string
@@ -609,13 +611,15 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 	if stateData.Version.IsNull() {
 		stateData.Version = types.StringValue(domain.InstanceVersion5)
 	}
-	if stateData.OrganizationId.IsNull() || stateData.OrganizationId.ValueString() == "" {
-		stateData.OrganizationId = r.lookupOrganizationId(ctx, stateData.ProjectId.ValueString(), &response.Diagnostics)
-	}
-	if instance.Data.Type != domain.InstanceTypeBusinessCritical {
+	if !domain.SupportsMultiDatabase(instance.Data.Type) {
 		stateData.MultiDatabase = types.BoolValue(false)
 	} else if stateData.MultiDatabase.IsNull() || stateData.MultiDatabase.ValueBool() {
 		// multi_database cannot be changed after creation, so a known false never needs re-checking.
+		// The organization lookup costs one API call per organization, so it only runs here,
+		// where organization_id is needed to ask the v2beta1 API about multi_database.
+		if stateData.OrganizationId.IsNull() || stateData.OrganizationId.ValueString() == "" {
+			stateData.OrganizationId = r.lookupOrganizationId(ctx, stateData.ProjectId.ValueString(), &response.Diagnostics)
+		}
 		if stateData.OrganizationId.IsNull() {
 			response.Diagnostics.AddWarning("Cannot determine multi_database setting",
 				fmt.Sprintf("instance_id=%s: organization_id is unknown; set organization_id in the configuration", stateData.InstanceId.ValueString()))

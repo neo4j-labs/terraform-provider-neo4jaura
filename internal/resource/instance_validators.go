@@ -20,6 +20,7 @@ package resource
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -73,7 +74,8 @@ var (
 type multiDatabaseValidator struct{}
 
 func (v *multiDatabaseValidator) Description(_ context.Context) string {
-	return "multi_database requires a business-critical instance and organization_id"
+	instanceTypes := strings.Join(domain.MultiDatabaseInstanceTypes, ", ")
+	return fmt.Sprintf("multi_database requires one of the instance types [%s] and organization_id", instanceTypes)
 }
 
 func (v *multiDatabaseValidator) MarkdownDescription(ctx context.Context) string {
@@ -83,11 +85,21 @@ func (v *multiDatabaseValidator) MarkdownDescription(ctx context.Context) string
 func (v *multiDatabaseValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	var data InstanceResourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
-	if resp.Diagnostics.HasError() || data.MultiDatabase.IsNull() || data.MultiDatabase.IsUnknown() || !data.MultiDatabase.ValueBool() {
+	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !data.Type.IsNull() && !data.Type.IsUnknown() && data.Type.ValueString() != domain.InstanceTypeBusinessCritical {
-		resp.Diagnostics.AddAttributeError(path.Root("multi_database"), "Invalid Configuration", "multi_database is only supported on business-critical instances")
+	v.validateMultiDatabase(data, resp)
+}
+
+func (v *multiDatabaseValidator) validateMultiDatabase(data InstanceResourceModel, resp *resource.ValidateConfigResponse) {
+	if data.MultiDatabase.IsNull() || data.MultiDatabase.IsUnknown() || !data.MultiDatabase.ValueBool() {
+		return
+	}
+	isTypeKnown := !data.Type.IsNull() && !data.Type.IsUnknown()
+	if isTypeKnown && !domain.SupportsMultiDatabase(data.Type.ValueString()) {
+		instanceTypes := strings.Join(domain.MultiDatabaseInstanceTypes, ", ")
+		detail := fmt.Sprintf("multi_database is only supported on instance types [%s]. Instance type '%s' does not support it.", instanceTypes, data.Type.ValueString())
+		resp.Diagnostics.AddAttributeError(path.Root("multi_database"), "Invalid Configuration", detail)
 	}
 	if !data.OrganizationId.IsUnknown() && (data.OrganizationId.IsNull() || data.OrganizationId.ValueString() == "") {
 		resp.Diagnostics.AddAttributeError(path.Root("organization_id"), "Invalid Configuration", "organization_id is required when multi_database is true")

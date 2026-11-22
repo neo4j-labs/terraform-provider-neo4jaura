@@ -55,6 +55,8 @@ type MockServer struct {
 	mu                               sync.Mutex
 	server                           *httptest.Server
 	disableMultiDatabaseOnNextCreate bool
+	// organizationListCount counts GET /v2beta1/organizations calls; all access must hold mu.
+	organizationListCount int
 	// instances stores mock instance state; all access must hold mu.
 	instances map[string]*mockInstanceState
 	// snapshots is keyed by "<instanceId>/<snapshotId>"; all access must hold mu.
@@ -123,6 +125,14 @@ func (ms *MockServer) Reset() {
 	ms.deletedOrganizationUsers = make(map[string]bool)
 	ms.invites = make(map[string]client.OrganizationInviteData)
 	ms.disableMultiDatabaseOnNextCreate = false
+	ms.organizationListCount = 0
+}
+
+// OrganizationListCount returns how many times GET /v2beta1/organizations was called since the last Reset.
+func (ms *MockServer) OrganizationListCount() int {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	return ms.organizationListCount
 }
 
 func (ms *MockServer) DisableMultiDatabaseOnNextCreate() {
@@ -702,7 +712,7 @@ func (ms *MockServer) handlePostMultiDatabaseInstance(w http.ResponseWriter, r *
 		return
 	}
 	var req client.PostInstanceV2Request
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !req.MultiDatabase || req.Type != domain.InstanceTypeBusinessCritical {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !req.MultiDatabase || !domain.SupportsMultiDatabase(req.Type) {
 		http.Error(w, "invalid multi-database request", http.StatusBadRequest)
 		return
 	}
@@ -1136,6 +1146,10 @@ func (ms *MockServer) handleGetProjectsByOrganization(w http.ResponseWriter, _ *
 }
 
 func (ms *MockServer) handleGetOrganizations(w http.ResponseWriter, _ *http.Request) {
+	ms.mu.Lock()
+	ms.organizationListCount++
+	ms.mu.Unlock()
+
 	resp := client.GetOrganizationsResponse{
 		Data: []client.OrganizationData{
 			{Id: "test-org-id-001", Name: "Test Organization"},

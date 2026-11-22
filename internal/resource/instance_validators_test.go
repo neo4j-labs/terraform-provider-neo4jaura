@@ -271,3 +271,81 @@ func TestValidateGraphAnalyticsPlugin(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateMultiDatabase(t *testing.T) {
+	t.Parallel()
+
+	validator := &multiDatabaseValidator{}
+	unsupportedTypeError := func(instanceType string) string {
+		return "multi_database is only supported on instance types [business-critical, enterprise-db, enterprise-ds]. " +
+			"Instance type '" + instanceType + "' does not support it."
+	}
+
+	cases := map[string]struct {
+		model         InstanceResourceModel
+		expectedError string
+	}{
+		"valid_business_critical": {
+			model: multiDatabaseModel(domain.InstanceTypeBusinessCritical),
+		},
+		"valid_enterprise_db": {
+			model: multiDatabaseModel(domain.InstanceTypeEnterpriseDb),
+		},
+		"valid_enterprise_ds": {
+			model: multiDatabaseModel(domain.InstanceTypeEnterpriseDs),
+		},
+		"invalid_professional_db": {
+			model:         multiDatabaseModel(domain.InstanceTypeProfessionalDb),
+			expectedError: unsupportedTypeError(domain.InstanceTypeProfessionalDb),
+		},
+		"invalid_professional_ds": {
+			model:         multiDatabaseModel(domain.InstanceTypeProfessionalDs),
+			expectedError: unsupportedTypeError(domain.InstanceTypeProfessionalDs),
+		},
+		"invalid_free_db": {
+			model:         multiDatabaseModel(domain.InstanceTypeFreeDb),
+			expectedError: unsupportedTypeError(domain.InstanceTypeFreeDb),
+		},
+		"multi_database_false_on_professional_db": {
+			model: InstanceResourceModel{
+				Type:          types.StringValue(domain.InstanceTypeProfessionalDb),
+				MultiDatabase: types.BoolValue(false),
+			},
+		},
+	}
+
+	for name, tc := range cases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			resp := &resource.ValidateConfigResponse{}
+			validator.validateMultiDatabase(tc.model, resp)
+
+			if tc.expectedError == "" {
+				assert.Falsef(t, resp.Diagnostics.HasError(), "expected no error, got: %v", resp.Diagnostics)
+				return
+			}
+			assert.True(t, resp.Diagnostics.HasError(), "expected error, got no errors")
+			found := false
+			for _, d := range resp.Diagnostics {
+				if d.Summary() == "Invalid Configuration" && d.Detail() == tc.expectedError {
+					found = true
+					break
+				}
+			}
+			assert.Truef(t, found, "expected error detail %q, got: %v", tc.expectedError, resp.Diagnostics)
+		})
+	}
+}
+
+// multiDatabaseModel returns a valid multi-database configuration of the given instance type.
+func multiDatabaseModel(instanceType string) InstanceResourceModel {
+	return InstanceResourceModel{
+		Type:                 types.StringValue(instanceType),
+		MultiDatabase:        types.BoolValue(true),
+		OrganizationId:       types.StringValue("test-org-id-001"),
+		Source:               types.ObjectNull(nil),
+		GraphAnalyticsPlugin: types.BoolNull(),
+	}
+}

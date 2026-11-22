@@ -17,6 +17,8 @@
 
 package domain
 
+import "slices"
+
 const (
 	InstanceStatusCreating      string = "creating"
 	InstanceStatusDestroying    string = "destroying"
@@ -58,6 +60,18 @@ const (
 	InstanceTypeFreeDb           string = "free-db"
 	InstanceTypeBusinessCritical string = "business-critical"
 )
+
+// MultiDatabaseInstanceTypes are the instance types that can be created with multiple databases.
+var MultiDatabaseInstanceTypes = []string{
+	InstanceTypeBusinessCritical,
+	InstanceTypeEnterpriseDb,
+	InstanceTypeEnterpriseDs,
+}
+
+// SupportsMultiDatabase reports whether instances of the given type can be created with multiple databases.
+func SupportsMultiDatabase(instanceType string) bool {
+	return slices.Contains(MultiDatabaseInstanceTypes, instanceType)
+}
 
 const (
 	CloudProviderGcp   string = "gcp"
