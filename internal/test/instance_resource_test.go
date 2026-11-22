@@ -125,20 +125,19 @@ resource "neo4jaura_instance" "this" {
 }
 `, defaultProviderConfig)
 
-var businessCriticalMultiDatabaseConfig = fmt.Sprintf(`
-%[1]s
+const businessCriticalMultiDatabaseConfig = defaultProviderConfig + `
 resource "neo4jaura_instance" "this" {
-  name           = "TestMultiDatabase"
-  cloud_provider = "aws"
-  region         = "us-east-1"
-  memory         = "4GB"
-  storage        = "8GB"
-  type           = "business-critical"
-  organization_id = "test-org-id"
-  project_id     = "test-project-id-001"
-  multi_database = true
+  name            = "TestMultiDatabase"
+  cloud_provider  = "aws"
+  region          = "us-east-1"
+  memory          = "4GB"
+  storage         = "8GB"
+  type            = "business-critical"
+  organization_id = "test-org-id-001"
+  project_id      = "test-project-id-001"
+  multi_database  = true
 }
-`, defaultProviderConfig)
+`
 
 func TestAcc_business_critical_multi_database_creation(t *testing.T) {
 	testMockServer.Reset()
@@ -424,6 +423,38 @@ func TestAcc_multi_database_creation_rejects_unenabled_instance(t *testing.T) {
 	}
 }
 
+// TestAcc_multi_database_creation_rejects_wrong_organization verifies that, like the real v2beta1 API,
+// the mock rejects an organization that does not own the project instead of accepting any ID.
+func TestAcc_multi_database_creation_rejects_wrong_organization(t *testing.T) {
+	testMockServer.Reset()
+	const wrongOrganizationConfig = defaultProviderConfig + `
+resource "neo4jaura_instance" "this" {
+  name            = "TestMultiDatabase"
+  cloud_provider  = "aws"
+  region          = "us-east-1"
+  memory          = "4GB"
+  storage         = "8GB"
+  type            = "business-critical"
+  organization_id = "other-org-id"
+  project_id      = "test-project-id-001"
+  multi_database  = true
+}
+`
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{{
+			Config:      wrongOrganizationConfig,
+			ExpectError: regexp.MustCompile("Status: 404"),
+		}},
+	})
+
+	instanceCount := testMockServer.InstanceCount()
+	if instanceCount != 0 {
+		t.Errorf("mock server holds %d instance(s); creating with the wrong organization must not create one", instanceCount)
+	}
+}
+
 func TestAcc_multi_database_instance_disappears(t *testing.T) {
 	testMockServer.Reset()
 	resource.Test(t, resource.TestCase{
@@ -451,7 +482,7 @@ resource "neo4jaura_instance" "this" {
   project_id = "test-project-id-001"
   type = "professional-db"
   multi_database = true
-  organization_id = "test-org-id"
+  organization_id = "test-org-id-001"
 }`,
 			PlanOnly:    true,
 			ExpectError: regexp.MustCompile("multi_database is only supported on instance types"),

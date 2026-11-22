@@ -739,8 +739,8 @@ func (ms *MockServer) routeV2Beta1(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ms *MockServer) handlePostMultiDatabaseInstance(w http.ResponseWriter, r *http.Request, organizationId, projectId string) {
-	if organizationId == "" || projectId == "" {
-		http.Error(w, "missing organization or project", http.StatusBadRequest)
+	if !organizationOwnsProject(organizationId, projectId) {
+		http.NotFound(w, r)
 		return
 	}
 	var req client.PostInstanceV2Request
@@ -817,7 +817,7 @@ func (ms *MockServer) handleGetMultiDatabaseInstance(w http.ResponseWriter, _ *h
 		http.Error(w, http.StatusText(failureStatus), failureStatus)
 		return
 	}
-	if !ok || organizationId == "" || projectId != tenantId {
+	if !ok || !organizationOwnsProject(organizationId, projectId) || projectId != tenantId {
 		http.NotFound(w, nil)
 		return
 	}
@@ -1202,16 +1202,34 @@ func (ms *MockServer) handleDeleteOrganizationInvite(w http.ResponseWriter, _ *h
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (ms *MockServer) handleGetProjectsByOrganization(w http.ResponseWriter, _ *http.Request, _ string) {
-	resp := client.GetProjectsResponse{
-		Data: []client.ProjectResponseData{
-			{Id: "test-org-project-id-001", Name: "Org Project One"},
-			{Id: "test-project-id-001", Name: "Instance Project"},
-			{Id: "test-org-project-id-002", Name: "Org Project Two"},
-			{Id: "proj-001", Name: "Alpha"},
-			{Id: "proj-002", Name: "Beta"},
-		},
+// mockOrganizationId is the only organization the mock's GET /v2beta1/organizations lists.
+const mockOrganizationId = "test-org-id-001"
+
+// mockOrganizationProjects are the projects GET /v2beta1/organizations/{id}/projects lists.
+var mockOrganizationProjects = []client.ProjectResponseData{
+	{Id: "test-org-project-id-001", Name: "Org Project One"},
+	{Id: "test-project-id-001", Name: "Instance Project"},
+	{Id: "test-org-project-id-002", Name: "Org Project Two"},
+	{Id: "proj-001", Name: "Alpha"},
+	{Id: "proj-002", Name: "Beta"},
+}
+
+// organizationOwnsProject reports whether the v2beta1 instance endpoints accept the organization and
+// project pair. Like the real API, an organization that does not own the project gets a 404.
+func organizationOwnsProject(organizationId, projectId string) bool {
+	if organizationId != mockOrganizationId {
+		return false
 	}
+	for _, project := range mockOrganizationProjects {
+		if project.Id == projectId {
+			return true
+		}
+	}
+	return false
+}
+
+func (ms *MockServer) handleGetProjectsByOrganization(w http.ResponseWriter, _ *http.Request, _ string) {
+	resp := client.GetProjectsResponse{Data: mockOrganizationProjects}
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -1227,7 +1245,7 @@ func (ms *MockServer) handleGetOrganizations(w http.ResponseWriter, _ *http.Requ
 
 	resp := client.GetOrganizationsResponse{
 		Data: []client.OrganizationData{
-			{Id: "test-org-id-001", Name: "Test Organization"},
+			{Id: mockOrganizationId, Name: "Test Organization"},
 		},
 	}
 	writeJSON(w, http.StatusOK, resp)
