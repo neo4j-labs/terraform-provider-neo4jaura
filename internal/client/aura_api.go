@@ -20,6 +20,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -168,10 +169,15 @@ func (api *AuraApi) FindOrganizationIdByProjectId(ctx context.Context, projectId
 	if err != nil {
 		return "", err
 	}
+	// A later organization may still own the project, so skip organizations whose projects cannot be
+	// listed and report them only if no organization matches.
+	var skippedErrors []error
 	for _, organization := range organizations.Data {
 		projects, err := api.GetProjectsByOrganizationId(ctx, organization.Id)
 		if err != nil {
-			return "", err
+			skippedError := fmt.Errorf("listing projects of organization %s: %w", organization.Id, err)
+			skippedErrors = append(skippedErrors, skippedError)
+			continue
 		}
 		for _, project := range projects.Data {
 			if project.Id == projectId {
@@ -179,7 +185,9 @@ func (api *AuraApi) FindOrganizationIdByProjectId(ctx context.Context, projectId
 			}
 		}
 	}
-	return "", fmt.Errorf("organization for project %s: %w", projectId, ErrNotFound)
+	notFoundError := fmt.Errorf("organization for project %s: %w", projectId, ErrNotFound)
+	lookupErrors := append([]error{notFoundError}, skippedErrors...)
+	return "", errors.Join(lookupErrors...)
 }
 
 func (api *AuraApi) GetInstanceById(ctx context.Context, id string) (GetInstanceResponse, error) {
