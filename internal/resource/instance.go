@@ -207,7 +207,7 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
-					stringplanmodifier.RequiresReplaceIfConfigured(),
+					requiresReplaceIfStateKnown(),
 				},
 			},
 			"multi_database": schema.BoolAttribute{
@@ -217,7 +217,7 @@ func (r *InstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Computed:            true,
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
-					boolplanmodifier.RequiresReplaceIfConfigured(),
+					requiresReplaceIfStateKnownBool(),
 				},
 			},
 			"connection_url": schema.StringAttribute{
@@ -880,7 +880,9 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 	} else {
 		plan.GraphAnalyticsPlugin = types.BoolNull()
 	}
-	// Neither can change in place; carry over the state value if it was null and is planned as unknown.
+	// Both are only updated in place when state held null (see requiresReplaceIfStateKnown); the next
+	// Read re-checks multi_database against v2beta1 using the new organization_id. When unconfigured
+	// they are planned as unknown, so carry over the state value.
 	if plan.OrganizationId.IsUnknown() {
 		plan.OrganizationId = state.OrganizationId
 	}

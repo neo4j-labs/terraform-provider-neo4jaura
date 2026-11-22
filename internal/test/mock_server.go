@@ -57,6 +57,8 @@ type MockServer struct {
 	disableMultiDatabaseOnNextCreate bool
 	// organizationListCount counts GET /v2beta1/organizations calls; all access must hold mu.
 	organizationListCount int
+	// failOrganizationList makes GET /v2beta1/organizations return 403; all access must hold mu.
+	failOrganizationList bool
 	// multiDatabaseInstanceGetFailures maps an instance ID to the HTTP status that
 	// GET /v2beta1/.../instances/{id} returns for it; all access must hold mu.
 	multiDatabaseInstanceGetFailures map[string]int
@@ -130,6 +132,7 @@ func (ms *MockServer) Reset() {
 	ms.invites = make(map[string]client.OrganizationInviteData)
 	ms.disableMultiDatabaseOnNextCreate = false
 	ms.organizationListCount = 0
+	ms.failOrganizationList = false
 	ms.multiDatabaseInstanceGetFailures = make(map[string]int)
 }
 
@@ -147,6 +150,14 @@ func (ms *MockServer) FailMultiDatabaseInstanceGet(instanceId string, status int
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	ms.multiDatabaseInstanceGetFailures[instanceId] = status
+}
+
+// FailOrganizationList makes GET /v2beta1/organizations respond with 403 until the next Reset,
+// simulating credentials without organization access, so organization_id cannot be looked up.
+func (ms *MockServer) FailOrganizationList() {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	ms.failOrganizationList = true
 }
 
 func (ms *MockServer) DisableMultiDatabaseOnNextCreate() {
@@ -1188,7 +1199,12 @@ func (ms *MockServer) handleGetProjectsByOrganization(w http.ResponseWriter, _ *
 func (ms *MockServer) handleGetOrganizations(w http.ResponseWriter, _ *http.Request) {
 	ms.mu.Lock()
 	ms.organizationListCount++
+	failing := ms.failOrganizationList
 	ms.mu.Unlock()
+	if failing {
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+		return
+	}
 
 	resp := client.GetOrganizationsResponse{
 		Data: []client.OrganizationData{

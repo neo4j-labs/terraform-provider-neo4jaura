@@ -308,6 +308,60 @@ func TestAcc_business_critical_read_tolerates_v2beta1_failure(t *testing.T) {
 	}
 }
 
+// TestAcc_filling_in_unknown_organization_and_multi_database_updates_in_place verifies that setting
+// organization_id and multi_database in the configuration, after state holds null for both because the
+// organization lookup failed, is an in-place update rather than a replacement of the instance.
+func TestAcc_filling_in_unknown_organization_and_multi_database_updates_in_place(t *testing.T) {
+	storage := domain.InstanceStorage8GB
+	testMockServer.Reset()
+	testMockServer.SeedMultiDatabaseInstance(client.GetInstanceData{
+		Id:            importMultiDatabaseInstanceId,
+		Name:          "TestMultiDatabase",
+		Status:        domain.InstanceStatusRunning,
+		CloudProvider: domain.CloudProviderAws,
+		Region:        "us-east-1",
+		Memory:        domain.InstanceMemory4GB,
+		Storage:       &storage,
+		Type:          domain.InstanceTypeBusinessCritical,
+		TenantId:      "test-project-id-001",
+	})
+	testMockServer.FailOrganizationList()
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckInstanceDestroyed(testMockServer),
+		Steps: []resource.TestStep{{
+			Config:             importedBusinessCriticalWithoutOrganizationConfig,
+			ResourceName:       "neo4jaura_instance.this",
+			ImportState:        true,
+			ImportStateId:      importMultiDatabaseInstanceId,
+			ImportStatePersist: true,
+			ImportStateCheck: func(states []*terraform.InstanceState) error {
+				if len(states) != 1 {
+					return fmt.Errorf("expected 1 imported instance, got %d", len(states))
+				}
+				organizationId := states[0].Attributes["organization_id"]
+				if organizationId != "" {
+					return fmt.Errorf("expected organization_id to be null after a failed lookup, got %q", organizationId)
+				}
+				return nil
+			},
+		}, {
+			Config: importedMultiDatabaseConfig,
+			ConfigPlanChecks: resource.ConfigPlanChecks{
+				PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction("neo4jaura_instance.this", plancheck.ResourceActionUpdate),
+				},
+			},
+			ConfigStateChecks: []statecheck.StateCheck{
+				statecheck.ExpectKnownValue("neo4jaura_instance.this", tfjsonpath.New("instance_id"), knownvalue.StringExact(importMultiDatabaseInstanceId)),
+				statecheck.ExpectKnownValue("neo4jaura_instance.this", tfjsonpath.New("organization_id"), knownvalue.StringExact("test-org-id-001")),
+				statecheck.ExpectKnownValue("neo4jaura_instance.this", tfjsonpath.New("multi_database"), knownvalue.Bool(true)),
+			},
+		}},
+	})
+}
+
 func TestAcc_multi_database_creation_rejects_unenabled_instance(t *testing.T) {
 	testMockServer.Reset()
 	testMockServer.DisableMultiDatabaseOnNextCreate()
