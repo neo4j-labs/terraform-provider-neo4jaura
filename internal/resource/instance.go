@@ -610,14 +610,6 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 	if instance.Data.TenantId != "" {
 		stateData.ProjectId = types.StringValue(instance.Data.TenantId)
 	}
-	// The API does not return the Neo4j version and only one is supported, so fall back to it.
-	if stateData.Version.IsNull() {
-		stateData.Version = types.StringValue(domain.InstanceVersion5)
-	}
-	// The API does not return the Neo4j version; 5 is the only supported one.
-	if stateData.Version.IsNull() {
-		stateData.Version = types.StringValue(domain.InstanceVersion5)
-	}
 	if !domain.SupportsMultiDatabase(instance.Data.Type) {
 		stateData.MultiDatabase = types.BoolValue(false)
 	} else if stateData.MultiDatabase.IsNull() || stateData.MultiDatabase.ValueBool() {
