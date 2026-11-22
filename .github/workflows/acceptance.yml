@@ -24,5 +24,6 @@ jobs:
       - run: make live-acceptance
         env:
           AURA_PROJECT_ID: ${{ vars.AURA_PROJECT_ID }}
+          AURA_ORGANIZATION_ID: ${{ vars.AURA_ORGANIZATION_ID }}
           AURA_CLIENT_ID: ${{ secrets.AURA_CLIENT_ID }}
           AURA_CLIENT_SECRET: ${{ secrets.AURA_CLIENT_SECRET }}

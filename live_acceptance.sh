@@ -7,6 +7,8 @@
 #   AURA_PROJECT_ID     — Aura project (tenant) ID to create test instances in
 #
 # Optional:
+#   AURA_ORGANIZATION_ID — Aura organization ID owning the project; tests that need it
+#                          (multi-database instances) are skipped when it is not set
 #   LIVE_TEST_RUN       — -run filter, e.g. TestLive_instance_lifecycle
 #                         (defaults to all TestLive_* tests)
 #   LIVE_TEST_TIMEOUT   — go test timeout (default: 30m)
@@ -15,6 +17,7 @@
 #   export AURA_CLIENT_ID=...
 #   export AURA_CLIENT_SECRET=...
 #   export AURA_PROJECT_ID=...
+#   export AURA_ORGANIZATION_ID=...   # optional
 #   ./live_acceptance.sh
 #
 #   # Run a single test:
@@ -51,6 +54,7 @@ TIMEOUT="${LIVE_TEST_TIMEOUT:-30m}"
 
 echo "Running live acceptance tests against the Aura API..."
 echo "  Project:  $AURA_PROJECT_ID"
+echo "  Organization: ${AURA_ORGANIZATION_ID:-<not set, multi-database tests skipped>}"
 echo "  Filter:   -run $RUN_FILTER"
 echo "  Timeout:  $TIMEOUT"
 echo ""

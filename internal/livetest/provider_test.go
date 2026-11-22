@@ -17,6 +17,7 @@
 
 // Package livetest contains acceptance tests that run against the real Aura API.
 // They require AURA_CLIENT_ID, AURA_CLIENT_SECRET, and AURA_PROJECT_ID to be set
+// (multi-database tests additionally need AURA_ORGANIZATION_ID)
 // and are intentionally kept separate from the mock-based tests in internal/test/
 // so that the mock TestMain never redirects traffic away from the live API.
 //
@@ -52,6 +53,18 @@ func liveProjectID(t *testing.T) string {
 	id := os.Getenv("AURA_PROJECT_ID")
 	if id == "" {
 		t.Skip("AURA_PROJECT_ID not set — skipping live test")
+	}
+	return id
+}
+
+// liveOrganizationID returns the Aura organization ID from the AURA_ORGANIZATION_ID
+// environment variable. Only tests that need it call this, so a missing value skips
+// just those tests rather than the whole live suite.
+func liveOrganizationID(t *testing.T) string {
+	t.Helper()
+	id := os.Getenv("AURA_ORGANIZATION_ID")
+	if id == "" {
+		t.Skip("AURA_ORGANIZATION_ID not set — skipping live test")
 	}
 	return id
 }

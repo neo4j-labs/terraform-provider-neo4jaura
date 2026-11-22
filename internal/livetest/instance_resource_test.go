@@ -241,3 +241,71 @@ resource "neo4jaura_instance" "pause_resume" {
 		},
 	})
 }
+
+// TestLive_instance_multi_database creates a business-critical Aura instance with
+// multiple databases enabled and verifies that it reaches running state with
+// multi_database=true and the configured organization_id.
+//
+// Requires: AURA_CLIENT_ID, AURA_CLIENT_SECRET, AURA_PROJECT_ID, AURA_ORGANIZATION_ID, TF_ACC=1
+// Typical runtime: 5–10 minutes.
+func TestLive_instance_multi_database(t *testing.T) {
+	t.Parallel()
+	projectID := liveProjectID(t)
+	organizationID := liveOrganizationID(t)
+
+	config := liveProviderConfig + `
+resource "neo4jaura_instance" "multi_database" {
+  name            = "tf-live-multi-database"
+  cloud_provider  = "gcp"
+  region          = "europe-west1"
+  memory          = "4GB"
+  storage         = "8GB"
+  type            = "business-critical"
+  organization_id = "` + organizationID + `"
+  project_id      = "` + projectID + `"
+  multi_database  = true
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.multi_database",
+						tfjsonpath.New("instance_id"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.multi_database",
+						tfjsonpath.New("status"),
+						knownvalue.StringExact("running"),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.multi_database",
+						tfjsonpath.New("type"),
+						knownvalue.StringExact("business-critical"),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.multi_database",
+						tfjsonpath.New("multi_database"),
+						knownvalue.Bool(true),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.multi_database",
+						tfjsonpath.New("organization_id"),
+						knownvalue.StringExact(organizationID),
+					),
+					statecheck.ExpectKnownValue(
+						"neo4jaura_instance.multi_database",
+						tfjsonpath.New("connection_url"),
+						knownvalue.NotNull(),
+					),
+				},
+			},
+		},
+	})
+}
