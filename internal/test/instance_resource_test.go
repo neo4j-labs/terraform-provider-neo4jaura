@@ -322,7 +322,9 @@ resource "neo4jaura_instance" "this" {
 }
 
 // TestAcc_enterprise_multi_database_creation verifies that enterprise instances can be created with
-// multiple databases, and that a refresh keeps multi_database = true without planning changes.
+// multiple databases, and that a refresh keeps the type and multi_database = true without planning
+// changes. The mock's v2beta1 create only accepts virtual-dedicated-cloud and derives enterprise-ds from
+// graph_analytics=plugin, so this also covers the type mapping.
 func TestAcc_enterprise_multi_database_creation(t *testing.T) {
 	for _, instanceType := range enterpriseMultiDatabaseInstanceTypes {
 		t.Run(instanceType, func(tt *testing.T) {

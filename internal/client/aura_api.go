@@ -108,8 +108,36 @@ func (api *AuraApi) PostInstanceV1(ctx context.Context, request PostInstanceV1Re
 	return unmarshalAuraResponse[PostInstanceV1Response](http.MethodPost, status, body)
 }
 
+// v2beta1InstanceKind is how the v2beta1 API expresses a v1 instance type: a type plus a graph_analytics mode.
+type v2beta1InstanceKind struct {
+	instanceType   string
+	graphAnalytics string
+}
+
+// v2beta1InstanceKinds maps the v1 instance types that v2beta1 names differently. These v2beta1 names stay
+// inside the client: the provider only exposes the v1 type names. Types not listed keep their name.
+var v2beta1InstanceKinds = map[string]v2beta1InstanceKind{
+	domain.InstanceTypeEnterpriseDb:   {instanceType: "virtual-dedicated-cloud", graphAnalytics: "serverless"},
+	domain.InstanceTypeEnterpriseDs:   {instanceType: "virtual-dedicated-cloud", graphAnalytics: "plugin"},
+	domain.InstanceTypeProfessionalDb: {instanceType: "professional", graphAnalytics: "serverless"},
+	domain.InstanceTypeProfessionalDs: {instanceType: "professional", graphAnalytics: "plugin"},
+}
+
+// translatedToV2beta1 returns a copy of the request with the v1 instance type translated to the v2beta1
+// type and graph_analytics mode.
+func translatedToV2beta1(request PostInstanceV2Request) PostInstanceV2Request {
+	kind, ok := v2beta1InstanceKinds[request.Type]
+	if !ok {
+		return request
+	}
+	request.Type = kind.instanceType
+	request.GraphAnalytics = &kind.graphAnalytics
+	return request
+}
+
 func (api *AuraApi) PostInstanceV2(ctx context.Context, organizationId, projectId string, request PostInstanceV2Request) (PostInstanceV2Response, error) {
-	payload, err := json.Marshal(request)
+	v2beta1Request := translatedToV2beta1(request)
+	payload, err := json.Marshal(v2beta1Request)
 	if err != nil {
 		return PostInstanceV2Response{}, err
 	}

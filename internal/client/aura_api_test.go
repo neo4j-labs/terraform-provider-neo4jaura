@@ -53,3 +53,32 @@ func TestIsSuccessfulResponseStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestTranslatedToV2beta1(t *testing.T) {
+	tests := []struct {
+		instanceType       string
+		wantType           string
+		wantGraphAnalytics string
+	}{
+		{instanceType: "enterprise-db", wantType: "virtual-dedicated-cloud", wantGraphAnalytics: "serverless"},
+		{instanceType: "enterprise-ds", wantType: "virtual-dedicated-cloud", wantGraphAnalytics: "plugin"},
+		{instanceType: "professional-db", wantType: "professional", wantGraphAnalytics: "serverless"},
+		{instanceType: "professional-ds", wantType: "professional", wantGraphAnalytics: "plugin"},
+		{instanceType: "business-critical", wantType: "business-critical"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.instanceType, func(t *testing.T) {
+			got := translatedToV2beta1(PostInstanceV2Request{Type: tt.instanceType})
+			if got.Type != tt.wantType {
+				t.Errorf("type = %q, want %q", got.Type, tt.wantType)
+			}
+			gotGraphAnalytics := ""
+			if got.GraphAnalytics != nil {
+				gotGraphAnalytics = *got.GraphAnalytics
+			}
+			if gotGraphAnalytics != tt.wantGraphAnalytics {
+				t.Errorf("graph_analytics = %q, want %q", gotGraphAnalytics, tt.wantGraphAnalytics)
+			}
+		})
+	}
+}

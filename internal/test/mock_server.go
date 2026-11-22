@@ -712,7 +712,7 @@ func (ms *MockServer) handlePostMultiDatabaseInstance(w http.ResponseWriter, r *
 		return
 	}
 	var req client.PostInstanceV2Request
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !req.MultiDatabase || !domain.SupportsMultiDatabase(req.Type) {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !req.MultiDatabase || !isV2MultiDatabaseType(req.Type) {
 		http.Error(w, "invalid multi-database request", http.StatusBadRequest)
 		return
 	}
@@ -724,7 +724,7 @@ func (ms *MockServer) handlePostMultiDatabaseInstance(w http.ResponseWriter, r *
 		instance: client.GetInstanceData{
 			Id: id, Name: req.Name, Status: domain.InstanceStatusCreating,
 			TenantId: projectId, CloudProvider: req.CloudProvider, Region: req.Region,
-			Type: req.Type, Memory: req.Memory, Storage: req.Storage,
+			Type: reportedInstanceType(req), Memory: req.Memory, Storage: req.Storage,
 			VectorOptimized: req.VectorOptimized,
 		},
 		multiDatabase: enabled,
@@ -735,6 +735,27 @@ func (ms *MockServer) handlePostMultiDatabaseInstance(w http.ResponseWriter, r *
 		Region: req.Region, Type: req.Type, Username: "neo4j", Password: "test-password",
 		ConnectionUrl: "neo4j+s://test.databases.neo4j.io",
 	}})
+}
+
+// mockV2InstanceTypeVirtualDedicatedCloud is the v2beta1 API name for the enterprise-db and enterprise-ds types.
+const mockV2InstanceTypeVirtualDedicatedCloud = "virtual-dedicated-cloud"
+
+// isV2MultiDatabaseType reports whether the v2beta1 create API accepts multi_database for the type.
+// Like the real API, it expects virtual-dedicated-cloud instead of enterprise-db / enterprise-ds.
+func isV2MultiDatabaseType(instanceType string) bool {
+	return instanceType == domain.InstanceTypeBusinessCritical || instanceType == mockV2InstanceTypeVirtualDedicatedCloud
+}
+
+// reportedInstanceType returns the v1 type the mock reports for an instance created through v2beta1.
+// virtual-dedicated-cloud is enterprise-ds with graph_analytics=plugin, and enterprise-db otherwise.
+func reportedInstanceType(request client.PostInstanceV2Request) string {
+	if request.Type != mockV2InstanceTypeVirtualDedicatedCloud {
+		return request.Type
+	}
+	if request.GraphAnalytics != nil && *request.GraphAnalytics == "plugin" {
+		return domain.InstanceTypeEnterpriseDs
+	}
+	return domain.InstanceTypeEnterpriseDb
 }
 
 func (ms *MockServer) handleGetMultiDatabaseInstance(w http.ResponseWriter, _ *http.Request, organizationId, projectId, instanceId string) {

@@ -45,6 +45,8 @@ type PostInstanceV2Request struct {
 	CloudProvider   string  `json:"cloud_provider"`
 	MultiDatabase   bool    `json:"multi_database"`
 	VectorOptimized *bool   `json:"vector_optimized,omitempty"`
+	// GraphAnalytics is set by the client from Type; see translatedToV2beta1.
+	GraphAnalytics *string `json:"graph_analytics,omitempty"`
 }
 
 type PatchInstanceRequest struct {
