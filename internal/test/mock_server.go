@@ -211,6 +211,13 @@ func (ms *MockServer) InstanceExists(id string) bool {
 	return ok
 }
 
+// InstanceCount returns how many instances the mock server currently holds.
+func (ms *MockServer) InstanceCount() int {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	return len(ms.instances)
+}
+
 // DeleteInstance removes an instance from the mock's state store out-of-band,
 // simulating an external deletion without going through the Terraform delete path.
 // After calling this, GET /v1/instances/{id} returns 404, which triggers

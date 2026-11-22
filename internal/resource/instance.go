@@ -476,13 +476,14 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		return
 	}
 	if data.MultiDatabase.ValueBool() {
-		instanceV2, err := r.auraApi.GetInstanceV2(ctx, data.OrganizationId.ValueString(), data.ProjectId.ValueString(), instanceId)
-		if err != nil {
-			response.Diagnostics.AddError("Error verifying multi-database instance", fmt.Sprintf("instance_id=%s: %s", instanceId, err.Error()))
-			return
-		}
-		if !instanceV2.Data.MultiDatabase {
-			response.Diagnostics.AddError("Multi-database was not enabled", fmt.Sprintf("instance_id=%s: Aura reported multi_database=false after creation", instanceId))
+		verifyDiags := r.verifyMultiDatabaseEnabled(ctx, &data)
+		if verifyDiags.HasError() {
+			// The instance exists and is billed. Save what is known so Terraform marks it tainted
+			// and replaces or destroys it, instead of losing track of it.
+			fillComputedAttributes(&data, instance.Data)
+			data.Status = types.StringValue(instance.Data.Status)
+			response.Diagnostics.Append(verifyDiags...)
+			response.Diagnostics.Append(response.State.Set(ctx, &data)...)
 			return
 		}
 	}
@@ -521,49 +522,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		tflog.Debug(ctx, fmt.Sprintf("Successfully patched instance %s", instanceId))
 	}
 
-	if instance.Data.Storage != nil {
-		data.Storage = types.StringValue(*instance.Data.Storage)
-	} else {
-		data.Storage = types.StringNull()
-	}
-	if instance.Data.CreatedAt != nil {
-		data.CreatedAt = types.StringValue(*instance.Data.CreatedAt)
-	} else {
-		data.CreatedAt = types.StringNull()
-	}
-	if instance.Data.MetricsIntegrationUrl != nil {
-		data.MetricsIntegrationUrl = types.StringValue(*instance.Data.MetricsIntegrationUrl)
-	} else {
-		data.MetricsIntegrationUrl = types.StringNull()
-	}
-	if instance.Data.SecondariesCount != nil {
-		data.SecondariesCount = types.Int32Value(int32(*instance.Data.SecondariesCount))
-	} else if !data.SecondariesCount.IsNull() {
-		// API may omit secondaries_count in response; keep the value we set via PATCH
-		// data.SecondariesCount already has the correct planned value
-	} else {
-		data.SecondariesCount = types.Int32Null()
-	}
-	if instance.Data.CdcEnrichmentMode != nil {
-		data.CdcEnrichmentMode = types.StringValue(*instance.Data.CdcEnrichmentMode)
-	} else if !data.CdcEnrichmentMode.IsNull() {
-		// API returns null for CDC enrichment mode on business-critical tier
-		// Keep the planned value since we applied it via PATCH
-		// data.CdcEnrichmentMode already has the correct planned value
-	} else {
-		// No planned value and API returns null - leave as null
-		data.CdcEnrichmentMode = types.StringNull()
-	}
-	if instance.Data.VectorOptimized != nil {
-		data.VectorOptimized = types.BoolValue(*instance.Data.VectorOptimized)
-	} else {
-		data.VectorOptimized = types.BoolNull()
-	}
-	if instance.Data.GraphAnalyticsPlugin != nil {
-		data.GraphAnalyticsPlugin = types.BoolValue(*instance.Data.GraphAnalyticsPlugin)
-	} else {
-		data.GraphAnalyticsPlugin = types.BoolNull()
-	}
+	fillComputedAttributes(&data, instance.Data)
 
 	requestedStatus := data.Status
 	data.Status = types.StringValue(instance.Data.Status)
@@ -1001,4 +960,71 @@ func (r *InstanceResource) pauseInstance(ctx context.Context, id string) util.Di
 		return util.NewDiagnosticsError("Error while waiting for instance to be paused", err.Error())
 	}
 	return util.NoDiagnosticsError()
+}
+
+// verifyMultiDatabaseEnabled asks the v2beta1 API whether the new instance really has multiple databases.
+// On failure it sets data.MultiDatabase to what is known: false when Aura reports it disabled, null when
+// the API call fails.
+func (r *InstanceResource) verifyMultiDatabaseEnabled(ctx context.Context, data *InstanceResourceModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+	instanceId := data.InstanceId.ValueString()
+	instanceV2, err := r.auraApi.GetInstanceV2(ctx, data.OrganizationId.ValueString(), data.ProjectId.ValueString(), instanceId)
+	if err != nil {
+		data.MultiDatabase = types.BoolNull()
+		diags.AddError("Error verifying multi-database instance", fmt.Sprintf("instance_id=%s: %s", instanceId, err.Error()))
+		return diags
+	}
+	if !instanceV2.Data.MultiDatabase {
+		data.MultiDatabase = types.BoolValue(false)
+		diags.AddError("Multi-database was not enabled", fmt.Sprintf("instance_id=%s: Aura reported multi_database=false after creation", instanceId))
+	}
+	return diags
+}
+
+// fillComputedAttributes copies the computed attributes the API reports for a new instance into data.
+// cdc_enrichment_mode and secondaries_count keep their planned values when the API omits them.
+func fillComputedAttributes(data *InstanceResourceModel, instance client.GetInstanceData) {
+	if instance.Storage != nil {
+		data.Storage = types.StringValue(*instance.Storage)
+	} else {
+		data.Storage = types.StringNull()
+	}
+	if instance.CreatedAt != nil {
+		data.CreatedAt = types.StringValue(*instance.CreatedAt)
+	} else {
+		data.CreatedAt = types.StringNull()
+	}
+	if instance.MetricsIntegrationUrl != nil {
+		data.MetricsIntegrationUrl = types.StringValue(*instance.MetricsIntegrationUrl)
+	} else {
+		data.MetricsIntegrationUrl = types.StringNull()
+	}
+	if instance.SecondariesCount != nil {
+		data.SecondariesCount = types.Int32Value(int32(*instance.SecondariesCount))
+	} else if !data.SecondariesCount.IsNull() {
+		// API may omit secondaries_count in response; keep the value we set via PATCH
+		// data.SecondariesCount already has the correct planned value
+	} else {
+		data.SecondariesCount = types.Int32Null()
+	}
+	if instance.CdcEnrichmentMode != nil {
+		data.CdcEnrichmentMode = types.StringValue(*instance.CdcEnrichmentMode)
+	} else if !data.CdcEnrichmentMode.IsNull() {
+		// API returns null for CDC enrichment mode on business-critical tier
+		// Keep the planned value since we applied it via PATCH
+		// data.CdcEnrichmentMode already has the correct planned value
+	} else {
+		// No planned value and API returns null - leave as null
+		data.CdcEnrichmentMode = types.StringNull()
+	}
+	if instance.VectorOptimized != nil {
+		data.VectorOptimized = types.BoolValue(*instance.VectorOptimized)
+	} else {
+		data.VectorOptimized = types.BoolNull()
+	}
+	if instance.GraphAnalyticsPlugin != nil {
+		data.GraphAnalyticsPlugin = types.BoolValue(*instance.GraphAnalyticsPlugin)
+	} else {
+		data.GraphAnalyticsPlugin = types.BoolNull()
+	}
 }

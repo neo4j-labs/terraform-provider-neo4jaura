@@ -400,17 +400,28 @@ func TestAcc_filling_in_unknown_organization_and_multi_database_updates_in_place
 	})
 }
 
+// TestAcc_multi_database_creation_rejects_unenabled_instance verifies that when Aura creates the
+// instance without multiple databases, Create fails but still saves the instance to state, so
+// Terraform marks it tainted and the destroy at the end of the test deletes it instead of orphaning it.
 func TestAcc_multi_database_creation_rejects_unenabled_instance(t *testing.T) {
 	testMockServer.Reset()
 	testMockServer.DisableMultiDatabaseOnNextCreate()
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckInstanceDestroyed(testMockServer),
 		Steps: []resource.TestStep{{
 			Config:      businessCriticalMultiDatabaseConfig,
 			ExpectError: regexp.MustCompile("Multi-database was not enabled"),
 		}},
 	})
+
+	// The test framework skips destroy and CheckDestroy when state is empty, so an instance that
+	// was created but never saved to state is only caught by asking the mock directly.
+	instanceCount := testMockServer.InstanceCount()
+	if instanceCount != 0 {
+		t.Errorf("mock server still holds %d instance(s) after the test; the instance was orphaned", instanceCount)
+	}
 }
 
 func TestAcc_multi_database_instance_disappears(t *testing.T) {
