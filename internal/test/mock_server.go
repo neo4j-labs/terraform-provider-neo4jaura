@@ -57,6 +57,9 @@ type MockServer struct {
 	disableMultiDatabaseOnNextCreate bool
 	// organizationListCount counts GET /v2beta1/organizations calls; all access must hold mu.
 	organizationListCount int
+	// multiDatabaseInstanceGetFailures maps an instance ID to the HTTP status that
+	// GET /v2beta1/.../instances/{id} returns for it; all access must hold mu.
+	multiDatabaseInstanceGetFailures map[string]int
 	// instances stores mock instance state; all access must hold mu.
 	instances map[string]*mockInstanceState
 	// snapshots is keyed by "<instanceId>/<snapshotId>"; all access must hold mu.
@@ -80,13 +83,14 @@ type MockServer struct {
 // the underlying httptest.Server. Call Close() when finished.
 func NewMockServer() *MockServer {
 	ms := &MockServer{
-		instances:                make(map[string]*mockInstanceState),
-		snapshots:                make(map[string]*mockSnapshotState),
-		snapshotListEmptyUntil:   make(map[string]int),
-		projectUsers:             make(map[string][]string),
-		organizationUsers:        make(map[string]client.OrganizationUserData),
-		deletedOrganizationUsers: make(map[string]bool),
-		invites:                  make(map[string]client.OrganizationInviteData),
+		multiDatabaseInstanceGetFailures: make(map[string]int),
+		instances:                        make(map[string]*mockInstanceState),
+		snapshots:                        make(map[string]*mockSnapshotState),
+		snapshotListEmptyUntil:           make(map[string]int),
+		projectUsers:                     make(map[string][]string),
+		organizationUsers:                make(map[string]client.OrganizationUserData),
+		deletedOrganizationUsers:         make(map[string]bool),
+		invites:                          make(map[string]client.OrganizationInviteData),
 	}
 
 	mux := http.NewServeMux()
@@ -126,6 +130,7 @@ func (ms *MockServer) Reset() {
 	ms.invites = make(map[string]client.OrganizationInviteData)
 	ms.disableMultiDatabaseOnNextCreate = false
 	ms.organizationListCount = 0
+	ms.multiDatabaseInstanceGetFailures = make(map[string]int)
 }
 
 // OrganizationListCount returns how many times GET /v2beta1/organizations was called since the last Reset.
@@ -133,6 +138,15 @@ func (ms *MockServer) OrganizationListCount() int {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	return ms.organizationListCount
+}
+
+// FailMultiDatabaseInstanceGet makes GET /v2beta1/organizations/{orgId}/projects/{projectId}/instances/{instanceId}
+// respond with status for the given instance until the next Reset, simulating a v2beta1 API that
+// rejects (403) or cannot find (404) an instance the v1 API still reports.
+func (ms *MockServer) FailMultiDatabaseInstanceGet(instanceId string, status int) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	ms.multiDatabaseInstanceGetFailures[instanceId] = status
 }
 
 func (ms *MockServer) DisableMultiDatabaseOnNextCreate() {
@@ -760,6 +774,7 @@ func reportedInstanceType(request client.PostInstanceV2Request) string {
 
 func (ms *MockServer) handleGetMultiDatabaseInstance(w http.ResponseWriter, _ *http.Request, organizationId, projectId, instanceId string) {
 	ms.mu.Lock()
+	failureStatus, failing := ms.multiDatabaseInstanceGetFailures[instanceId]
 	state, ok := ms.instances[instanceId]
 	var tenantId string
 	var multiDatabase bool
@@ -768,6 +783,10 @@ func (ms *MockServer) handleGetMultiDatabaseInstance(w http.ResponseWriter, _ *h
 		multiDatabase = state.multiDatabase
 	}
 	ms.mu.Unlock()
+	if failing {
+		http.Error(w, http.StatusText(failureStatus), failureStatus)
+		return
+	}
 	if !ok || organizationId == "" || projectId != tenantId {
 		http.NotFound(w, nil)
 		return

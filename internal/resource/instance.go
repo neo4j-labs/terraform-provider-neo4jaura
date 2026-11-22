@@ -626,14 +626,13 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 		} else {
 			instanceV2, err := r.auraApi.GetInstanceV2(ctx, stateData.OrganizationId.ValueString(), stateData.ProjectId.ValueString(), stateData.InstanceId.ValueString())
 			if err != nil {
-				if errors.Is(err, client.ErrNotFound) {
-					response.Diagnostics.AddError("Cannot verify multi-database setting", fmt.Sprintf("instance_id=%s: v2beta1 returned 404 but v1 still finds the instance; check organization_id and project_id", stateData.InstanceId.ValueString()))
-					return
-				}
-				response.Diagnostics.AddError("Error while checking multi-database setting", fmt.Sprintf("instance_id=%s: %s", stateData.InstanceId.ValueString(), err.Error()))
-				return
+				// A failed check must not block plan/apply of an instance that v1 still reports,
+				// so multi_database keeps its state value and the cause is only a warning.
+				detail := describeMultiDatabaseVerificationError(stateData.InstanceId.ValueString(), err)
+				response.Diagnostics.AddWarning("Cannot verify multi-database setting", detail)
+			} else {
+				stateData.MultiDatabase = types.BoolValue(instanceV2.Data.MultiDatabase)
 			}
-			stateData.MultiDatabase = types.BoolValue(instanceV2.Data.MultiDatabase)
 		}
 	}
 
@@ -963,6 +962,16 @@ func (r *InstanceResource) lookupOrganizationId(ctx context.Context, projectId s
 		return types.StringNull()
 	}
 	return types.StringValue(organizationId)
+}
+
+// describeMultiDatabaseVerificationError explains why the v2beta1 API could not report multi_database
+// for an instance. A 404 while v1 still finds the instance usually means organization_id or
+// project_id is wrong, so that case points the user there.
+func describeMultiDatabaseVerificationError(instanceId string, err error) string {
+	if errors.Is(err, client.ErrNotFound) {
+		return fmt.Sprintf("instance_id=%s: v2beta1 returned 404 but v1 still finds the instance; check organization_id and project_id. multi_database is left unchanged.", instanceId)
+	}
+	return fmt.Sprintf("instance_id=%s: %s. multi_database is left unchanged.", instanceId, err.Error())
 }
 
 func (r *InstanceResource) resumeInstance(ctx context.Context, id string) util.DiagnosticsError {
